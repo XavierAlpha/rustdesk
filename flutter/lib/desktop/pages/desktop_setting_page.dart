@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
+import 'package:cryptography/cryptography.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -40,6 +42,67 @@ const double _kContentFontSize = 15;
 const Color _accentColor = MyTheme.accent;
 const String _kSettingPageControllerTag = 'settingPageController';
 const String _kSettingPageTabKeyTag = 'settingPageTabKey';
+
+// PBKDF2 unlock PIN helpers
+const int _kPBKDF2ITERATIONS = 150000;
+const int _kPBKDF2DKLEN = 32; // bytes
+
+String _makePbkdf2Marker({
+  required int iterations,
+  required Uint8List salt,
+  required Uint8List dk,
+}) {
+  final saltB64 = base64.encode(salt);
+  final dkB64 = base64.encode(dk);
+  return 'pbkdf2:sha256:$iterations:$saltB64:$dkB64';
+}
+
+Map<String, String> _parsePbkdf2Marker(String v) {
+  // pbkdf2:sha256:<iterations>:<salt_b64>:<dk_b64>
+  final parts = v.split(':');
+  if (parts.length >= 5) {
+    return {
+      'algo': parts[1],
+      'iterations': parts[2],
+      'salt': parts[3],
+      'dk': parts.sublist(4).join(':'),
+    };
+  }
+  return {'algo': '', 'iterations': '0', 'salt': '', 'dk': ''};
+}
+
+Uint8List _randomSalt(int len) {
+  final rnd = Random.secure();
+  final list = List<int>.generate(len, (_) => rnd.nextInt(256));
+  return Uint8List.fromList(list);
+}
+
+bool _constantTimeEquals(Uint8List a, Uint8List b) {
+  if (a.length != b.length) return false;
+  var diff = 0;
+  for (var i = 0; i < a.length; i++) {
+    diff |= a[i] ^ b[i];
+  }
+  return diff == 0;
+}
+
+Future<Uint8List> _pbkdf2Derive({
+  required String pin,
+  required Uint8List salt,
+  required int iterations,
+  required int dkLen,
+}) async {
+  final pbkdf2 = Pbkdf2(
+    macAlgorithm: Hmac.sha256(),
+    iterations: iterations,
+    bits: dkLen * 8,
+  );
+  final secretKey = SecretKey(utf8.encode(pin));
+  final newKey = await pbkdf2.deriveKey(secretKey: secretKey, nonce: salt);
+  final bytes = await newKey.extractBytes();
+  return Uint8List.fromList(bytes);
+}
+// -------------------- end helpers --------------------
 
 class _TabInfo {
   late final SettingsTabKey key;
@@ -276,7 +339,7 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
   Widget build(BuildContext context) {
     super.build(context);
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: _buildBlock(
         children: <Widget>[
           SizedBox(
@@ -1452,37 +1515,62 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
   }
 
   Widget unlockPin() {
-    bool enabled = !locked;
-    RxString unlockPin = bind.mainGetUnlockPin().obs;
-    update() async {
-      unlockPin.value = bind.mainGetUnlockPin();
-    }
-
-    onChanged(bool? checked) async {
-      changeUnlockPinDialog(unlockPin.value, update);
-    }
-
+    // Only PBKDF2 marker is supported. UI shows checked (non-editable checkbox).
+    final stored = bind.mainGetUnlockPin();
     final isOptFixed = isOptionFixed(kOptionWhitelist);
+    final enabled = !locked && !isOptFixed;
+
+    // When a PBKDF2 marker is present, verify first. On success show a small
+    // success dialog and allow "Change PIN". If no marker, open set dialog.
+    void openOrVerify() {
+      if (stored.isNotEmpty && stored.startsWith('pbkdf2:')) {
+        _showVerifyPinDialog(stored, () {
+          // Verified successfully -> show small dialog with option to change PIN
+          gFFI.dialogManager.show((setState, close, context) {
+            return CustomAlertDialog(
+              title: Text(translate('PIN verified')),
+              content: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 320),
+                child: Text(translate(
+                    'The PIN is correct. You may change it if needed.')),
+              ),
+              actions: [
+                dialogButton('Close', onPressed: close, isOutline: true),
+                dialogButton('Change', onPressed: () {
+                  close();
+                  // Open set dialog to let user change PIN
+                  _showSetPinDialog(stored, () {
+                    setState(() {});
+                  });
+                }),
+              ],
+              onCancel: close,
+            );
+          });
+        });
+      } else {
+        // No PBKDF2 marker -> open set (create) dialog
+        _showSetPinDialog(stored, () {
+          setState(() {});
+        });
+      }
+    }
+
+    final display = stored.isEmpty ? translate('Not set') : '******';
     return GestureDetector(
-      child: Obx(() => Row(
-            children: [
-              Checkbox(
-                      value: unlockPin.isNotEmpty,
-                      onChanged: enabled && !isOptFixed ? onChanged : null)
-                  .marginOnly(right: 5),
-              Expanded(
-                  child: Text(
-                translate('Unlock with PIN'),
-                style: TextStyle(color: disabledTextColor(context, enabled)),
-              ))
-            ],
-          )),
-      onTap: enabled
-          ? () {
-              onChanged(!unlockPin.isNotEmpty);
-            }
-          : null,
-    ).marginOnly(left: _kCheckBoxLeftMargin);
+      child: Row(
+        children: [
+          Checkbox(value: true, onChanged: null).marginOnly(right: 5),
+          Expanded(
+            child: Text(
+              '${translate('Unlock with PIN')} ($display)',
+              style: TextStyle(color: disabledTextColor(context, true)),
+            ),
+          )
+        ],
+      ).marginOnly(left: _kCheckBoxLeftMargin),
+      onTap: enabled ? openOrVerify : null,
+    );
   }
 }
 
@@ -1739,7 +1827,7 @@ class _DisplayState extends State<_Display> {
   Widget trackpadSpeed(BuildContext context) {
     final initSpeed = (int.tryParse(
             bind.mainGetUserDefaultOption(key: kKeyTrackpadSpeed)) ??
-        kDefaultTrackpadSpeed);
+            kDefaultTrackpadSpeed);
     final curSpeed = SimpleWrapper(initSpeed);
     void onDebouncer(int v) {
       bind.mainSetUserDefaultOption(
@@ -2475,7 +2563,7 @@ class _WaylandCardState extends State<WaylandCard> {
       showConfirmMsgBox,
       tip: 'clear_Wayland_screen_selection_tip',
       style: ButtonStyle(
-        backgroundColor: MaterialStateProperty.all<Color>(
+        backgroundColor: WidgetStateProperty.all<Color>(
             Theme.of(context).colorScheme.error.withOpacity(0.75)),
       ),
     );
@@ -2562,12 +2650,29 @@ Widget _lock(
                   onPressed: () async {
                     final unlockPin = bind.mainGetUnlockPin();
                     if (unlockPin.isEmpty) {
+                      // no PIN configured -> fallback to superuser permission
                       bool checked = await callMainCheckSuperUserPermission();
                       if (checked) {
                         onUnlock();
                       }
+                    } else if (unlockPin.startsWith('pbkdf2:')) {
+                      // primary verification path
+                      _showVerifyPinDialog(unlockPin, onUnlock);
                     } else {
-                      checkUnlockPinDialog(unlockPin, onUnlock);
+                      // unsupported/legacy marker found — fallback to admin check
+                      bool checked = await callMainCheckSuperUserPermission();
+                      if (checked) {
+                        onUnlock();
+                      } else {
+                        msgBox(
+                            gFFI.sessionId,
+                            'custom-nocancel',
+                            'Info',
+                            translate(
+                                'PIN format not supported. Please reset PIN.'),
+                            '',
+                            gFFI.dialogManager);
+                      }
                     }
                   },
                 ).marginSymmetric(horizontal: 2, vertical: 4),
@@ -2687,6 +2792,156 @@ class _CountDownButtonState extends State<_CountDownButton> {
 }
 
 //#endregion
+
+// Show dialog to verify PBKDF2-stored PIN. On success call onUnlock().
+void _showVerifyPinDialog(String storedMarker, Function() onUnlock) {
+  final parsed = _parsePbkdf2Marker(storedMarker);
+  final iterations = int.tryParse(parsed['iterations'] ?? '') ?? 0;
+  final saltB64 = parsed['salt'] ?? '';
+  final dkB64 = parsed['dk'] ?? '';
+
+  var pinController = TextEditingController();
+  String errorText = '';
+  RxBool obscure = true.obs;
+
+  gFFI.dialogManager.show((setState, close, context) {
+    submit() async {
+      final input = pinController.text.trim();
+      if (input.isEmpty) {
+        setState(() => errorText = translate('PIN cannot be empty'));
+        return;
+      }
+      try {
+        final salt = base64.decode(saltB64);
+        final expected = base64.decode(dkB64);
+        final dk = await _pbkdf2Derive(
+            pin: input,
+            salt: Uint8List.fromList(salt),
+            iterations: iterations,
+            dkLen: expected.length);
+        if (_constantTimeEquals(dk, Uint8List.fromList(expected))) {
+          close();
+          onUnlock();
+        } else {
+          setState(() => errorText = translate('Incorrect PIN'));
+        }
+      } catch (e) {
+        debugPrint('PBKDF2 verify error: $e');
+        setState(() => errorText = translate('Verification error'));
+      }
+    }
+
+    return CustomAlertDialog(
+      title: Text(translate('Enter PIN')),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 360),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Obx(() => TextField(
+                  controller: pinController,
+                  obscureText: obscure.value,
+                  decoration: InputDecoration(
+                    labelText: translate('PIN'),
+                    errorText: errorText.isNotEmpty ? errorText : null,
+                    suffixIcon: IconButton(
+                      onPressed: () => obscure.value = !obscure.value,
+                      icon: Icon(obscure.value
+                          ? Icons.visibility_off
+                          : Icons.visibility),
+                    ),
+                  ),
+                  autofocus: true,
+                ).workaroundFreezeLinuxMint()),
+          ],
+        ),
+      ),
+      actions: [
+        dialogButton('Cancel', onPressed: close, isOutline: true),
+        dialogButton('OK', onPressed: submit),
+      ],
+      onSubmit: submit,
+      onCancel: close,
+    );
+  });
+}
+
+// Show dialog to set/change PIN. On OK stores PBKDF2 marker.
+void _showSetPinDialog(String currentMarker, Function() onChangedCallback) {
+  var pinController = TextEditingController();
+  var confirmController = TextEditingController();
+  String errorText = '';
+  RxBool obscure = true.obs;
+
+  gFFI.dialogManager.show((setState, close, context) {
+    submit() async {
+      final pin = pinController.text.trim();
+      final confirm = confirmController.text.trim();
+      if (pin.isEmpty) {
+        setState(() => errorText = translate('PIN cannot be empty'));
+        return;
+      }
+      if (pin != confirm) {
+        setState(() => errorText = translate('PIN does not match'));
+        return;
+      }
+      try {
+        final salt = _randomSalt(16);
+        final dk = await _pbkdf2Derive(
+            pin: pin,
+            salt: salt,
+            iterations: _kPBKDF2ITERATIONS,
+            dkLen: _kPBKDF2DKLEN);
+        final marker = _makePbkdf2Marker(
+            iterations: _kPBKDF2ITERATIONS, salt: salt, dk: dk);
+        await bind.mainSetLocalOption(key: 'unlock-pin', value: marker);
+        close();
+        onChangedCallback();
+      } catch (e) {
+        debugPrint('set PIN failed: $e');
+        setState(() => errorText = translate('Set PIN failed'));
+      }
+    }
+
+    return CustomAlertDialog(
+      title: Text(translate('Set PIN')),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 480),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Obx(() => TextField(
+                  controller: pinController,
+                  obscureText: obscure.value,
+                  decoration: InputDecoration(labelText: translate('PIN')),
+                ).workaroundFreezeLinuxMint()),
+            Obx(() => TextField(
+                  controller: confirmController,
+                  obscureText: obscure.value,
+                  decoration: InputDecoration(
+                      labelText: translate('Confirm PIN'),
+                      errorText: errorText.isNotEmpty ? errorText : null,
+                      suffixIcon: IconButton(
+                          onPressed: () => obscure.value = !obscure.value,
+                          icon: Icon(obscure.value
+                              ? Icons.visibility_off
+                              : Icons.visibility))),
+                ).workaroundFreezeLinuxMint()),
+            const SizedBox(height: 8),
+            Text(translate('pin-recommendation-tip')),
+          ],
+        ),
+      ),
+      actions: [
+        dialogButton('Cancel', onPressed: close, isOutline: true),
+        dialogButton('OK', onPressed: submit),
+      ],
+      onSubmit: submit,
+      onCancel: close,
+    );
+  });
+}
+// -------------------------------------------------------------------------------------------
 
 //#region dialogs
 
