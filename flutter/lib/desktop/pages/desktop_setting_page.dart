@@ -525,7 +525,7 @@ class _GeneralState extends State<_General> {
           _OptionCheckBox(
             context,
             'Check for software update on startup',
-            kOptionEnableCheckUpdate,
+            kOptionAllowCheckUpdate,
             isServer: false,
           ),
         if (showAutoUpdate)
@@ -1273,13 +1273,14 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
     update(bool v) => setState(() {});
     RxBool applyEnabled = false.obs;
     return [
-      _OptionCheckBox(context, 'Enable direct IP access', kOptionDirectServer,
+      _OptionCheckBox(
+          context, 'Enable direct IP access', kOptionEnableDirectServer,
           update: update, enabled: !locked),
       () {
         // Simple temp wrapper for PR check
         tmpWrapper() {
-          bool enabled = option2bool(kOptionDirectServer,
-              bind.mainGetOptionSync(key: kOptionDirectServer));
+          bool enabled = option2bool(kOptionEnableDirectServer,
+              bind.mainGetOptionSync(key: kOptionEnableDirectServer));
           if (!enabled) applyEnabled.value = false;
           controller.text =
               bind.mainGetOptionSync(key: kOptionDirectAccessPort);
