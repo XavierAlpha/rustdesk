@@ -109,7 +109,8 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         bind.mainGetOptionSync(key: kOptionEnableLanDiscovery));
     _onlyWhiteList = whitelistNotEmpty();
     _enableDirectIPAccess = option2bool(
-        kOptionDirectServer, bind.mainGetOptionSync(key: kOptionDirectServer));
+        kOptionEnableDirectServer,
+        bind.mainGetOptionSync(key: kOptionEnableDirectServer));
     _enableRecordSession = option2bool(kOptionEnableRecordSession,
         bind.mainGetOptionSync(key: kOptionEnableRecordSession));
     _enableHardwareCodec = option2bool(kOptionEnableHwcodec,
@@ -181,7 +182,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
       }
 
       var checkUpdateOnStartup =
-          mainGetLocalBoolOptionSync(kOptionEnableCheckUpdate);
+          mainGetLocalBoolOptionSync(kOptionAllowCheckUpdate);
       if (checkUpdateOnStartup != _checkUpdateOnStartup) {
         update = true;
         _checkUpdateOnStartup = checkUpdateOnStartup;
@@ -462,14 +463,15 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                             }))
             ]),
         initialValue: _enableDirectIPAccess,
-        onToggle: isOptionFixed(kOptionDirectServer)
+        onToggle: isOptionFixed(kOptionEnableDirectServer)
             ? null
             : (_) async {
                 _enableDirectIPAccess = !_enableDirectIPAccess;
                 String value =
-                    bool2option(kOptionDirectServer, _enableDirectIPAccess);
+                    bool2option(
+                    kOptionEnableDirectServer, _enableDirectIPAccess);
                 await bind.mainSetOption(
-                    key: kOptionDirectServer, value: value);
+                    key: kOptionEnableDirectServer, value: value);
                 setState(() {});
               },
       ),
@@ -601,7 +603,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
             Text(translate('Check for software update on startup')),
           ]),
           onToggle: (bool toValue) async {
-            await mainSetLocalBoolOption(kOptionEnableCheckUpdate, toValue);
+            await mainSetLocalBoolOption(kOptionAllowCheckUpdate, toValue);
             setState(() => _checkUpdateOnStartup = toValue);
           },
         ),
