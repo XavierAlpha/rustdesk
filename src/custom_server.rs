@@ -21,8 +21,7 @@ pub struct CustomServer {
 fn get_custom_server_from_config_string(s: &str) -> ResultType<CustomServer> {
     let tmp: String = s.chars().rev().collect();
     const PK: &[u8; 32] = &[
-        88, 168, 68, 104, 60, 5, 163, 198, 165, 38, 12, 85, 114, 203, 96, 163, 70, 48, 0, 131, 57,
-        12, 46, 129, 83, 17, 84, 193, 119, 197, 130, 103,
+        170, 40, 203, 97, 24, 15, 43, 127, 167, 203, 125, 205, 221, 85, 85, 122, 73, 205, 87, 49, 186, 250, 180, 164, 69, 85, 231, 122, 23, 211, 246, 131,
     ];
     let pk = sign::PublicKey(*PK);
     let data = URL_SAFE_NO_PAD.decode(tmp)?;
