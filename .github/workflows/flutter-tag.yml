@@ -2,6 +2,11 @@ name: Flutter Tag Build
 
 on:
   workflow_dispatch:
+    inputs:
+      manual_tag:
+        description: 'Tags (v1.2.3 or 1.2.3)'
+        required: true
+        type: string
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
@@ -15,4 +20,4 @@ jobs:
     secrets: inherit
     with:
       upload-artifact: true
-      upload-tag: ${{ github.ref_name }}
+      upload-tag: ${{ github.event_name == 'push' && github.ref_name || inputs.manual_tag }}

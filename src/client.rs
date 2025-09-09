@@ -290,12 +290,12 @@ impl Client {
             crate::get_rendezvous_server(1_000).await
         } else {
             if other_server == PUBLIC_SERVER {
+                let s = RENDEZVOUS_SERVERS.read().unwrap();
+                let first_server = s.get(0).cloned().unwrap_or_default();
+                let other_servers = s.get(1..).unwrap_or_default().to_owned();
                 (
-                    check_port(RENDEZVOUS_SERVERS[0], RENDEZVOUS_PORT),
-                    RENDEZVOUS_SERVERS[1..]
-                        .iter()
-                        .map(|x| x.to_string())
-                        .collect(),
+                    check_port(&first_server, RENDEZVOUS_PORT),
+                    other_servers,
                     true,
                 )
             } else {
@@ -758,11 +758,12 @@ impl Client {
         key: &str,
         conn: &mut Stream,
     ) -> ResultType<Option<Vec<u8>>> {
-        let rs_pk = get_rs_pk(if key.is_empty() {
-            config::RS_PUB_KEY
+        let pk_str: String = if key.is_empty() {
+            config::RS_PUB_KEY.read().unwrap().clone()
         } else {
-            key
-        });
+            key.to_owned()
+        };
+        let rs_pk = get_rs_pk(&pk_str);
         let mut sign_pk = None;
         let mut option_pk = None;
         if !signed_id_pk.is_empty() {
@@ -1790,7 +1791,7 @@ impl LoginConfigHandler {
             let server = server_key.next().unwrap_or_default();
             let args = server_key.next().unwrap_or_default();
             let key = if server == PUBLIC_SERVER {
-                config::RS_PUB_KEY.to_owned()
+                config::RS_PUB_KEY.read().unwrap().clone()
             } else {
                 let mut args_map: HashMap<String, &str> = HashMap::new();
                 for arg in args.split('&') {
@@ -1851,8 +1852,13 @@ impl LoginConfigHandler {
                 || Config::is_proxy();
         if let Some((real_id, server, key)) = &self.other_server {
             let other_server_key = self.get_option("other-server-key");
-            if !other_server_key.is_empty() && key.is_empty() {
-                self.other_server = Some((real_id.to_owned(), server.to_owned(), other_server_key));
+            if key.is_empty() {
+                if !other_server_key.is_empty() {
+                    self.other_server = Some((real_id.to_owned(), server.to_owned(), other_server_key));
+                } else {
+                    let public_key = config::RS_PUB_KEY.read().unwrap().clone();
+                    self.other_server = Some((real_id.to_owned(), server.to_owned(), public_key));
+                }
             }
         }
 
