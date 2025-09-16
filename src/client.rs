@@ -1852,8 +1852,13 @@ impl LoginConfigHandler {
                 || Config::is_proxy();
         if let Some((real_id, server, key)) = &self.other_server {
             let other_server_key = self.get_option("other-server-key");
-            if !other_server_key.is_empty() && key.is_empty() {
-                self.other_server = Some((real_id.to_owned(), server.to_owned(), other_server_key));
+            if key.is_empty() {
+                if !other_server_key.is_empty() {
+                    self.other_server = Some((real_id.to_owned(), server.to_owned(), other_server_key));
+                } else {
+                    let public_key = config::RS_PUB_KEY.read().unwrap().clone();
+                    self.other_server = Some((real_id.to_owned(), server.to_owned(), public_key));
+                }
             }
         }
 
