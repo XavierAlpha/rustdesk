@@ -902,8 +902,8 @@ pub fn check_software_update() {
     if is_custom_client() {
         return;
     }
-    let opt = LocalConfig::get_option(keys::OPTION_ENABLE_CHECK_UPDATE);
-    if config::option2bool(keys::OPTION_ENABLE_CHECK_UPDATE, &opt) {
+    let opt = LocalConfig::get_option(keys::OPTION_ALLOW_CHECK_UPDATE);
+    if config::option2bool(keys::OPTION_ALLOW_CHECK_UPDATE, &opt) {
         std::thread::spawn(move || allow_err!(do_check_software_update()));
     }
 }
