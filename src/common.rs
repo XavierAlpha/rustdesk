@@ -1055,10 +1055,12 @@ pub fn is_public(url: &str) -> bool {
 }
 
 pub fn get_udp_punch_enabled() -> bool {
-    config::option2bool(
-        keys::OPTION_ENABLE_UDP_PUNCH,
-        &get_local_option(keys::OPTION_ENABLE_UDP_PUNCH),
-    )
+    // Honor the global "Disable UDP" switch by short-circuiting all UDP punch logic.
+    !is_udp_disabled()
+        && config::option2bool(
+            keys::OPTION_ENABLE_UDP_PUNCH,
+            &get_local_option(keys::OPTION_ENABLE_UDP_PUNCH),
+        )
 }
 
 pub fn get_ipv6_punch_enabled() -> bool {
