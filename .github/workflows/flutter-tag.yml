@@ -7,6 +7,10 @@ on:
         description: 'Tags (v1.2.3 or 1.2.3)'
         required: true
         type: string
+      version:
+        description: 'Version (1.2.3)'
+        required: true
+        type: string
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
@@ -21,3 +25,4 @@ jobs:
     with:
       upload-artifact: true
       upload-tag: ${{ github.event_name == 'push' && github.ref_name || inputs.manual_tag }}
+      version: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}

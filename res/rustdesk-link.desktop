@@ -1,7 +1,7 @@
 [Desktop Entry]
-Name=RustDesk
+Name=Camellia
 NoDisplay=true
-MimeType=x-scheme-handler/rustdesk;
+MimeType=x-scheme-handler/camellia;
 TryExec=rustdesk
 Exec=rustdesk %u
 Icon=rustdesk
