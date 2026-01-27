@@ -16,6 +16,9 @@ cert.pfx
 *png
 *svg
 *jpg
+!res/camellia-banner.svg
+!docs/assets/*.png
+!docs/assets/*.svg
 sciter.dll
 **pdb
 src/bridge_generated.rs

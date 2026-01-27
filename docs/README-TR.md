@@ -1,43 +1,46 @@
 
 <p align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk - Uzak masaüstü uygulamanız"><br>
+  <img src="../res/logo-header.svg" alt="Camellia - Uzak masaüstü uygulamanız"><br>
   <a href="#free-public-servers">Sunucular</a> •
   <a href="#raw-steps-to-build">Derleme</a> •
   <a href="#how-to-build-with-docker">Docker ile Derleme</a> •
   <a href="#file-structure">Dosya Yapısı</a> •
   <a href="#snapshot">Ekran Görüntüleri</a><br>
   [<a href="docs/README-UA.md">Українська</a>] | [<a href="docs/README-CS.md">česky</a>] | [<a href="docs/README-ZH.md">中文</a>] | [<a href="docs/README-HU.md">Magyar</a>] | [<a href="docs/README-ES.md">Español</a>] | [<a href="docs/README-FA.md">فارسی</a>] | [<a href="docs/README-FR.md">Français</a>] | [<a href="docs/README-DE.md">Deutsch</a>] | [<a href="docs/README-PL.md">Polski</a>] | [<a href="docs/README-ID.md">Indonesian</a>] | [<a href="docs/README-FI.md">Suomi</a>] | [<a href="docs/README-ML.md">മലയാളം</a>] | [<a href="docs/README-JP.md">日本語</a>] | [<a href="docs/README-NL.md">Nederlands</a>] | [<a href="docs/README-IT.md">Italiano</a>] | [<a href="docs/README-RU.md">Русский</a>] | [<a href="docs/README-PTBR.md">Português (Brasil)</a>] | [<a href="docs/README-EO.md">Esperanto</a>] | [<a href="docs/README-KR.md">한국어</a>] | [<a href="docs/README-AR.md">العربي</a>] | [<a href="docs/README-VN.md">Tiếng Việt</a>] | [<a href="docs/README-DA.md">Dansk</a>] | [<a href="docs/README-GR.md">Ελληνικά</a>]<br>
-  <b>README, <a href="https://github.com/rustdesk/rustdesk/tree/master/src/lang">RustDesk UI</a> ve <a href="https://github.com/rustdesk/doc.rustdesk.com">RustDesk Dökümantasyonu</a>'nu ana dilinize çevirmemiz için yardımınıza ihtiyacımız var</b>
+  <b>README, <a href="https://github.com/CamelliaCorp/camellia/tree/master/src/lang">Camellia UI</a> ve <a href="https://github.com/CamelliaCorp/camellia">Camellia Dökümantasyonu</a>'nu ana dilinize çevirmemiz için yardımınıza ihtiyacımız var</b>
 </p>
+
+License: GNU Affero General Public License v3.0 (AGPL-3.0). See LICENCE.
+
 
 
 > [!Dikkat]
 > **Yanlış Kullanım Uyarısı:** <br>
-> RustDesk geliştiricileri, bu yazılımın etik olmayan veya yasa dışı kullanımını onaylamaz veya desteklemez. Yetkisiz erişim, kontrol veya gizlilik ihlali gibi kötüye kullanımlar kesinlikle yönergelerimize aykırıdır. Yazarlar, uygulamanın herhangi bir yanlış kullanımından sorumlu değildir.
+> Camellia geliştiricileri, bu yazılımın etik olmayan veya yasa dışı kullanımını onaylamaz veya desteklemez. Yetkisiz erişim, kontrol veya gizlilik ihlali gibi kötüye kullanımlar kesinlikle yönergelerimize aykırıdır. Yazarlar, uygulamanın herhangi bir yanlış kullanımından sorumlu değildir.
 
-Bizimle sohbet edin: [Discord](https://discord.gg/nDceKgxnkV) | [Twitter](https://twitter.com/rustdesk) | [Reddit](https://www.reddit.com/r/rustdesk) | [YouTube](https://www.youtube.com/@rustdesk)
+Contact: contact@aimmv.com | GitHub: https://github.com/CamelliaCorp/camellia
 
-[![RustDesk Server Pro](https://img.shields.io/badge/RustDesk%20Server%20Pro-Geli%C5%9Fmi%C5%9F%20%C3%96zellikler-blue)](https://rustdesk.com/pricing.html)
+[![Camellia Server Pro](./assets/camellia-server-pro-badge.svg)](https://camellia.aimmv.com/pricing.html)
 
-Rust dilinde yazılmış, başka bir uzak masaüstü yazılımı daha. Hiçbir yapılandırma gerekmeksizin, hemen kullanıma hazır. Güvenlik konusunda hiçbir endişe duymadan, verileriniz üzerinde tam kontrole sahip olun. Kendi rendezvous/relay sunucumuzu kullanabilirsiniz, [kendi sunucunuzu kurabilirsiniz](https://rustdesk.com/server) veya [kendi rendezvous/relay sunucunuzu yazabilirsiniz](https://github.com/rustdesk/rustdesk-server-demo).
+Rust dilinde yazılmış, başka bir uzak masaüstü yazılımı daha. Hiçbir yapılandırma gerekmeksizin, hemen kullanıma hazır. Güvenlik konusunda hiçbir endişe duymadan, verileriniz üzerinde tam kontrole sahip olun. Kendi rendezvous/relay sunucumuzu kullanabilirsiniz, [kendi sunucunuzu kurabilirsiniz](https://camellia.aimmv.com/server) veya [kendi rendezvous/relay sunucunuzu yazabilirsiniz](https://github.com/CamelliaCorp/camellia).
 
-![image](https://user-images.githubusercontent.com/71636191/171661982-430285f0-2e12-4b1d-9957-4a58e375304d.png)
+![image](./assets/171661982-430285f0-2e12-4b1d-9957-4a58e375304d.png)
 
-RustDesk, herkesin katkısına açıktır. Başlamak için [CONTRIBUTING.md](CONTRIBUTING-TR.md) belgesine göz atın.
+Camellia, herkesin katkısına açıktır. Başlamak için [CONTRIBUTING.md](CONTRIBUTING-TR.md) belgesine göz atın.
 
-[**SSS**](https://github.com/rustdesk/rustdesk/wiki/FAQ)
+[**SSS**](https://github.com/CamelliaCorp/camellia/wiki/FAQ)
 
-[**BINARY İNDİR**](https://github.com/rustdesk/rustdesk/releases)
+[**BINARY İNDİR**](https://github.com/CamelliaCorp/camellia/releases)
 
-[**NIGHTLY DERLEME**](https://github.com/rustdesk/rustdesk/releases/tag/nightly)
+[**NIGHTLY DERLEME**](https://github.com/CamelliaCorp/camellia/releases/tag/nightly)
 
-[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"
+[<img src="./assets/fdroid-badge.png"
     alt="F-Droid'de Alın"
     height="80">](https://f-droid.org/en/packages/com.carriez.flutter_hbb)
 
 ## Gereksinimler
 
-Masaüstü sürümleri GUI için; [Sciter](https://sciter.com/)(kaldırılacak) veya Flutter kullanır. Sciter daha kolay ve başlamak için daha dostcanlısı, bundan dolayı bu kılavuz sadece Sciter içindir. Flutter sürümünü derlemek için [CI](https://github.com/rustdesk/rustdesk/blob/master/.github/workflows/flutter-build.yml)'ımıza bakın.
+Masaüstü sürümleri GUI için; [Sciter](https://sciter.com/)(kaldırılacak) veya Flutter kullanır. Sciter daha kolay ve başlamak için daha dostcanlısı, bundan dolayı bu kılavuz sadece Sciter içindir. Flutter sürümünü derlemek için [CI](https://github.com/CamelliaCorp/camellia/blob/master/.github/workflows/flutter-build.yml)'ımıza bakın.
 
 Lütfen Sciter dinamik kütüphanesini kendiniz indirin.
 
@@ -56,7 +59,7 @@ Lütfen Sciter dinamik kütüphanesini kendiniz indirin.
 
 - `cargo run` komutunu çalıştırın.
 
-## [Derleme](https://rustdesk.com/docs/en/dev/build/)
+## [Derleme](https://camellia.aimmv.com/docs/en/dev/build/)
 
 ## Linux Üzerinde Derleme Nasıl Yapılır
 
@@ -116,8 +119,8 @@ cd
 ```sh
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
-git clone https://github.com/rustdesk/rustdesk
-cd rustdesk
+git clone https://github.com/CamelliaCorp/camellia
+cd camellia
 mkdir -p target/debug
 wget https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.lnx/x64/libsciter-gtk.so
 mv libsciter-gtk.so target/debug
@@ -129,53 +132,50 @@ VCPKG_ROOT=$HOME/vcpkg cargo run
 Önce repository'i klonlayın ve Docker container'ını oluşturun.
 
 ```sh
-git clone https://github.com/rustdesk/rustdesk
-cd rustdesk
-docker build -t "rustdesk-builder" .
+git clone https://github.com/CamelliaCorp/camellia
+cd camellia
+docker build -t "camellia-builder" .
 ```
 
 Ardından, uygulamayı her derlemeniz gerektiğinde aşağıdaki komutu çalıştırın:
 
 ```sh
-docker run --rm -it -v $PWD:/home/user/rustdesk -v rustdesk-git-cache:/home/user/.cargo/git -v rustdesk-registry-cache:/home/user/.cargo/registry -e PUID="$(id -u)" -e PGID="$(id -g)" rustdesk-builder
+docker run --rm -it -v $PWD:/home/user/camellia -v camellia-git-cache:/home/user/.cargo/git -v camellia-registry-cache:/home/user/.cargo/registry -e PUID="$(id -u)" -e PGID="$(id -g)" camellia-builder
 ```
 
 Bilin ki ilk derlemeniz gereksinimlerin önbelleği yüklenmesinden ötürü uzun sürebilir, sonraki derlemeleriniz daha hızlı olacaktır. Ayrıca, derleme komutuna isteğe bağlı argümanlar belirtmeniz gerekiyorsa, bunu komutun sonunda ki `<OPTIONAL-ARGS>` yerine yazabilirsiniz. Örneğin, optimize edilmiş bir sürümü derlemek isterseniz, yukarıdaki komutu çalıştırdıktan sonra `--release` ekleyebilirsiniz. Oluşan çalıştırılabilir dosya sisteminizdeki hedef klasöründe bulunacak ve şu komutla çalıştırılabilir olacaktır:
 
 ```sh
-target/debug/rustdesk
+target/debug/camellia
 ```
 
 Veya, yayım çalıştırılabilir dosyası için:
 
 ```sh
-target/release/rustdesk
+target/release/camellia
 ```
 
-Lütfen bu komutları RustDesk reposunun root klasöründe çalıştırdığınızdan emin olun, aksi takdirde uygulama gereken kaynakları bulamayabilir. Ayrıca, `install` veya `run` gibi diğer cargo altkomutları şu anda bu yöntem aracılığıyla desteklenmemektedir, çünkü bunlar programı konteyner içinde kurar veya çalıştırır, ana makinede değil.
+Lütfen bu komutları Camellia reposunun root klasöründe çalıştırdığınızdan emin olun, aksi takdirde uygulama gereken kaynakları bulamayabilir. Ayrıca, `install` veya `run` gibi diğer cargo altkomutları şu anda bu yöntem aracılığıyla desteklenmemektedir, çünkü bunlar programı konteyner içinde kurar veya çalıştırır, ana makinede değil.
  
 ## Dosya Yapısı
 
-- **[libs/hbb_common](https://github.com/rustdesk/rustdesk/tree/master/libs/hbb_common)**: video codec, config, tcp/udp wrapper, protobuf, dosya transferi için fs fonksiyonları ve diğer bazı yardımcı işlevler
-- **[libs/scrap](https://github.com/rustdesk/rustdesk/tree/master/libs/scrap)**: ekran yakalama
-- **[libs/enigo](https://github.com/rustdesk/rustdesk/tree/master/libs/enigo)**: platforma özgü klavye/fare kontrolü
-- **[libs/clipboard](https://github.com/rustdesk/rustdesk/tree/master/libs/clipboard)**: platforma özgü kopyala/yapıştır implementasyonları.
-- **[src/ui](https://github.com/rustdesk/rustdesk/tree/master/src/ui)**: Eski Sciter UI (kaldırılacak)
-- **[src/server](https://github.com/rustdesk/rustdesk/tree/master/src/server)**: ses/pano/input/video servisleri ve ağ bağlantıları
-- **[src/client.rs](https://github.com/rustdesk/rustdesk/tree/master/src/client.rs)**: Eşli bağlantı başlat
-- **[src/rendezvous_mediator.rs](https://github.com/rustdesk/rustdesk/tree/master/src/rendezvous_mediator.rs)**: [rustdesk-server](https://github.com/rustdesk/rustdesk-server) ile iletişime gir, remote direct(TCP delik açma) yada relay bağlantısı için bekle
-- **[src/platform](https://github.com/rustdesk/rustdesk/tree/master/src/platform)**: platforma özgü kod
-- **[flutter](https://github.com/rustdesk/rustdesk/tree/master/flutter)**: Masaüstü ve mobil için Flutter kodu
-- **[flutter/web/js](https://github.com/rustdesk/rustdesk/tree/master/flutter/web/v1/js)**: Flutter web istemcisi için JavaScript
+- **[libs/hbb_common](https://github.com/CamelliaCorp/camellia/tree/master/libs/hbb_common)**: video codec, config, tcp/udp wrapper, protobuf, dosya transferi için fs fonksiyonları ve diğer bazı yardımcı işlevler
+- **[libs/scrap](https://github.com/CamelliaCorp/camellia/tree/master/libs/scrap)**: ekran yakalama
+- **[libs/enigo](https://github.com/CamelliaCorp/camellia/tree/master/libs/enigo)**: platforma özgü klavye/fare kontrolü
+- **[libs/clipboard](https://github.com/CamelliaCorp/camellia/tree/master/libs/clipboard)**: platforma özgü kopyala/yapıştır implementasyonları.
+- **[src/ui](https://github.com/CamelliaCorp/camellia/tree/master/src/ui)**: Eski Sciter UI (kaldırılacak)
+- **[src/server](https://github.com/CamelliaCorp/camellia/tree/master/src/server)**: ses/pano/input/video servisleri ve ağ bağlantıları
+- **[src/client.rs](https://github.com/CamelliaCorp/camellia/tree/master/src/client.rs)**: Eşli bağlantı başlat
+- **[src/rendezvous_mediator.rs](https://github.com/CamelliaCorp/camellia/tree/master/src/rendezvous_mediator.rs)**: [Camellia server](https://github.com/CamelliaCorp/camellia) ile iletişime gir, remote direct(TCP delik açma) yada relay bağlantısı için bekle
+- **[src/platform](https://github.com/CamelliaCorp/camellia/tree/master/src/platform)**: platforma özgü kod
+- **[flutter](https://github.com/CamelliaCorp/camellia/tree/master/flutter)**: Masaüstü ve mobil için Flutter kodu
+- **[flutter/web/js](https://github.com/CamelliaCorp/camellia/tree/master/flutter/web/v1/js)**: Flutter web istemcisi için JavaScript
 
 
 ## Ekran Görüntüleri
 
-![image](https://user-images.githubusercontent.com/71636191/113112362-ae4deb80-923b-11eb-957d-ff88daad4f06.png)
+![image](./assets/113112362-ae4deb80-923b-11eb-957d-ff88daad4f06.png)
+![image](./assets/113112619-f705a480-923b-11eb-911d-97e984ef52b6.png)
+![image](./assets/113112857-3fbd5d80-923c-11eb-9836-768325faf906.png)
+![image](./assets/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
 
-![image](https://user-images.githubusercontent.com/71636191/113112619-f705a480-923b-11eb-911d-97e984ef52b6.png)
-
-![image](https://user-images.githubusercontent.com/71636191/113112857-3fbd5d80-923c-11eb-9836-768325faf906.png)
-
-![image](https://user-images.githubusercontent.com/71636191/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
-```

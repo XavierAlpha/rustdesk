@@ -1,40 +1,43 @@
 <p align="center">
-  <img src="res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
+  <img src="res/logo-header.svg" alt="Camellia - Your remote desktop"><br>
   <a href="#public-servers">Servere</a> •
   <a href="#raw-steps-to-build">Build</a> •
   <a href="#how-to-build-with-docker">Docker</a> •
   <a href="#file-structure">Struktur</a> •
   <a href="#snapshot">Snapshot</a><br>
   [<a href="docs/README-UA.md">Українська</a>] | [<a href="docs/README-CS.md">česky</a>] | [<a href="docs/README-ZH.md">中文</a>] | [<a href="docs/README-HU.md">Magyar</a>] | [<a href="docs/README-ES.md">Español</a>] | [<a href="docs/README-FA.md">فارسی</a>] | [<a href="docs/README-FR.md">Français</a>] | [<a href="docs/README-DE.md">Deutsch</a>] | [<a href="docs/README-PL.md">Polski</a>] | [<a href="docs/README-ID.md">Indonesian</a>] | [<a href="docs/README-FI.md">Suomi</a>] | [<a href="docs/README-ML.md">മലയാളം</a>] | [<a href="docs/README-JP.md">日本語</a>] | [<a href="docs/README-NL.md">Nederlands</a>] | [<a href="docs/README-IT.md">Italiano</a>] | [<a href="docs/README-RU.md">Русский</a>] | [<a href="docs/README-PTBR.md">Português (Brasil)</a>] | [<a href="docs/README-EO.md">Esperanto</a>] | [<a href="docs/README-KR.md">한국어</a>] | [<a href="docs/README-AR.md">العربي</a>] | [<a href="docs/README-VN.md">Tiếng Việt</a>] | [<a href="docs/README-DA.md">Dansk</a>] | [<a href="docs/README-GR.md">Ελληνικά</a>] | [<a href="docs/README-TR.md">Türkçe</a>] | [<a href="docs/README-NO.md">Norsk</a><br>
-  <b>Vi trenger din hjelp til å oversette denne README-en, <a href="https://github.com/rustdesk/rustdesk/tree/master/src/lang">RustDesk UI</a> og <a href="https://github.com/rustdesk/doc.rustdesk.com">RustDesk Doc</a> tid ditt morsmål</b>
+  <b>Vi trenger din hjelp til å oversette denne README-en, <a href="https://github.com/CamelliaCorp/camellia/tree/master/src/lang">Camellia UI</a> og <a href="https://github.com/CamelliaCorp/camellia">Camellia Doc</a> tid ditt morsmål</b>
 </p>
 
-Snakk med oss: [Discord](https://discord.gg/nDceKgxnkV) | [Twitter](https://twitter.com/rustdesk) | [Reddit](https://www.reddit.com/r/rustdesk) | [YouTube](https://www.youtube.com/@rustdesk)
+License: GNU Affero General Public License v3.0 (AGPL-3.0). See LICENCE.
 
-[![RustDesk Server Pro](https://img.shields.io/badge/RustDesk%20Server%20Pro-Avanserte%20Funksjoner-blue)](https://rustdesk.com/pricing.html)
 
-Enda en annen fjernstyrt desktop programvare, skrevet i Rust. Virker rett ut av pakken, ingen konfigurasjon nødvendig. Du har full kontroll over din data, uten beskymring for sikkerhet. Du kan bruke vår rendezvous_mediator/relay server, [sett opp din egen](https://rustdesk.com/server), eller [skriv din egen rendezvous_mediator/relay server](https://github.com/rustdesk/rustdesk-server-demo).
+Contact: contact@aimmv.com | GitHub: https://github.com/CamelliaCorp/camellia
 
-![image](https://user-images.githubusercontent.com/71636191/171661982-430285f0-2e12-4b1d-9957-4a58e375304d.png)
+[![Camellia Server Pro](./assets/camellia-server-pro-badge.svg)](https://camellia.aimmv.com/pricing.html)
 
-RustDesk er velkommen for bidrag fra alle. Se [CONTRIBUTING.md](CONTRIBUTING-NO.md) for hjelp med oppstart.
+Enda en annen fjernstyrt desktop programvare, skrevet i Rust. Virker rett ut av pakken, ingen konfigurasjon nødvendig. Du har full kontroll over din data, uten beskymring for sikkerhet. Du kan bruke vår rendezvous_mediator/relay server, [sett opp din egen](https://camellia.aimmv.com/server), eller [skriv din egen rendezvous_mediator/relay server](https://github.com/CamelliaCorp/camellia).
 
-[**FAQ**](https://github.com/rustdesk/rustdesk/wiki/FAQ)
+![image](./assets/171661982-430285f0-2e12-4b1d-9957-4a58e375304d.png)
 
-[**BINARY NEDLASTING**](https://github.com/rustdesk/rustdesk/releases)
+Camellia er velkommen for bidrag fra alle. Se [CONTRIBUTING.md](CONTRIBUTING-NO.md) for hjelp med oppstart.
 
-[**NIGHTLY BUILD**](https://github.com/rustdesk/rustdesk/releases/tag/nightly)
+[**FAQ**](https://github.com/CamelliaCorp/camellia/wiki/FAQ)
 
-[<img src="https://f-droid.org/badge/get-it-on.png"
+[**BINARY NEDLASTING**](https://github.com/CamelliaCorp/camellia/releases)
+
+[**NIGHTLY BUILD**](https://github.com/CamelliaCorp/camellia/releases/tag/nightly)
+
+[<img src="./assets/fdroid-badge.png"
     alt="Få det på F-Droid"
     height="80">](https://f-droid.org/en/packages/com.carriez.flutter_hbb)
-[<img src="https://flathub.org/api/badge?svg&locale=en"
+[<img src="./assets/flathub-badge.svg"
     alt="Få det på Flathub"
-    height="80">](https://flathub.org/apps/com.rustdesk.RustDesk)
+    height="80">](https://flathub.org/apps/com.camellia.Camellia)
 
 ## Avhengigheter
 
-Desktop versjoner bruker Flutter eller Sciter (avviklet) for GUI, denne veiledningen er bare for Sciter, grunnet att det er letter og en mer venlig start. Skjekk ut vår [CI](https://github.com/rustdesk/rustdesk/blob/master/.github/workflows/flutter-build.yml) for bygging av Flutter versjonen.
+Desktop versjoner bruker Flutter eller Sciter (avviklet) for GUI, denne veiledningen er bare for Sciter, grunnet att det er letter og en mer venlig start. Skjekk ut vår [CI](https://github.com/CamelliaCorp/camellia/blob/master/.github/workflows/flutter-build.yml) for bygging av Flutter versjonen.
 
 Venligst last ned Sciters dynamiske bibliotek selv.
 
@@ -53,7 +56,7 @@ Venligst last ned Sciters dynamiske bibliotek selv.
 
 - Kjør `cargo run`
 
-## [Bygg](https://rustdesk.com/docs/en/dev/build/)
+## [Bygg](https://camellia.aimmv.com/docs/en/dev/build/)
 
 ## Hvordan Bygge til Linux
 
@@ -113,8 +116,8 @@ cd
 ```sh
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
-git clone https://github.com/rustdesk/rustdesk
-cd rustdesk
+git clone https://github.com/CamelliaCorp/camellia
+cd camellia
 mkdir -p target/debug
 wget https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.lnx/x64/libsciter-gtk.so
 mv libsciter-gtk.so target/debug
@@ -126,52 +129,49 @@ VCPKG_ROOT=$HOME/vcpkg cargo run
 Start med å klone repositoret og bygg Docker konteineren:
 
 ```sh
-git clone https://github.com/rustdesk/rustdesk
-cd rustdesk
-docker build -t "rustdesk-builder" .
+git clone https://github.com/CamelliaCorp/camellia
+cd camellia
+docker build -t "camellia-builder" .
 ```
 
 Deretter, hver gang du trenger å bygge applikasjonen, kjør følgene kommando:
 
 ```sh
-docker run --rm -it -v $PWD:/home/user/rustdesk -v rustdesk-git-cache:/home/user/.cargo/git -v rustdesk-registry-cache:/home/user/.cargo/registry -e PUID="$(id -u)" -e PGID="$(id -g)" rustdesk-builder
+docker run --rm -it -v $PWD:/home/user/camellia -v camellia-git-cache:/home/user/.cargo/git -v camellia-registry-cache:/home/user/.cargo/registry -e PUID="$(id -u)" -e PGID="$(id -g)" camellia-builder
 ```
 
 Det kan ta lengere tid før avhengighetene blir bufret første gang du bygger, senere bygg er raskere. Hvis du trenger å spesifisere forkjellige argumenter til bygge kommandoen, kan du gjøre det på slutten av kommandoen ved `<OPTIONAL-ARGS>` feltet. For eksempel, hvis du ville bygge en optimalisert release versjon, ville du kjørt kommandoen over fulgt `--release`. Den kjørbare filen vill være tilgjengelig i mål direktive på ditt system, og kan bli kjørt med:
 
 ```sh
-target/debug/rustdesk
+target/debug/camellia
 ```
 
 Eller, hvis du kjører ett release program:
 
 ```sh
-target/release/rustdesk
+target/release/camellia
 ```
 
-Venligst pass på att du kjører disse kommandoene fra roten av RustDesk repositoret, eller kan det hende att applikasjon ikke finner de riktige ressursene. Pass også på att andre cargo subkommandoer som for eksempel `install` eller `run` ikke støttes med denne metoden da de vill installere eller kjøre programmet i konteineren istedet for verten.
+Venligst pass på att du kjører disse kommandoene fra roten av Camellia repositoret, eller kan det hende att applikasjon ikke finner de riktige ressursene. Pass også på att andre cargo subkommandoer som for eksempel `install` eller `run` ikke støttes med denne metoden da de vill installere eller kjøre programmet i konteineren istedet for verten.
 
 ## Fil Struktur
 
-- **[libs/hbb_common](https://github.com/rustdesk/rustdesk/tree/master/libs/hbb_common)**: video kodek, configurasjon, tcp/udp innpakning, protobuf, fs funksjon for fil overføring, og noen andre verktøy funksjoner
-- **[libs/scrap](https://github.com/rustdesk/rustdesk/tree/master/libs/scrap)**: skjermfangst
-- **[libs/enigo](https://github.com/rustdesk/rustdesk/tree/master/libs/enigo)**: platform spesefik keyboard/mus kontroll
-- **[libs/clipboard](https://github.com/rustdesk/rustdesk/tree/master/libs/clipboard)**: fil kopi og innliming implementasjon for Windows, Linux, macOS.
-- **[src/ui](https://github.com/rustdesk/rustdesk/tree/master/src/ui)**: foreldret Sciter UI (avviklet)
-- **[src/server](https://github.com/rustdesk/rustdesk/tree/master/src/server)**: lyd/utklippstavle/input/video tjenester, og internett tilkobling
-- **[src/client.rs](https://github.com/rustdesk/rustdesk/tree/master/src/client.rs)**: start en peer tilkobling
-- **[src/rendezvous_mediator.rs](https://github.com/rustdesk/rustdesk/tree/master/src/rendezvous_mediator.rs)**: Kommunikasjon med [rustdesk-server](https://github.com/rustdesk/rustdesk-server), vent på direkte fjernstyring (TCP hulling) eller vidresendt tilkobling
-- **[src/platform](https://github.com/rustdesk/rustdesk/tree/master/src/platform)**: platform spesefik kode
-- **[flutter](https://github.com/rustdesk/rustdesk/tree/master/flutter)**: Flutter kode for desktop og mobil
-- **[flutter/web/js](https://github.com/rustdesk/rustdesk/tree/master/flutter/web/js)**: JavaScript for Flutter nettsted klient
+- **[libs/hbb_common](https://github.com/CamelliaCorp/camellia/tree/master/libs/hbb_common)**: video kodek, configurasjon, tcp/udp innpakning, protobuf, fs funksjon for fil overføring, og noen andre verktøy funksjoner
+- **[libs/scrap](https://github.com/CamelliaCorp/camellia/tree/master/libs/scrap)**: skjermfangst
+- **[libs/enigo](https://github.com/CamelliaCorp/camellia/tree/master/libs/enigo)**: platform spesefik keyboard/mus kontroll
+- **[libs/clipboard](https://github.com/CamelliaCorp/camellia/tree/master/libs/clipboard)**: fil kopi og innliming implementasjon for Windows, Linux, macOS.
+- **[src/ui](https://github.com/CamelliaCorp/camellia/tree/master/src/ui)**: foreldret Sciter UI (avviklet)
+- **[src/server](https://github.com/CamelliaCorp/camellia/tree/master/src/server)**: lyd/utklippstavle/input/video tjenester, og internett tilkobling
+- **[src/client.rs](https://github.com/CamelliaCorp/camellia/tree/master/src/client.rs)**: start en peer tilkobling
+- **[src/rendezvous_mediator.rs](https://github.com/CamelliaCorp/camellia/tree/master/src/rendezvous_mediator.rs)**: Kommunikasjon med [Camellia server](https://github.com/CamelliaCorp/camellia), vent på direkte fjernstyring (TCP hulling) eller vidresendt tilkobling
+- **[src/platform](https://github.com/CamelliaCorp/camellia/tree/master/src/platform)**: platform spesefik kode
+- **[flutter](https://github.com/CamelliaCorp/camellia/tree/master/flutter)**: Flutter kode for desktop og mobil
+- **[flutter/web/js](https://github.com/CamelliaCorp/camellia/tree/master/flutter/web/js)**: JavaScript for Flutter nettsted klient
 
 ## Skjermbilder
 
-![Tilkoblings Manager](https://github.com/rustdesk/rustdesk/assets/28412477/db82d4e7-c4bc-4823-8e6f-6af7eadf7651)
-
-![Koble til Windows PC](https://github.com/rustdesk/rustdesk/assets/28412477/9baa91e9-3362-4d06-aa1a-7518edcbd7ea)
-
-![Fil Overføring](https://github.com/rustdesk/rustdesk/assets/28412477/39511ad3-aa9a-4f8c-8947-1cce286a46ad)
-
-![TCP Tunneling](https://github.com/rustdesk/rustdesk/assets/28412477/78e8708f-e87e-4570-8373-1360033ea6c5)
+![Tilkoblings Manager](./assets/113112362-ae4deb80-923b-11eb-957d-ff88daad4f06.png)
+![Koble til Windows PC](./assets/113112619-f705a480-923b-11eb-911d-97e984ef52b6.png)
+![Fil Overføring](./assets/113112857-3fbd5d80-923c-11eb-9836-768325faf906.png)
+![TCP Tunneling](./assets/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
 

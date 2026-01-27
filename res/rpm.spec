@@ -1,10 +1,10 @@
-Name:       rustdesk
-Version:    1.4.5
+Name:       camellia
+Version:    %{?pkgver}%{!?pkgver:1.4.5}
 Release:    0
 Summary:    RPM package
 License:    GPL-3.0
-URL:        https://rustdesk.com
-Vendor:     rustdesk <info@rustdesk.com>
+URL:        https://camellia.aimmv.com
+Vendor:     Camellia <contact@aimmv.com>
 Requires:   gtk3 libxcb libXfixes alsa-lib libva2 pam gstreamer1-plugins-base
 Recommends: libayatana-appindicator-gtk3 libxdo
 
@@ -23,27 +23,27 @@ The best open-source remote desktop client software, written in Rust.
 
 %install
 mkdir -p %{buildroot}/usr/bin/
-mkdir -p %{buildroot}/usr/share/rustdesk/
-mkdir -p %{buildroot}/usr/share/rustdesk/files/
+mkdir -p %{buildroot}/usr/share/camellia/
+mkdir -p %{buildroot}/usr/share/camellia/files/
 mkdir -p %{buildroot}/usr/share/icons/hicolor/256x256/apps/
 mkdir -p %{buildroot}/usr/share/icons/hicolor/scalable/apps/
-install -m 755 $HBB/target/release/rustdesk %{buildroot}/usr/bin/rustdesk
-install $HBB/libsciter-gtk.so %{buildroot}/usr/share/rustdesk/libsciter-gtk.so
-install $HBB/res/rustdesk.service %{buildroot}/usr/share/rustdesk/files/
-install $HBB/res/128x128@2x.png %{buildroot}/usr/share/icons/hicolor/256x256/apps/rustdesk.png
-install $HBB/res/scalable.svg %{buildroot}/usr/share/icons/hicolor/scalable/apps/rustdesk.svg
-install $HBB/res/rustdesk.desktop %{buildroot}/usr/share/rustdesk/files/
-install $HBB/res/rustdesk-link.desktop %{buildroot}/usr/share/rustdesk/files/
+install -m 755 $HBB/target/release/camellia %{buildroot}/usr/bin/camellia
+install $HBB/libsciter-gtk.so %{buildroot}/usr/share/camellia/libsciter-gtk.so
+install $HBB/res/camellia.service %{buildroot}/usr/share/camellia/files/
+install $HBB/res/128x128@2x.png %{buildroot}/usr/share/icons/hicolor/256x256/apps/camellia.png
+install $HBB/res/scalable.svg %{buildroot}/usr/share/icons/hicolor/scalable/apps/camellia.svg
+install $HBB/res/camellia.desktop %{buildroot}/usr/share/camellia/files/
+install $HBB/res/camellia-link.desktop %{buildroot}/usr/share/camellia/files/
 
 %files
-/usr/bin/rustdesk
-/usr/share/rustdesk/libsciter-gtk.so
-/usr/share/rustdesk/files/rustdesk.service
-/usr/share/icons/hicolor/256x256/apps/rustdesk.png
-/usr/share/icons/hicolor/scalable/apps/rustdesk.svg
-/usr/share/rustdesk/files/rustdesk.desktop
-/usr/share/rustdesk/files/rustdesk-link.desktop
-/usr/share/rustdesk/files/__pycache__/*
+/usr/bin/camellia
+/usr/share/camellia/libsciter-gtk.so
+/usr/share/camellia/files/camellia.service
+/usr/share/icons/hicolor/256x256/apps/camellia.png
+/usr/share/icons/hicolor/scalable/apps/camellia.svg
+/usr/share/camellia/files/camellia.desktop
+/usr/share/camellia/files/camellia-link.desktop
+/usr/share/camellia/files/__pycache__/*
 
 %changelog
 # let's skip this for now
@@ -61,9 +61,9 @@ case "$1" in
 esac
 
 %post
-cp /usr/share/rustdesk/files/rustdesk.service /etc/systemd/system/camellia.service
-cp /usr/share/rustdesk/files/rustdesk.desktop /usr/share/applications/
-cp /usr/share/rustdesk/files/rustdesk-link.desktop /usr/share/applications/
+cp /usr/share/camellia/files/camellia.service /etc/systemd/system/camellia.service
+cp /usr/share/camellia/files/camellia.desktop /usr/share/applications/
+cp /usr/share/camellia/files/camellia-link.desktop /usr/share/applications/
 systemctl daemon-reload
 systemctl enable camellia
 systemctl start camellia
@@ -86,8 +86,8 @@ esac
 case "$1" in
   0)
     # for uninstall
-    rm /usr/share/applications/rustdesk.desktop || true
-    rm /usr/share/applications/rustdesk-link.desktop || true
+    rm /usr/share/applications/camellia.desktop || true
+    rm /usr/share/applications/camellia-link.desktop || true
     update-desktop-database
   ;;
   1)

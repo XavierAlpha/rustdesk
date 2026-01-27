@@ -27,15 +27,15 @@ g_arpsystemcomponent = {
     },
     "Contact": {
         "msi": "ARPCONTACT",
-        "v": "https://github.com/rustdesk/rustdesk",
+        "v": "https://github.com/CamelliaCorp/camellia",
     },
     "HelpLink": {
         "msi": "ARPHELPLINK",
-        "v": "https://github.com/rustdesk/rustdesk/issues/",
+        "v": "https://github.com/CamelliaCorp/camellia/issues/",
     },
     "ReadMe": {
         "msi": "ARPREADME",
-        "v": "https://github.com/rustdesk/rustdesk",
+        "v": "https://github.com/CamelliaCorp/camellia",
     },
 }
 
@@ -48,7 +48,7 @@ def make_parser():
         "-d",
         "--dist-dir",
         type=str,
-        default="../../rustdesk",
+        default="../../camellia",
         help="The dist directory to install.",
     )
     parser.add_argument(
@@ -78,7 +78,7 @@ def make_parser():
     parser.add_argument(
         "--exe-name",
         type=str,
-        default="rustdesk",
+        default="camellia",
         help="The executable base name without extension.",
     )
     parser.add_argument(
@@ -91,7 +91,7 @@ def make_parser():
         "-m",
         "--manufacturer",
         type=str,
-        default="PURSLANE",
+        default="CAMELLIA",
         help="The app manufacturer.",
     )
     return parser
@@ -564,3 +564,6 @@ if __name__ == "__main__":
 
     replace_app_name_in_langs(args.app_name)
     replace_app_name_in_custom_actions(args.app_name)
+
+
+
