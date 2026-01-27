@@ -928,7 +928,7 @@ pub fn extract_update_dmg(file: &str) {
 }
 
 fn extract_dmg(dmg_path: &str, target_dir: &str) -> ResultType<()> {
-    let mount_point = "/Volumes/RustDeskUpdate";
+    let mount_point = "/Volumes/CamelliaUpdate";
     let target_path = Path::new(target_dir);
 
     if target_path.exists() {

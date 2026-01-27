@@ -100,7 +100,7 @@ jobs:
         shell: bash
         run: |
           sed -i -e "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
-
+          sed -i -e "s/^version:.*/version: ${{ env.VERSION }}+${{ github.run_number }}/" flutter/pubspec.yaml
       - name: Import the codesign cert
         if: env.MACOS_P12_BASE64 != null
         uses: apple-actions/import-codesign-certs@v1
@@ -143,6 +143,14 @@ jobs:
         with:
           channel: "stable"
           flutter-version: ${{ matrix.job.flutter }}
+
+      - name: Generate launcher icons
+        shell: bash
+        run: |
+          pushd flutter
+          flutter pub get
+          dart run flutter_launcher_icons
+          popd
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@v1
@@ -266,7 +274,7 @@ jobs:
         shell: bash
         run: |
           sed -i -e "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
-
+          sed -i -e "s/^version:.*/version: ${{ env.VERSION }}+${{ github.run_number }}/" flutter/pubspec.yaml
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -309,6 +317,14 @@ jobs:
         with:
           channel: "stable"
           flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Generate launcher icons
+        shell: bash
+        run: |
+          pushd flutter
+          flutter pub get
+          dart run flutter_launcher_icons
+          popd
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@v1

@@ -93,7 +93,7 @@ impl ParsedPeerInfo {
     fn is_support_virtual_display(&self) -> bool {
         self.is_installed
             && self.platform == "Windows"
-            && (self.idd_impl == "rustdesk_idd" || self.idd_impl == "amyuni_idd")
+            && (self.idd_impl == "camellia_idd" || self.idd_impl == "amyuni_idd")
     }
 }
 

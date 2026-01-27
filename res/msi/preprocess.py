@@ -203,7 +203,7 @@ def replace_app_name_in_custom_actions(app_name):
             lines = f.readlines()
         for i, line in enumerate(lines):
             line = re.sub(r"\bRustDesk\b", app_name, line)
-            line = line.replace(f"{app_name} v4 Printer Driver", "RustDesk v4 Printer Driver")
+            line = line.replace(f"{app_name} v4 Printer Driver", "Camellia v4 Printer Driver")
             lines[i] = line
         with open(file_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
@@ -502,7 +502,7 @@ def update_license_file(app_name):
     license_file = Path(sys.argv[0]).parent.joinpath("Package/License.rtf")
     with open(license_file, "r", encoding="utf-8") as f:
         license_content = f.read()
-    license_content = license_content.replace("website rustdesk.com and other ", "")
+    license_content = license_content.replace("website camellia.aimmv.com and other ", "")
     license_content = license_content.replace("RustDesk", app_name)
     license_content = re.sub("Purslane Ltd", app_name, license_content, flags=re.IGNORECASE)
     with open(license_file, "w", encoding="utf-8") as f:
