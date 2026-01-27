@@ -103,8 +103,10 @@ jobs:
         shell: pwsh
         run: |
           $raw = "${{ env.VERSION }}"
-          (Get-Content Cargo.toml) -replace '^version\\s*=\\s*\".*\"', ('version = "' + $raw + '"') | Set-Content Cargo.toml
-
+          (Get-Content Cargo.toml) -replace '^version\s*=\s*".*"', ('version = "' + $raw + '"') | Set-Content Cargo.toml -Encoding UTF8
+          $build = "${{ github.run_number }}"
+          $versionLine = "version: $raw+$build"
+          (Get-Content flutter/pubspec.yaml) -replace '^version:\s*.*$', $versionLine | Set-Content flutter/pubspec.yaml -Encoding UTF8
       - name: Restore bridge files
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -137,6 +139,14 @@ jobs:
           cp .github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff $(dirname $(dirname $(which flutter)))
           cd $(dirname $(dirname $(which flutter)))
           [[ "3.24.5" == ${{env.FLUTTER_VERSION}} ]] && git apply flutter_3.24.4_dropdown_menu_enableFilter.diff
+
+      - name: Generate launcher icons
+        shell: bash
+        run: |
+          pushd flutter
+          flutter pub get
+          dart run flutter_launcher_icons
+          popd
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -340,8 +350,10 @@ jobs:
         shell: pwsh
         run: |
           $raw = "${{ env.VERSION }}"
-          (Get-Content Cargo.toml) -replace '^version\\s*=\\s*\".*\"', ('version = "' + $raw + '"') | Set-Content Cargo.toml
-
+          (Get-Content Cargo.toml) -replace '^version\s*=\s*".*"', ('version = "' + $raw + '"') | Set-Content Cargo.toml -Encoding UTF8
+          $build = "${{ github.run_number }}"
+          $versionLine = "version: $raw+$build"
+          (Get-Content flutter/pubspec.yaml) -replace '^version:\s*.*$', $versionLine | Set-Content flutter/pubspec.yaml -Encoding UTF8
       - name: Install LLVM and Clang
         uses: rustdesk-org/install-llvm-action-32bit@6aa7d9ad3df84dff01cd4596dd0fc880a7f47fce # no release tag; commit 2026-05-26
         with:
@@ -505,7 +517,7 @@ jobs:
         shell: bash
         run: |
           sed -i -e "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
-
+          sed -i -e "s/^version:.*/version: ${{ env.VERSION }}+${{ github.run_number }}/" flutter/pubspec.yaml
       - name: Install flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
@@ -516,6 +528,14 @@ jobs:
         run: |
           cd $(dirname $(dirname $(which flutter)))
           [[ "3.24.5" == ${{env.FLUTTER_VERSION}} ]] && git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+
+      - name: Generate launcher icons
+        shell: bash
+        run: |
+          pushd flutter
+          flutter pub get
+          dart run flutter_launcher_icons
+          popd
 
       - name: Setup vcpkg with Github Actions binary cache
         uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11
@@ -635,7 +655,7 @@ jobs:
         shell: bash
         run: |
           sed -i -e "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
-
+          sed -i -e "s/^version:.*/version: ${{ env.VERSION }}+${{ github.run_number }}/" flutter/pubspec.yaml
       - name: Import the codesign cert
         if: env.MACOS_P12_BASE64 != null
         uses: apple-actions/import-codesign-certs@253ddeeac23f2bdad1646faac5c8c2832e800071 # v1
@@ -955,7 +975,7 @@ jobs:
         shell: bash
         run: |
           sed -i -e "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
-
+          sed -i -e "s/^version:.*/version: ${{ env.VERSION }}+${{ github.run_number }}/" flutter/pubspec.yaml
       - name: Install flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
@@ -966,6 +986,14 @@ jobs:
         run: |
           cd $(dirname $(dirname $(which flutter)))
           [[ "3.24.5" == ${{env.ANDROID_FLUTTER_VERSION}} ]] && git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+
+      - name: Generate launcher icons
+        shell: bash
+        run: |
+          pushd flutter
+          flutter pub get
+          dart run flutter_launcher_icons
+          popd
 
       - uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1
         id: setup-ndk
@@ -1232,7 +1260,7 @@ jobs:
         shell: bash
         run: |
           sed -i -e "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
-
+          sed -i -e "s/^version:.*/version: ${{ env.VERSION }}+${{ github.run_number }}/" flutter/pubspec.yaml
       - name: Install flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
@@ -1243,6 +1271,14 @@ jobs:
         run: |
           cd $(dirname $(dirname $(which flutter)))
           [[ "3.24.5" == ${{env.ANDROID_FLUTTER_VERSION}} ]] && git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+
+      - name: Generate launcher icons
+        shell: bash
+        run: |
+          pushd flutter
+          flutter pub get
+          dart run flutter_launcher_icons
+          popd
 
       - name: Restore bridge files
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -1402,7 +1438,7 @@ jobs:
         shell: bash
         run: |
           sed -i -e "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
-
+          sed -i -e "s/^version:.*/version: ${{ env.VERSION }}+${{ github.run_number }}/" flutter/pubspec.yaml
       - name: Set Swap Space
         if: ${{ matrix.job.arch == 'x86_64' }}
         uses: pierotofy/set-swap-space@49819abfb41bd9b44fb781159c033dba90353a7c # v1.0
@@ -1612,6 +1648,20 @@ jobs:
               popd
             fi
 
+            # generate launcher icons
+            pushd /workspace/flutter
+            case ${{ matrix.job.arch }} in
+              aarch64)
+                /opt/flutter-elinux/bin/flutter-elinux pub get
+                /opt/flutter-elinux/flutter/bin/dart run flutter_launcher_icons
+              ;;
+              x86_64)
+                /opt/flutter/bin/flutter pub get
+                /opt/flutter/bin/dart run flutter_launcher_icons
+              ;;
+            esac
+            popd
+
             # build flutter
             pushd /workspace
             export CARGO_INCREMENTAL=0
@@ -1765,7 +1815,7 @@ jobs:
         shell: bash
         run: |
           sed -i -e "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
-
+          sed -i -e "s/^version:.*/version: ${{ env.VERSION }}+${{ github.run_number }}/" flutter/pubspec.yaml
       - name: Modify vcpkg.json for armv7
         if: matrix.job.vcpkg-triplet == 'arm-linux'
         run: |
@@ -2139,6 +2189,13 @@ jobs:
           cd $(dirname $(dirname $(which flutter)))
           [[ "3.24.5" == ${{env.FLUTTER_VERSION}} ]] && git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
 
+      - name: Generate launcher icons
+        shell: bash
+        run: |
+          pushd flutter
+          flutter pub get
+          dart run flutter_launcher_icons
+          popd
       # https://rustdesk.com/docs/en/dev/build/web/
       - name: Build web
         shell: bash
