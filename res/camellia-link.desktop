@@ -2,10 +2,10 @@
 Name=Camellia
 NoDisplay=true
 MimeType=x-scheme-handler/camellia;
-TryExec=rustdesk
-Exec=rustdesk %u
-Icon=rustdesk
+TryExec=camellia
+Exec=camellia %u
+Icon=camellia
 Terminal=false
 Type=Application
 StartupNotify=false
-StartupWMClass=rustdesk
+StartupWMClass=camellia

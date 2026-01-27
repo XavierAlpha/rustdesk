@@ -176,20 +176,26 @@ jobs:
           head -n 100 "${VCPKG_ROOT}/buildtrees/ffmpeg/build-${{ matrix.job.vcpkg-triplet }}-rel-out.log" || true
         shell: bash
 
-      - name: Build rustdesk
+      - name: Build camellia
         run: |
           # Windows: build RustDesk
           python3 .\build.py --portable --hwcodec --flutter --vram --skip-portable-pack
-          mv ./flutter/build/windows/x64/runner/Release ./rustdesk
+          mv ./flutter/build/windows/x64/runner/Release ./camellia
+          if ((Test-Path -Path .\\camellia\\rustdesk.exe) -and -not (Test-Path -Path .\\camellia\\camellia.exe)) {
+            Move-Item -Path .\\camellia\\rustdesk.exe -Destination .\\camellia\\camellia.exe
+          }
+          if ((Test-Path -Path .\\camellia\\RuntimeBroker_rustdesk.exe) -and -not (Test-Path -Path .\\camellia\\RuntimeBroker_camellia.exe)) {
+            Move-Item -Path .\\camellia\\RuntimeBroker_rustdesk.exe -Destination .\\camellia\\RuntimeBroker_camellia.exe
+          }
 
-          # Download usbmmidd_v2.zip and extract it to ./rustdesk
+          # Download usbmmidd_v2.zip and extract it to ./camellia
           Invoke-WebRequest -Uri https://github.com/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip -OutFile usbmmidd_v2.zip
           Expand-Archive usbmmidd_v2.zip -DestinationPath .
           Remove-Item -Path usbmmidd_v2\Win32 -Recurse
           Remove-Item -Path "usbmmidd_v2\deviceinstaller64.exe", "usbmmidd_v2\deviceinstaller.exe", "usbmmidd_v2\usbmmidd.bat"
-          mv -Force .\usbmmidd_v2 ./rustdesk
+          mv -Force .\usbmmidd_v2 ./camellia
 
-          # Download printer driver files and extract them to ./rustdesk
+          # Download printer driver files and extract them to ./camellia
           try {
             Invoke-WebRequest -Uri https://github.com/rustdesk/hbb_common/releases/download/driver/rustdesk_printer_driver_v4-1.4.zip -OutFile rustdesk_printer_driver_v4-1.4.zip
             Invoke-WebRequest -Uri https://github.com/rustdesk/hbb_common/releases/download/driver/printer_driver_adapter.zip -OutFile printer_driver_adapter.zip
@@ -203,10 +209,10 @@ jobs:
             if ($checksum_driver -eq $downloadsum_driver.Hash -and $checksum_adapter -eq $downloadsum_adapter.Hash) {
                 Write-Output "rustdesk_printer_driver_v4-1.4, checksums match, extract the file."
                 Expand-Archive rustdesk_printer_driver_v4-1.4.zip -DestinationPath .
-                mkdir ./rustdesk/drivers
-                mv -Force .\rustdesk_printer_driver_v4-1.4 ./rustdesk/drivers/RustDeskPrinterDriver
+                mkdir ./camellia/drivers
+                mv -Force .\rustdesk_printer_driver_v4-1.4 ./camellia/drivers/RustDeskPrinterDriver
                 Expand-Archive printer_driver_adapter.zip -DestinationPath .
-                mv -Force .\printer_driver_adapter.dll ./rustdesk
+                mv -Force .\printer_driver_adapter.dll ./camellia
             } elseif ($checksum_driver -ne $downloadsum_driver.Hash) {
                 Write-Output "rustdesk_printer_driver_v4-1.4, checksums do not match, ignore the file."
             } else {
@@ -237,21 +243,21 @@ jobs:
         if: ${{ inputs.upload-artifact }}
         with:
           name: topmostwindow-artifacts
-          path: "./rustdesk"
+          path: "./camellia"
 
       - name: Upload unsigned
         if: env.UPLOAD_ARTIFACT == 'true'
         uses: actions/upload-artifact@master
         with:
-          name: rustdesk-unsigned-windows-${{ matrix.job.arch }}
-          path: rustdesk
+          name: camellia-unsigned-windows-${{ matrix.job.arch }}
+          path: camellia
 
       - name: Sign rustdesk files
         if: env.UPLOAD_ARTIFACT == 'true' && env.SIGN_BASE_URL != '-2'
         shell: bash
         run: |
           pip3 install requests argparse
-          BASE_URL=${{ env.SIGN_BASE_URL }} SECRET_KEY=${{ secrets.SIGN_SECRET_KEY }} python3 res/job.py sign_files ./rustdesk/
+          BASE_URL=${{ env.SIGN_BASE_URL }} SECRET_KEY=${{ secrets.SIGN_SECRET_KEY }} python3 res/job.py sign_files ./camellia/
 
       - name: Build self-extracted executable
         shell: bash
@@ -260,10 +266,14 @@ jobs:
           sed -i '/dpiAware/d' res/manifest.xml
           pushd ./libs/portable
           pip3 install -r requirements.txt
-          python3 ./generate.py -f ../../rustdesk/ -o . -e ../../rustdesk/rustdesk.exe
+          python3 ./generate.py -f ../../camellia/ -o . -e ../../camellia/camellia.exe
           popd
           mkdir -p ./SignOutput
-          mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/camellia-${{ env.VERSION }}-${{ matrix.job.arch }}.exe
+          packer=./target/release/camellia-portable-packer.exe
+          if [ ! -f "$packer" ]; then
+            packer=./target/release/rustdesk-portable-packer.exe
+          fi
+          mv "$packer" ./SignOutput/camellia-${{ env.VERSION }}-${{ matrix.job.arch }}.exe
 
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
@@ -272,7 +282,7 @@ jobs:
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |
           pushd ./res/msi
-          python preprocess.py --arp -d ../../rustdesk --exe-name rustdesk
+          python preprocess.py --arp -d ../../camellia --exe-name camellia
           nuget restore msi.sln
           msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
           mv ./Package/bin/x64/Release/en-us/Package.msi ../../SignOutput/camellia-${{ env.VERSION }}-${{ matrix.job.arch }}.msi
@@ -375,7 +385,7 @@ jobs:
           head -n 100 "${VCPKG_ROOT}/buildtrees/ffmpeg/build-${{ matrix.job.vcpkg-triplet }}-rel-out.log" || true
         shell: bash
 
-      - name: Build rustdesk
+      - name: Build camellia
         id: build
         shell: bash
         run: |
@@ -384,7 +394,11 @@ jobs:
           sed -i 's/branch = "dyn"/branch = "dyn_x86"/g' ./Cargo.toml
           cargo build --features inline,vram,hwcodec --release --bins
           mkdir -p ./Release
-          mv ./target/release/rustdesk.exe ./Release/rustdesk.exe
+          if [ -f ./target/release/camellia.exe ]; then
+            mv ./target/release/camellia.exe ./Release/camellia.exe
+          else
+            mv ./target/release/rustdesk.exe ./Release/camellia.exe
+          fi
           curl -LJ -o ./Release/sciter.dll https://github.com/c-smile/sciter-sdk/raw/master/bin.win/x32/sciter.dll
           echo "output_folder=./Release" >> $GITHUB_OUTPUT
           curl -LJ -o ./usbmmidd_v2.zip https://github.com/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip
@@ -415,7 +429,7 @@ jobs:
         if: env.UPLOAD_ARTIFACT == 'true'
         uses: actions/upload-artifact@master
         with:
-          name: rustdesk-unsigned-windows-${{ matrix.job.arch }}
+          name: camellia-unsigned-windows-${{ matrix.job.arch }}
           path: Release
 
       - name: Sign rustdesk files
@@ -431,10 +445,14 @@ jobs:
           sed -i '/dpiAware/d' res/manifest.xml
           pushd ./libs/portable
           pip3 install -r requirements.txt
-          python3 ./generate.py -f ../../Release/ -o . -e ../../Release/rustdesk.exe
+          python3 ./generate.py -f ../../Release/ -o . -e ../../Release/camellia.exe
           popd
           mkdir -p ./SignOutput
-          mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/camellia-${{ env.VERSION }}-${{ matrix.job.arch }}-sciter.exe
+          packer=./target/release/camellia-portable-packer.exe
+          if [ ! -f "$packer" ]; then
+            packer=./target/release/rustdesk-portable-packer.exe
+          fi
+          mv "$packer" ./SignOutput/camellia-${{ env.VERSION }}-${{ matrix.job.arch }}-sciter.exe
 
       - name: Sign rustdesk self-extracted file
         if: env.UPLOAD_ARTIFACT == 'true' && env.SIGN_BASE_URL != '-2'
@@ -623,12 +641,12 @@ jobs:
         with:
           p12-file-base64: ${{ secrets.MACOS_P12_BASE64 }}
           p12-password: ${{ secrets.MACOS_P12_PASSWORD }}
-          keychain: rustdesk
+          keychain: camellia
 
       - name: Check sign and import sign key
         if: env.MACOS_P12_BASE64 != null
         run: |
-          security default-keychain -s rustdesk.keychain
+          security default-keychain -s camellia.keychain
           security find-identity -v
 
       - name: Import notarize key
@@ -636,7 +654,7 @@ jobs:
         uses: timheuer/base64-to-file@v1.2
         with:
           # https://gregoryszorc.com/docs/apple-codesign/stable/apple_codesign_rcodesign.html#notarizing-and-stapling
-          fileName: rustdesk.json
+          fileName: camellia.json
           fileDir: ${{ github.workspace }}
           encodedString: ${{ secrets.MACOS_NOTARIZE_JSON }}
 
@@ -773,15 +791,15 @@ jobs:
           CREATE_DMG="$(readlink -f "$CREATE_DMG")"
           sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
           # Unlock keychain
-          security default-keychain -s rustdesk.keychain
-          security unlock-keychain -p ${{ secrets.MACOS_P12_PASSWORD }} rustdesk.keychain
+          security default-keychain -s camellia.keychain
+          security unlock-keychain -p ${{ secrets.MACOS_P12_PASSWORD }} camellia.keychain
           # start sign the rustdesk.app and dmg
           rm -rf *.dmg || true
           codesign --force --options runtime -s ${{ secrets.MACOS_CODESIGN_IDENTITY }} --deep --strict ./flutter/build/macos/Build/Products/Release/Camellia.app -vvv
           create-dmg --icon "Camellia.app" 200 190 --hide-extension "Camellia.app" --window-size 800 400 --app-drop-link 600 185 camellia-${{ env.VERSION }}.dmg ./flutter/build/macos/Build/Products/Release/Camellia.app
           codesign --force --options runtime -s ${{ secrets.MACOS_CODESIGN_IDENTITY }} --deep --strict camellia-${{ env.VERSION }}.dmg -vvv
           # notarize the camellia-${{ env.VERSION }}.dmg
-          rcodesign notary-submit --api-key-path ${{ github.workspace }}/rustdesk.json  --staple camellia-${{ env.VERSION }}.dmg
+          rcodesign notary-submit --api-key-path ${{ github.workspace }}/camellia.json  --staple camellia-${{ env.VERSION }}.dmg
 
       - name: Rename camellia
         if: env.UPLOAD_ARTIFACT == 'true'
@@ -824,13 +842,13 @@ jobs:
       - name: Download Artifacts
         uses: actions/download-artifact@master
         with:
-          name: rustdesk-unsigned-windows-x86_64
+          name: camellia-unsigned-windows-x86_64
           path: ./windows-x86_64/
 
       - name: Download Artifacts
         uses: actions/download-artifact@master
         with:
-          name: rustdesk-unsigned-windows-x86
+          name: camellia-unsigned-windows-x86
           path: ./windows-x86/
 
       - name: Combine unsigned app
@@ -1459,6 +1477,8 @@ jobs:
         name: Build rustdesk
         id: vcpkg
         if: matrix.job.arch == 'x86_64' || env.UPLOAD_ARTIFACT == 'true'
+        env:
+          VERSION: ${{ env.VERSION }}
         with:
           arch: ${{ matrix.job.arch }}
           distro: ${{ matrix.job.distro }}
@@ -1469,6 +1489,7 @@ jobs:
           dockerRunArgs: |
             --volume "${PWD}:/workspace"
             --volume "/opt/artifacts:/opt/artifacts"
+            --env VERSION
           shell: /bin/bash
           install: |
             apt-get update -y
@@ -1595,7 +1616,8 @@ jobs:
             export CARGO_INCREMENTAL=0
             export DEB_ARCH=${{ matrix.job.deb_arch }}
             python3 ./build.py --flutter --skip-cargo
-            for name in rustdesk*??.deb; do
+            shopt -s nullglob
+            for name in camellia*??.deb; do
               mv "$name" "${name%%.deb}-${{ matrix.job.arch }}.deb"
             done
 
@@ -1607,9 +1629,9 @@ jobs:
                 sed -i "s/linux\/x64/linux\/arm64/g" ./res/rpm-flutter.spec
                 ;;
             esac
-            HBB=`pwd` rpmbuild ./res/rpm-flutter.spec -bb
+            HBB=`pwd` rpmbuild --define "pkgver ${VERSION}" ./res/rpm-flutter.spec -bb
             pushd ~/rpmbuild/RPMS/${{ matrix.job.arch }}
-            for name in rustdesk*??.rpm; do
+            for name in camellia*??.rpm; do
                 mv "$name" /workspace/"${name%%.rpm}.rpm"
             done
 
@@ -1621,9 +1643,9 @@ jobs:
                 sed -i "s/linux\/x64/linux\/arm64/g" ./res/rpm-flutter-suse.spec
                 ;;
             esac
-            HBB=`pwd` rpmbuild ./res/rpm-flutter-suse.spec -bb
+            HBB=`pwd` rpmbuild --define "pkgver ${VERSION}" ./res/rpm-flutter-suse.spec -bb
             pushd ~/rpmbuild/RPMS/${{ matrix.job.arch }}
-            for name in rustdesk*??.rpm; do
+            for name in camellia*??.rpm; do
                 mv "$name" /workspace/"${name%%.rpm}-suse.rpm"
             done
 
@@ -1631,6 +1653,7 @@ jobs:
         if: env.UPLOAD_ARTIFACT == 'true'
         shell: bash
         run: |
+          shopt -s nullglob
           for name in rustdesk-*.deb; do
               mv "$name" "${name/rustdesk-/camellia-}"
           done
@@ -1669,18 +1692,20 @@ jobs:
 
       - name: Build archlinux package
         if: matrix.job.arch == 'x86_64' && env.UPLOAD_ARTIFACT == 'true'
-        uses: rustdesk-org/arch-makepkg-action@master
-        with:
-          packages:
-          scripts: |
-            cd res
-            sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
-            HBB=`pwd`/.. FLUTTER=1 makepkg -f
+        shell: bash
+        run: |
+          docker run --rm \
+            -e VERSION="${{ env.VERSION }}" \
+            -v "${PWD}:/github/workspace" \
+            -w /github/workspace \
+            rustdesk/makepkg:latest \
+            /bin/bash -lc "cd res && sed -i \"s/^pkgver=.*/pkgver=${VERSION}/\" PKGBUILD && HBB=\`pwd\`/.. FLUTTER=1 makepkg -f"
 
       - name: Rename archlinux package
         if: matrix.job.arch == 'x86_64' && env.UPLOAD_ARTIFACT == 'true'
         shell: bash
         run: |
+          shopt -s nullglob
           for name in res/rustdesk-${{ env.VERSION }}*.zst; do
               mv "$name" "${name/res\\/rustdesk-/res/camellia-}"
           done
@@ -1769,6 +1794,8 @@ jobs:
       - uses: rustdesk-org/run-on-arch-action@amd64-support
         name: Build rustdesk sciter binary for ${{ matrix.job.arch }}
         id: vcpkg
+        env:
+          VERSION: ${{ env.VERSION }}
         with:
           arch: ${{ matrix.job.arch }}
           distro: ${{ matrix.job.distro }}
@@ -1777,6 +1804,7 @@ jobs:
             ls -l "${PWD}"
           dockerRunArgs: |
             --volume "${PWD}:/workspace"
+            --env VERSION
           shell: /bin/bash
           install: |
             apt-get update
@@ -1891,13 +1919,17 @@ jobs:
               exit 1
             fi
             head -n 100 "${VCPKG_ROOT}/buildtrees/ffmpeg/build-${{ matrix.job.vcpkg-triplet }}-rel-out.log" || true
-            # build rustdesk
+            # build camellia
             python3 ./res/inline-sciter.py
             export CARGO_INCREMENTAL=0
             cargo build --features inline${{ matrix.job.extra_features }} --release --bins --jobs 1
             # make debian package
             mkdir -p ./Release
-            mv ./target/release/rustdesk ./Release/rustdesk
+            if [ -f ./target/release/camellia ]; then
+              mv ./target/release/camellia ./Release/camellia
+            else
+              mv ./target/release/rustdesk ./Release/camellia
+            fi
             wget -O ./Release/libsciter-gtk.so https://github.com/c-smile/sciter-sdk/raw/master/bin.lnx/${{ matrix.job.sciter_arch }}/libsciter-gtk.so
             export DEB_ARCH=${{ matrix.job.deb_arch }}
             ./build.py --package ./Release
@@ -1905,7 +1937,8 @@ jobs:
       - name: Rename camellia
         shell: bash
         run: |
-          for name in rustdesk*??.deb; do
+          shopt -s nullglob
+          for name in camellia*??.deb; do
               # use cp to duplicate deb files to fit other packages.
               cp "$name" "camellia-${{ env.VERSION }}-${{ matrix.job.arch }}-sciter.deb"
           done
@@ -1951,7 +1984,7 @@ jobs:
 
       - name: Rename Binary
         run: |
-          mv camellia-${{ env.VERSION }}-${{ matrix.job.arch }}.deb appimage/rustdesk.deb
+          mv camellia-${{ env.VERSION }}-${{ matrix.job.arch }}.deb appimage/camellia.deb
 
       - name: Build appimage package
         shell: bash
@@ -1971,6 +2004,7 @@ jobs:
         if: env.UPLOAD_ARTIFACT == 'true'
         shell: bash
         run: |
+          shopt -s nullglob
           for name in ./appimage/rustdesk-${{ env.VERSION }}-*.AppImage; do
               mv "$name" "${name/appimage\\/rustdesk-/appimage/camellia-}"
           done
@@ -2032,11 +2066,13 @@ jobs:
 
       - name: Rename Binary
         run: |
-          mv camellia-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.deb flatpak/rustdesk.deb
+          mv camellia-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.deb flatpak/camellia.deb
 
       - uses: rustdesk-org/run-on-arch-action@amd64-support
-        name: Build rustdesk flatpak package for ${{ matrix.job.arch }}
+        name: Build camellia flatpak package for ${{ matrix.job.arch }}
         id: flatpak
+        env:
+          VERSION: ${{ env.VERSION }}
         with:
           arch: ${{ matrix.job.arch }}
           distro: ${{ matrix.job.distro }}
@@ -2045,6 +2081,7 @@ jobs:
             ls -l "${PWD}"
           dockerRunArgs: |
             --volume "${PWD}:/workspace"
+            --env VERSION
           shell: /bin/bash
           install: |
             apt-get update -y
@@ -2058,7 +2095,7 @@ jobs:
             # package
             pushd flatpak
             git clone https://github.com/flathub/shared-modules.git --depth=1
-            flatpak-builder --user --install-deps-from=flathub -y --force-clean --repo=repo ./build ./rustdesk.json
+            flatpak-builder --user --install-deps-from=flathub -y --force-clean --repo=repo ./build ./camellia.json
             flatpak build-bundle ./repo camellia-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.flatpak com.camellia.Camellia
 
       - name: Publish flatpak package
