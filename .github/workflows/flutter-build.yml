@@ -104,7 +104,16 @@ jobs:
         run: |
           $raw = "${{ env.VERSION }}"
           (Get-Content Cargo.toml) -replace '^version\\s*=\\s*\".*\"', ('version = "' + $raw + '"') | Set-Content Cargo.toml
-
+          $build = "${{ github.run_number }}"
+          $versionLine = "version: $raw+$build"
+          (Get-Content flutter/pubspec.yaml) -replace '^version:\s*.*$', $versionLine | Set-Content flutter/pubspec.yaml
+          Remove-Item -Recurse -Force target\release\build, target\release\.fingerprint -ErrorAction SilentlyContinue
+          Remove-Item -Force target\release\librustdesk.dll -ErrorAction SilentlyContinue
+          Remove-Item -Force target\release\deps\librustdesk* -ErrorAction SilentlyContinue
+          Write-Host "Cargo.toml version:"
+          Select-String -Path Cargo.toml -Pattern '^version\\s*='
+          Write-Host "flutter/pubspec.yaml version:"
+          Select-String -Path flutter/pubspec.yaml -Pattern '^version:'
       - name: Restore bridge files
         uses: actions/download-artifact@master
         with:
@@ -137,6 +146,14 @@ jobs:
           cp .github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff $(dirname $(dirname $(which flutter)))
           cd $(dirname $(dirname $(which flutter)))
           [[ "3.24.5" == ${{env.FLUTTER_VERSION}} ]] && git apply flutter_3.24.4_dropdown_menu_enableFilter.diff
+
+      - name: Generate launcher icons
+        shell: bash
+        run: |
+          pushd flutter
+          flutter pub get
+          dart run flutter_launcher_icons
+          popd
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@v1
@@ -220,6 +237,16 @@ jobs:
             }
           } catch {
               Write-Host "Ingore the printer driver error."
+          }
+
+      - name: Audit generated version.rs
+        shell: pwsh
+        run: |
+          if (Test-Path -Path .\src\version.rs) {
+            Write-Host "src/version.rs:"
+            Get-Content .\src\version.rs
+          } else {
+            Write-Host "src/version.rs not found"
           }
 
       - name: find Runner.res
@@ -341,7 +368,12 @@ jobs:
         run: |
           $raw = "${{ env.VERSION }}"
           (Get-Content Cargo.toml) -replace '^version\\s*=\\s*\".*\"', ('version = "' + $raw + '"') | Set-Content Cargo.toml
-
+          $build = "${{ github.run_number }}"
+          $versionLine = "version: $raw+$build"
+          (Get-Content flutter/pubspec.yaml) -replace '^version:\s*.*$', $versionLine | Set-Content flutter/pubspec.yaml
+          Remove-Item -Recurse -Force target\release\build, target\release\.fingerprint -ErrorAction SilentlyContinue
+          Remove-Item -Force target\release\librustdesk.dll -ErrorAction SilentlyContinue
+          Remove-Item -Force target\release\deps\librustdesk* -ErrorAction SilentlyContinue
       - name: Install LLVM and Clang
         uses: rustdesk-org/install-llvm-action-32bit@master
         with:
@@ -400,6 +432,16 @@ jobs:
             mv ./target/release/rustdesk.exe ./Release/camellia.exe
           fi
           curl -LJ -o ./Release/sciter.dll https://github.com/c-smile/sciter-sdk/raw/master/bin.win/x32/sciter.dll
+
+      - name: Audit generated version.rs
+        shell: pwsh
+        run: |
+          if (Test-Path -Path .\src\version.rs) {
+            Write-Host "src/version.rs:"
+            Get-Content .\src\version.rs
+          } else {
+            Write-Host "src/version.rs not found"
+          }
           echo "output_folder=./Release" >> $GITHUB_OUTPUT
           curl -LJ -o ./usbmmidd_v2.zip https://github.com/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip
           unzip usbmmidd_v2.zip
@@ -504,7 +546,7 @@ jobs:
         shell: bash
         run: |
           sed -i -e "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
-
+          sed -i -e "s/^version:.*/version: ${{ env.VERSION }}+${{ github.run_number }}/" flutter/pubspec.yaml
       - name: Install flutter
         uses: subosito/flutter-action@v2
         with:
@@ -515,6 +557,14 @@ jobs:
         run: |
           cd $(dirname $(dirname $(which flutter)))
           [[ "3.24.5" == ${{env.FLUTTER_VERSION}} ]] && git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+
+      - name: Generate launcher icons
+        shell: bash
+        run: |
+          pushd flutter
+          flutter pub get
+          dart run flutter_launcher_icons
+          popd
 
       - name: Setup vcpkg with Github Actions binary cache
         uses: lukka/run-vcpkg@v11
@@ -634,7 +684,12 @@ jobs:
         shell: bash
         run: |
           sed -i -e "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
-
+          sed -i -e "s/^version:.*/version: ${{ env.VERSION }}+${{ github.run_number }}/" flutter/pubspec.yaml
+          rm -rf target/release/build target/release/.fingerprint target/release/librustdesk.* target/release/deps/librustdesk*
+          echo "Cargo.toml version:"
+          grep -n "^version\\s*=" Cargo.toml
+          echo "flutter/pubspec.yaml version:"
+          grep -n "^version:" flutter/pubspec.yaml
       - name: Import the codesign cert
         if: env.MACOS_P12_BASE64 != null
         uses: apple-actions/import-codesign-certs@v1
@@ -767,6 +822,16 @@ jobs:
             sed -i -e "s/MACOSX_DEPLOYMENT_TARGET = [0-9]*.[0-9]*;/MACOSX_DEPLOYMENT_TARGET = ${MIN_MACOS_VERSION};/" flutter/macos/Runner.xcodeproj/project.pbxproj
           fi
           ./build.py --flutter --hwcodec --unix-file-copy-paste ${{ matrix.job.extra-build-args }}
+
+      - name: Audit generated version.rs
+        shell: bash
+        run: |
+          if [ -f src/version.rs ]; then
+            echo "src/version.rs:"
+            cat src/version.rs
+          else
+            echo "src/version.rs not found"
+          fi
 
       - name: create unsigned dmg
         if: env.UPLOAD_ARTIFACT == 'true'
@@ -954,7 +1019,7 @@ jobs:
         shell: bash
         run: |
           sed -i -e "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
-
+          sed -i -e "s/^version:.*/version: ${{ env.VERSION }}+${{ github.run_number }}/" flutter/pubspec.yaml
       - name: Install flutter
         uses: subosito/flutter-action@v2
         with:
@@ -965,6 +1030,14 @@ jobs:
         run: |
           cd $(dirname $(dirname $(which flutter)))
           [[ "3.24.5" == ${{env.ANDROID_FLUTTER_VERSION}} ]] && git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+
+      - name: Generate launcher icons
+        shell: bash
+        run: |
+          pushd flutter
+          flutter pub get
+          dart run flutter_launcher_icons
+          popd
 
       - uses: nttld/setup-ndk@v1
         id: setup-ndk
@@ -1231,7 +1304,7 @@ jobs:
         shell: bash
         run: |
           sed -i -e "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
-
+          sed -i -e "s/^version:.*/version: ${{ env.VERSION }}+${{ github.run_number }}/" flutter/pubspec.yaml
       - name: Install flutter
         uses: subosito/flutter-action@v2
         with:
@@ -1242,6 +1315,14 @@ jobs:
         run: |
           cd $(dirname $(dirname $(which flutter)))
           [[ "3.24.5" == ${{env.ANDROID_FLUTTER_VERSION}} ]] && git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+
+      - name: Generate launcher icons
+        shell: bash
+        run: |
+          pushd flutter
+          flutter pub get
+          dart run flutter_launcher_icons
+          popd
 
       - name: Restore bridge files
         uses: actions/download-artifact@master
@@ -1401,7 +1482,12 @@ jobs:
         shell: bash
         run: |
           sed -i -e "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
-
+          sed -i -e "s/^version:.*/version: ${{ env.VERSION }}+${{ github.run_number }}/" flutter/pubspec.yaml
+          rm -rf target/release/build target/release/.fingerprint target/release/librustdesk.* target/release/deps/librustdesk*
+          echo "Cargo.toml version:"
+          grep -n "^version\\s*=" Cargo.toml
+          echo "flutter/pubspec.yaml version:"
+          grep -n "^version:" flutter/pubspec.yaml
       - name: Set Swap Space
         if: ${{ matrix.job.arch == 'x86_64' }}
         uses: pierotofy/set-swap-space@master
@@ -1611,6 +1697,20 @@ jobs:
               popd
             fi
 
+            # generate launcher icons
+            pushd /workspace/flutter
+            case ${{ matrix.job.arch }} in
+              aarch64)
+                /opt/flutter-elinux/bin/flutter-elinux pub get
+                /opt/flutter-elinux/flutter/bin/dart run flutter_launcher_icons
+              ;;
+              x86_64)
+                /opt/flutter/bin/flutter pub get
+                /opt/flutter/bin/dart run flutter_launcher_icons
+              ;;
+            esac
+            popd
+
             # build flutter
             pushd /workspace
             export CARGO_INCREMENTAL=0
@@ -1648,6 +1748,17 @@ jobs:
             for name in camellia*??.rpm; do
                 mv "$name" /workspace/"${name%%.rpm}-suse.rpm"
             done
+
+      - name: Audit generated version.rs
+        if: matrix.job.arch == 'x86_64' || env.UPLOAD_ARTIFACT == 'true'
+        shell: bash
+        run: |
+          if [ -f src/version.rs ]; then
+            echo "src/version.rs:"
+            cat src/version.rs
+          else
+            echo "src/version.rs not found"
+          fi
 
       - name: Rename linux packages
         if: env.UPLOAD_ARTIFACT == 'true'
@@ -1765,7 +1876,12 @@ jobs:
         shell: bash
         run: |
           sed -i -e "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
-
+          sed -i -e "s/^version:.*/version: ${{ env.VERSION }}+${{ github.run_number }}/" flutter/pubspec.yaml
+          rm -rf target/release/build target/release/.fingerprint target/release/librustdesk.* target/release/deps/librustdesk*
+          echo "Cargo.toml version:"
+          grep -n "^version\\s*=" Cargo.toml
+          echo "flutter/pubspec.yaml version:"
+          grep -n "^version:" flutter/pubspec.yaml
       - name: Modify vcpkg.json for armv7
         if: matrix.job.vcpkg-triplet == 'arm-linux'
         run: |
@@ -1933,6 +2049,16 @@ jobs:
             wget -O ./Release/libsciter-gtk.so https://github.com/c-smile/sciter-sdk/raw/master/bin.lnx/${{ matrix.job.sciter_arch }}/libsciter-gtk.so
             export DEB_ARCH=${{ matrix.job.deb_arch }}
             ./build.py --package ./Release
+
+      - name: Audit generated version.rs
+        shell: bash
+        run: |
+          if [ -f src/version.rs ]; then
+            echo "src/version.rs:"
+            cat src/version.rs
+          else
+            echo "src/version.rs not found"
+          fi
 
       - name: Rename camellia
         shell: bash
@@ -2139,6 +2265,13 @@ jobs:
           cd $(dirname $(dirname $(which flutter)))
           [[ "3.24.5" == ${{env.FLUTTER_VERSION}} ]] && git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
 
+      - name: Generate launcher icons
+        shell: bash
+        run: |
+          pushd flutter
+          flutter pub get
+          dart run flutter_launcher_icons
+          popd
       # https://rustdesk.com/docs/en/dev/build/web/
       - name: Build web
         shell: bash

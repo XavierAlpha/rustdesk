@@ -950,7 +950,7 @@ pub fn check_software_update() {
 }
 
 // No need to check `danger_accept_invalid_cert` for now.
-// Because the url is always `https://api.rustdesk.com/version/latest`.
+// Because the url is always `https://api.camellia.aimmv.com/version/latest`.
 #[tokio::main(flavor = "current_thread")]
 pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
     let (request, url) =
@@ -1090,7 +1090,7 @@ fn get_api_server_(api: String, custom: String) -> String {
 
 #[inline]
 pub fn is_public(url: &str) -> bool {
-    url.contains("rustdesk.com/") || url.ends_with("rustdesk.com")
+    url.contains("camellia.aimmv.com/") || url.ends_with("camellia.aimmv.com")
 }
 
 pub fn get_udp_punch_enabled() -> bool {
@@ -2463,25 +2463,25 @@ mod tests {
 
     #[test]
     fn test_is_public() {
-        // Test URLs containing "rustdesk.com/"
-        assert!(is_public("https://rustdesk.com/"));
-        assert!(is_public("https://www.rustdesk.com/"));
-        assert!(is_public("https://api.rustdesk.com/v1"));
-        assert!(is_public("https://rustdesk.com/path"));
+        // Test URLs containing "camellia.aimmv.com/"
+        assert!(is_public("https://camellia.aimmv.com/"));
+        assert!(is_public("https://www.camellia.aimmv.com/"));
+        assert!(is_public("https://api.camellia.aimmv.com/v1"));
+        assert!(is_public("https://camellia.aimmv.com/path"));
 
-        // Test URLs ending with "rustdesk.com"
-        assert!(is_public("rustdesk.com"));
-        assert!(is_public("https://rustdesk.com"));
-        assert!(is_public("http://www.rustdesk.com"));
-        assert!(is_public("https://api.rustdesk.com"));
+        // Test URLs ending with "camellia.aimmv.com"
+        assert!(is_public("camellia.aimmv.com"));
+        assert!(is_public("https://camellia.aimmv.com"));
+        assert!(is_public("http://www.camellia.aimmv.com"));
+        assert!(is_public("https://api.camellia.aimmv.com"));
 
         // Test non-public URLs
         assert!(!is_public("https://example.com"));
         assert!(!is_public("https://custom-server.com"));
         assert!(!is_public("http://192.168.1.1"));
         assert!(!is_public("localhost"));
-        assert!(!is_public("https://rustdesk.computer.com"));
-        assert!(!is_public("rustdesk.comhello.com"));
+        assert!(!is_public("https://camellia.aimmv.computer.com"));
+        assert!(!is_public("camellia.aimmv.comhello.com"));
     }
 
     #[test]
