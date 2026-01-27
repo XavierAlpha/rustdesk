@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk - Uzak masaüstü uygulamanız"><br>
+  <img src="../res/logo-header.svg" alt="Camellia - Uzak masaüstü uygulamanız"><br>
   <a href="#free-public-servers">Sunucular</a> •
   <a href="#raw-steps-to-build">Derleme</a> •
   <a href="#how-to-build-with-docker">Docker ile Derleme</a> •
@@ -179,3 +179,4 @@ Lütfen bu komutları RustDesk reposunun root klasöründe çalıştırdığın�
 
 ![image](https://user-images.githubusercontent.com/71636191/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
 ```
+

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
+  <img src="../res/logo-header.svg" alt="Camellia - Your remote desktop"><br>
   <a href="#servidores-gratis-de-uso-público">Servidores</a> •
   <a href="#pasos-para-compilar-desde-el-inicio">Compilar</a> •
   <a href="#como-compilar-con-docker">Docker</a> •
@@ -178,3 +178,4 @@ Por favor, asegurate de que estás ejecutando estos comandos desde la raíz del 
 ![File Transfer](https://github.com/rustdesk/rustdesk/assets/28412477/39511ad3-aa9a-4f8c-8947-1cce286a46ad)
 
 ![TCP Tunneling](https://github.com/rustdesk/rustdesk/assets/28412477/78e8708f-e87e-4570-8373-1360033ea6c5)
+

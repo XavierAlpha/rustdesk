@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk - Uw bureaublad op afstand"><br>
+  <img src="../res/logo-header.svg" alt="Camellia - Uw bureaublad op afstand"><br>
   <a href="#free-public-servers">Servers</a> •
   <a href="#raw-steps-to-build">Bouwen</a> •
   <a href="#how-to-build-with-docker">Docker</a> •
@@ -166,3 +166,4 @@ Zorg ervoor dat je deze commando's van de root van de RustDesk-repository uitvoe
 ![image](https://user-images.githubusercontent.com/71636191/113112857-3fbd5d80-923c-11eb-9836-768325faf906.png)
 
 ![image](https://user-images.githubusercontent.com/71636191/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
+

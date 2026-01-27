@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk – vaše vzdálená plocha"><br>
+  <img src="../res/logo-header.svg" alt="Camellia – vaše vzdálená plocha"><br>
   <a href="#free-public-servers">Servery</a> •
   <a href="#raw-steps-to-build">Sestavení ze zdrojových kódů</a> •
   <a href="#how-to-build-with-docker">Docker</a> •
@@ -155,3 +155,4 @@ Ujistěte se, že tyto příkazy spouštíte z kořenového adresáře RustDesk,
 ![image](https://user-images.githubusercontent.com/71636191/113112857-3fbd5d80-923c-11eb-9836-768325faf906.png)
 
 ![image](https://user-images.githubusercontent.com/71636191/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
+

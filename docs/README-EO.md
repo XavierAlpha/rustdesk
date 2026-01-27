@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
+  <img src="../res/logo-header.svg" alt="Camellia - Your remote desktop"><br>
   <a href="#senpagaj-publikaj-serviloj">Serviloj</a> •
   <a href="#paŝoj-por-kompili">Kompili</a> •
   <a href="#kiel-kompili-kun-docker">Docker</a> •
@@ -146,3 +146,4 @@ Bonvolu certigi, ke vi plenumas tiujn komandojn el la radiko de la deponejo Rust
 ![image](https://user-images.githubusercontent.com/71636191/113112857-3fbd5d80-923c-11eb-9836-768325faf906.png)
 
 ![image](https://user-images.githubusercontent.com/71636191/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
+

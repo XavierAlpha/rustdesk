@@ -1,5 +1,5 @@
 <p dir="rtl" align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
+  <img src="../res/logo-header.svg" alt="Camellia - Your remote desktop"><br>
   <a href="#تصاویر-محیط-نرم افزار">تصاویر محیط نرم‌افزار</a> •
   <a href="#ساختار-پوشه-ها">ساختار</a> •
   <a href="#نحوه-ساخت-با-داکر">داکر</a> •
@@ -157,3 +157,4 @@ target/release/rustdesk
 ![image](https://user-images.githubusercontent.com/71636191/113112857-3fbd5d80-923c-11eb-9836-768325faf906.png)
 
 ![image](https://user-images.githubusercontent.com/71636191/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
+

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk - Dein Remote-Desktop"><br>
+  <img src="../res/logo-header.svg" alt="Camellia - Dein Remote-Desktop"><br>
   <a href="#grobe-schritte-zum-kompilieren">Kompilieren</a> •
   <a href="#auf-docker-kompilieren">Docker</a> •
   <a href="#dateistruktur">Dateistruktur</a> •
@@ -179,4 +179,5 @@ Bitte stellen Sie sicher, dass Sie diese Befehle im Stammverzeichnis des RustDes
 ![Dateiübertragung](https://github.com/rustdesk/rustdesk/assets/28412477/39511ad3-aa9a-4f8c-8947-1cce286a46ad)
 
 ![TCP-Tunneling](https://github.com/rustdesk/rustdesk/assets/28412477/78e8708f-e87e-4570-8373-1360033ea6c5)
+
 

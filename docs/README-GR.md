@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
+  <img src="../res/logo-header.svg" alt="Camellia - Your remote desktop"><br>
   <a href="#Δωρεάν-δημόσιοι-διακομιστές">Διακομιστές</a> •
   <a href="#Γενικά-βήματα-ώστε-να-κάνετε-build">Build</a> •
   <a href="#Πως-να-κάνετε-build-στο-Docker">Docker</a> •
@@ -169,3 +169,4 @@ target/release/rustdesk
 ![image](https://user-images.githubusercontent.com/71636191/113112857-3fbd5d80-923c-11eb-9836-768325faf906.png)
 
 ![image](https://user-images.githubusercontent.com/71636191/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
+

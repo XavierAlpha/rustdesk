@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
+  <img src="../res/logo-header.svg" alt="Camellia - Your remote desktop"><br>
   <a href="#serveurs-publics-libres">Serveurs</a> -
   <a href="#étapes-brutes-de-la-compilationbuild">Build</a> -
   <a href="#comment-construire-avec-docker">Docker</a> -
@@ -150,3 +150,4 @@ Veuillez vous assurer que vous exécutez ces commandes à partir de la racine du
 ![image](https://user-images.githubusercontent.com/71636191/113112857-3fbd5d80-923c-11eb-9836-768325faf906.png)
 
 ![image](https://user-images.githubusercontent.com/71636191/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
+

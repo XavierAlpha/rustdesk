@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk - il tuo desktop remoto"><br>
+  <img src="../res/logo-header.svg" alt="Camellia - il tuo desktop remoto"><br>
   <a href="#server-pubblici-gratuiti">Server</a> •
   <a href="#passaggi-per-la-compilazione">Compilazione</a> •
   <a href="#come-compilare-con-docker">Docker</a> •
@@ -177,3 +177,4 @@ Assicurati di eseguire questi comandi dalla radice del repository RustDesk, altr
 ![image](https://user-images.githubusercontent.com/71636191/113112857-3fbd5d80-923c-11eb-9836-768325faf906.png)
 
 ![image](https://user-images.githubusercontent.com/71636191/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
+

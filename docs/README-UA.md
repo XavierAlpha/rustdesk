@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk - Ваша віддалена стільниця"><br>
+  <img src="../res/logo-header.svg" alt="Camellia - Ваша віддалена стільниця"><br>
   <a href="#публічні-сервери">Сервери</a> •
   <a href="#кроки-для-збірки">Збирання</a> •
   <a href="#як-зібрати-за-допомогою-docker">Docker</a> •
@@ -171,4 +171,5 @@ target/release/rustdesk
 ![Передача файлів](https://github.com/rustdesk/rustdesk/assets/28412477/39511ad3-aa9a-4f8c-8947-1cce286a46ad)
 
 ![Тунелювання TCP](https://github.com/rustdesk/rustdesk/assets/28412477/78e8708f-e87e-4570-8373-1360033ea6c5)
+
 

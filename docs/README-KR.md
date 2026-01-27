@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
+  <img src="../res/logo-header.svg" alt="Camellia - Your remote desktop"><br>
   <a href="#빌드를 위한 원시 단계">빌드</a> •
   <a href="#Docker로 빌드하는 방법">Docker</a> •
   <a href="#파일 구조">구조</a> •
@@ -179,4 +179,5 @@ RustDesk 리포지토리의 루트에서 이러한 명령을 실행하고 있는
 ![File Transfer](https://github.com/rustdesk/rustdesk/assets/28412477/39511ad3-aa9a-4f8c-8947-1cce286a46ad)
 
 ![TCP Tunneling](https://github.com/rustdesk/rustdesk/assets/28412477/78e8708f-e87e-4570-8373-1360033ea6c5)
+
 

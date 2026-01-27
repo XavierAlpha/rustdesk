@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk - Twój zdalny pulpit"><br>
+  <img src="../res/logo-header.svg" alt="Camellia - Twój zdalny pulpit"><br>
   <a href="#darmowe-serwery-publiczne">Serwery</a> •
   <a href="#podstawowe-kroki-do-kompilacji">Kompilacja</a> •
   <a href="#jak-kompilować-za-pomocą-dockera">Docker</a> •
@@ -166,4 +166,5 @@ Upewnij się, że uruchamiasz te polecenia z katalogu głównego repozytorium Ru
 ![image](https://user-images.githubusercontent.com/71636191/113112857-3fbd5d80-923c-11eb-9836-768325faf906.png)
 
 ![image](https://user-images.githubusercontent.com/71636191/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
+
 

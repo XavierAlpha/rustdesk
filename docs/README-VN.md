@@ -1,7 +1,7 @@
 
 
 <p align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
+  <img src="../res/logo-header.svg" alt="Camellia - Your remote desktop"><br>
   <a href="#free-public-servers">Server</a> •
   <a href="#raw-steps-to-build">Build</a> •
   <a href="#how-to-build-with-docker">Docker</a> •
@@ -159,3 +159,4 @@ Hãy đảm bảo rằng bạn đang chạy các lệnh này từ gốc của th
 ![image](https://user-images.githubusercontent.com/71636191/113112857-3fbd5d80-923c-11eb-9836-768325faf906.png)
 
 ![image](https://user-images.githubusercontent.com/71636191/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
+

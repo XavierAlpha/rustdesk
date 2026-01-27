@@ -4,7 +4,7 @@ project(runner LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "rustdesk")
+set(BINARY_NAME "camellia")
 # The unique GTK application identifier for this application. See:
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID
 set(APPLICATION_ID "com.camellia")
@@ -129,7 +129,7 @@ endforeach(bundled_library)
 # flutter_rust_bridge
 set(RUSTDESK_LIB_BUILD_TYPE $<IF:$<CONFIG:Debug>,debug,release>)
 string(TOLOWER ${CMAKE_BUILD_TYPE} ${RUSTDESK_LIB_BUILD_TYPE})
-message(STATUS "rustdesk lib build type: ${RUSTDESK_LIB_BUILD_TYPE}")
+message(STATUS "camellia lib build type: ${RUSTDESK_LIB_BUILD_TYPE}")
 
 set(RUSTDESK_LIB "../../target/${RUSTDESK_LIB_BUILD_TYPE}/liblibrustdesk.so")
 install(FILES "${RUSTDESK_LIB}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk - Ваш удаленый рабочий стол"><br>
+  <img src="../res/logo-header.svg" alt="Camellia - Ваш удаленый рабочий стол"><br>
   <a href="#первичные-шаги-для-сборки">Первичные шаги для сборки</a> •
   <a href="#как-собрать-с-помощью-Docker">Как собрать с помощью Docker</a> •
   <a href="#структура-файлов">Структура файлов</a> •
@@ -181,3 +181,4 @@ target/release/rustdesk
 ![Передача файлов](https://github.com/rustdesk/rustdesk/assets/28412477/39511ad3-aa9a-4f8c-8947-1cce286a46ad)
 
 ![TCP-туннелирование](https://github.com/rustdesk/rustdesk/assets/28412477/78e8708f-e87e-4570-8373-1360033ea6c5)
+
