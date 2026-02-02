@@ -35,6 +35,13 @@ const _legacyAddressBookName = "Legacy address book";
 
 const kUntagged = "Untagged";
 
+bool _isPersonalGuid(String? guid) {
+  if (guid == null) {
+    return false;
+  }
+  return guid.startsWith('personal-');
+}
+
 enum ForcePullAb {
   listAndCurrent,
   current,
@@ -56,6 +63,7 @@ class AbModel {
   RxString get currentAbPullError => current.pullError;
   RxString get currentAbPushError => current.pushError;
   String? _personalAbGuid;
+  String _personalAbName = _personalAddressBookName;
   RxBool legacyMode = false.obs;
 
   // Only handles peers add/remove
@@ -130,6 +138,7 @@ class AbModel {
       try {
         // Read personal guid every time to avoid upgrading the server without closing the main window
         _personalAbGuid = null;
+        _personalAbName = _personalAddressBookName;
         await _getPersonalAbGuid();
         // Determine legacy mode based on whether _personalAbGuid is null
         legacyMode.value = _personalAbGuid == null;
@@ -139,7 +148,7 @@ class AbModel {
         if (_personalAbGuid != null) {
           debugPrint("pull ab list");
           List<AbProfile> abProfiles = List.empty(growable: true);
-          abProfiles.add(AbProfile(_personalAbGuid!, _personalAddressBookName,
+          abProfiles.add(AbProfile(_personalAbGuid!, _personalAbName,
               gFFI.userModel.userName.value, null, ShareRule.read.value, null));
           // get all address book name
           await _getSharedAbProfiles(abProfiles);
@@ -169,13 +178,13 @@ class AbModel {
         if (!addressbooks.containsKey(_currentName.value)) {
           setCurrentName(legacyMode.value
               ? _legacyAddressBookName
-              : _personalAddressBookName);
+              : _personalAbName);
         }
         // pull current address book
         await current.pullAb(quiet: quiet);
         // try initialize personal address book
         if (!current.isPersonal()) {
-          final personalAb = addressbooks[_personalAddressBookName];
+          final personalAb = addressbooks[_personalAbName];
           if (personalAb != null && !personalAb.initialized) {
             await personalAb.pullAb(quiet: quiet);
           }
@@ -244,6 +253,12 @@ class AbModel {
         throw 'HTTP ${resp.statusCode}';
       }
       _personalAbGuid = json['guid'];
+      final name = json['name'];
+      if (name is String && name.trim().isNotEmpty) {
+        _personalAbName = name.trim();
+      } else {
+        _personalAbName = _personalAddressBookName;
+      }
       return true;
     } catch (err) {
       debugPrint('get personal ab err: ${err.toString()}');
@@ -392,7 +407,7 @@ class AbModel {
 
   Future<bool> changePersonalHashPassword(String id, String hash) async {
     var ret = false;
-    final personalAb = addressbooks[_personalAddressBookName];
+    final personalAb = addressbooks[_personalAbName];
     if (personalAb != null) {
       ret = await personalAb.changePersonalHashPassword(id, hash);
       await personalAb.pullAb(quiet: true);
@@ -616,17 +631,26 @@ class AbModel {
         if (abEntry is Map<String, dynamic>) {
           var guid = abEntry['guid'];
           var name = abEntry['name'];
+          if (name == null) {
+            continue;
+          }
+          final nameStr = name.toString();
           final BaseAb ab;
-          if (name == _legacyAddressBookName) {
+          if (nameStr == _legacyAddressBookName) {
             ab = LegacyAb();
           } else {
-            if (name == null || guid == null) {
+            if (guid == null) {
               continue;
             }
-            ab = Ab(AbProfile(guid, name, '', '', ShareRule.read.value, null),
-                name == _personalAddressBookName);
+            final guidStr = guid.toString();
+            final isPersonal = _isPersonalGuid(guidStr);
+            if (isPersonal) {
+              _personalAbName = nameStr;
+            }
+            ab = Ab(AbProfile(guidStr, nameStr, '', '', ShareRule.read.value, null),
+                isPersonal);
           }
-          addressbooks[name] = ab;
+          addressbooks[nameStr] = ab;
           if (abEntry['tags'] is List) {
             ab.tags.value =
                 (abEntry['tags'] as List).map((e) => e.toString()).toList();
@@ -697,7 +721,7 @@ class AbModel {
   }
 
   String personalAddressBookName() {
-    return _personalAddressBookName;
+    return _personalAbName;
   }
 
   Future<void> setCurrentName(String name) async {
@@ -705,8 +729,8 @@ class AbModel {
     if (addressbooks.containsKey(name)) {
       _currentName.value = name;
     } else {
-      if (addressbooks.containsKey(_personalAddressBookName)) {
-        _currentName.value = _personalAddressBookName;
+      if (addressbooks.containsKey(_personalAbName)) {
+        _currentName.value = _personalAbName;
       } else if (addressbooks.containsKey(_legacyAddressBookName)) {
         _currentName.value = _legacyAddressBookName;
       } else {
@@ -769,7 +793,7 @@ class AbModel {
   }
 
   String translatedName(String name) {
-    if (name == _personalAddressBookName || name == _legacyAddressBookName) {
+    if (name == _personalAbName || name == _legacyAddressBookName) {
       return translate(name);
     } else {
       return name;
@@ -832,8 +856,7 @@ abstract class BaseAb {
   String name();
 
   bool isPersonal() {
-    return name() == _personalAddressBookName ||
-        name() == _legacyAddressBookName;
+    return false;
   }
 
   bool isLegacy() {
@@ -925,6 +948,11 @@ class LegacyAb extends BaseAb {
   var licensedDevices = 0;
 
   LegacyAb();
+
+  @override
+  bool isPersonal() {
+    return true;
+  }
 
   @override
   AbProfile? sharedProfile() {
@@ -1316,11 +1344,15 @@ class Ab extends BaseAb {
 
   @override
   String name() {
-    if (personal) {
-      return _personalAddressBookName;
-    } else {
+    if (profile.name.isNotEmpty) {
       return profile.name;
     }
+    return _personalAddressBookName;
+  }
+
+  @override
+  bool isPersonal() {
+    return personal;
   }
 
   @override
