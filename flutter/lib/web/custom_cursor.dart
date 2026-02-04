@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:js' as js;
+import 'package:flutter_hbb/web/js_interop_bridge.dart' as js;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';

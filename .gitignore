@@ -57,4 +57,17 @@ examples/**/target/
 vcpkg_installed
 flutter/lib/generated_plugin_registrant.dart
 libsciter.dylib
-flutter/web/
+# flutter web
+flutter/web/js/node_modules/
+flutter/web/js/.yarn/
+flutter/web/js/.cache/
+flutter/web/js/dist/
+flutter/web/web_deps.tar.gz
+
+# allow web assets (overrides global image ignores)
+!flutter/web/**/*.png
+!flutter/web/**/*.svg
+!flutter/web/**/*.jpg
+!flutter/web/**/*.jpeg
+!flutter/web/**/*.webp
+!flutter/web/**/*.ico

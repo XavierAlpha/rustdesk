@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:js' as js;
+import 'package:flutter_hbb/web/js_interop_bridge.dart' as js;
 
 Future<void> webselectFiles({required bool is_folder}) async {
   return Future(

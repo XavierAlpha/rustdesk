@@ -171,7 +171,7 @@ Please ensure that you run these commands from the root of the Camellia reposito
 - **[src/rendezvous_mediator.rs](https://github.com/CamelliaCorp/camellia/tree/master/src/rendezvous_mediator.rs)**: Communicate with [Camellia server](https://github.com/CamelliaCorp/camellia), wait for remote direct (TCP hole punching) or relayed connection
 - **[src/platform](https://github.com/CamelliaCorp/camellia/tree/master/src/platform)**: platform specific code
 - **[flutter](https://github.com/CamelliaCorp/camellia/tree/master/flutter)**: Flutter code for desktop and mobile
-- **[flutter/web/js](https://github.com/CamelliaCorp/camellia/tree/master/flutter/web/v1/js)**: JavaScript for Flutter web client
+- **[flutter/web/js](https://github.com/CamelliaCorp/camellia/tree/master/flutter/web/js)**: JavaScript for Flutter web client
 
 ## Screenshots
 

@@ -1,12 +1,12 @@
 import 'dart:async';
-import 'dart:js' as js;
 import 'dart:convert';
-import 'dart:typed_data';
-import 'package:flutter/foundation.dart';
-import 'package:uuid/uuid.dart';
-import 'dart:html' as html;
+import 'dart:js_interop';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_hbb/consts.dart';
+import 'package:flutter_hbb/web/js_interop_bridge.dart' as js;
+import 'package:uuid/uuid.dart';
+import 'package:web/web.dart' as web;
 
 final _privateConstructorUsedError = UnsupportedError(
     'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
@@ -29,7 +29,7 @@ sealed class EventToUI {
 }
 
 class EventToUI_Event implements EventToUI {
-  const EventToUI_Event(final String field0) : this.field = field0;
+  const EventToUI_Event(final String field0) : field = field0;
   final String field;
   String get field0 => field;
 }
@@ -96,7 +96,8 @@ class RustdeskImpl {
         'is_shared_password': isSharedPassword,
         'isFileTransfer': isFileTransfer,
         'isViewCamera': isViewCamera,
-        'isTerminal': isTerminal
+        'isTerminal': isTerminal,
+        'forceRelay': forceRelay,
       })
     ]);
   }
@@ -731,12 +732,9 @@ class RustdeskImpl {
   }
 
   String mainGetLoginDeviceInfo({dynamic hint}) {
-    String userAgent = html.window.navigator.userAgent;
-    String appName = html.window.navigator.appName;
-    String appVersion = html.window.navigator.appVersion;
-    String? platform = html.window.navigator.platform;
+    final userAgent = web.window.navigator.userAgent;
     return jsonEncode({
-      'os': '$userAgent, $appName $appVersion ($platform)',
+      'os': userAgent,
       'type': 'Web client',
       'name': js.context.callMethod('getByName', ['my_name']),
     });
@@ -855,13 +853,35 @@ class RustdeskImpl {
     throw UnimplementedError("mainGetLanPeers");
   }
 
+  int _webStatusToStatusNum(String rawStatus) {
+    switch (rawStatus) {
+      case 'connected':
+      case 'ready':
+      case 'open':
+        return 1;
+      case 'connecting':
+      case 'starting':
+      case 'checking':
+        return 0;
+      default:
+        return -1;
+    }
+  }
+
   Future<String> mainGetConnectStatus({dynamic hint}) {
-    return Future(
-        () => js.context.callMethod('getByName', ["get_conn_status"]));
+    return Future(() {
+      final rawStatus =
+          js.context.callMethod('getByName', ["get_conn_status"]).toString();
+      return jsonEncode({
+        'status_num': _webStatusToStatusNum(rawStatus),
+        'raw_status': rawStatus,
+      });
+    });
   }
 
   Future<void> mainCheckConnectStatus({dynamic hint}) {
-    throw UnimplementedError("mainCheckConnectStatus");
+    return Future(
+        () => js.context.callMethod('setByName', ["check_connect_status"]));
   }
 
   Future<bool> mainIsUsingPublicServer({dynamic hint}) {
@@ -1054,7 +1074,7 @@ class RustdeskImpl {
   }
 
   Future<void> mainLoadLanPeers({dynamic hint}) {
-    throw UnimplementedError("mainLoadLanPeers");
+    return Future.value();
   }
 
   Future<void> mainRemoveDiscovered({required String id, dynamic hint}) {
@@ -1156,11 +1176,13 @@ class RustdeskImpl {
   }
 
   Future<String> mainGetTemporaryPassword({dynamic hint}) {
-    return Future.value('');
+    return Future(
+        () => js.context.callMethod('getByName', ['temporary_password']).toString());
   }
 
   Future<String> mainGetPermanentPassword({dynamic hint}) {
-    return Future.value('');
+    return Future(
+        () => js.context.callMethod('getByName', ['permanent_password']).toString());
   }
 
   Future<String> mainGetFingerprint({dynamic hint}) {
@@ -1231,7 +1253,7 @@ class RustdeskImpl {
   }
 
   Future<String> mainLoadAb({dynamic hint}) {
-    Completer<String> completer = Completer();
+    final completer = Completer<String>();
     Future<String> timeoutFuture = completer.future.timeout(
       Duration(seconds: 2),
       onTimeout: () {
@@ -1239,9 +1261,9 @@ class RustdeskImpl {
         return 'Timeout';
       },
     );
-    js.context["onLoadAbFinished"] = (String s) {
-      completer.complete(s);
-    };
+    js.context["onLoadAbFinished"] = ((JSAny? s) {
+      completer.complete((s?.dartify() ?? '').toString());
+    }).toJS;
     js.context.callMethod('setByName', ['load_ab']);
     return timeoutFuture;
   }
@@ -1256,7 +1278,7 @@ class RustdeskImpl {
   }
 
   Future<String> mainLoadGroup({dynamic hint}) {
-    Completer<String> completer = Completer();
+    final completer = Completer<String>();
     Future<String> timeoutFuture = completer.future.timeout(
       Duration(seconds: 2),
       onTimeout: () {
@@ -1264,9 +1286,9 @@ class RustdeskImpl {
         return 'Timeout';
       },
     );
-    js.context["onLoadGroupFinished"] = (String s) {
-      completer.complete(s);
-    };
+    js.context["onLoadGroupFinished"] = ((JSAny? s) {
+      completer.complete((s?.dartify() ?? '').toString());
+    }).toJS;
     js.context.callMethod('setByName', ['load_group']);
     return timeoutFuture;
   }
@@ -1343,12 +1365,14 @@ class RustdeskImpl {
   }
 
   Future<void> mainUpdateTemporaryPassword({dynamic hint}) {
-    throw UnimplementedError("mainUpdateTemporaryPassword");
+    return Future(
+        () => js.context.callMethod('setByName', ['update_temporary_password']));
   }
 
   Future<void> mainSetPermanentPassword(
       {required String password, dynamic hint}) {
-    throw UnimplementedError("mainSetPermanentPassword");
+    return Future(
+        () => js.context.callMethod('setByName', ['permanent_password', password]));
   }
 
   Future<bool> mainCheckSuperUserPermission({dynamic hint}) {
@@ -1834,7 +1858,8 @@ class RustdeskImpl {
   }
 
   int mainMaxEncryptLen({dynamic hint}) {
-    throw UnimplementedError("mainMaxEncryptLen");
+    // Keep consistent with native `hbb_common::config::ENCRYPT_MAX_LEN`.
+    return 128;
   }
 
   bool mainAudioSupportLoopback({dynamic hint}) {
@@ -1898,16 +1923,20 @@ class RustdeskImpl {
   }
 
   Future<String> mainGetCommon({required String key, dynamic hint}) {
-    throw UnimplementedError("mainGetCommon");
+    return Future(() =>
+        js.context.callMethod('getByName', ['common', key]).toString());
   }
 
   String mainGetCommonSync({required String key, dynamic hint}) {
-    throw UnimplementedError("mainGetCommonSync");
+    return js.context.callMethod('getByName', ['common', key]).toString();
   }
 
   Future<void> mainSetCommon(
       {required String key, required String value, dynamic hint}) {
-    throw UnimplementedError("mainSetCommon");
+    return Future(() => js.context.callMethod('setByName', [
+          'common',
+          jsonEncode({'key': key, 'value': value})
+        ]));
   }
 
   Future<String> sessionHandleScreenshot(
