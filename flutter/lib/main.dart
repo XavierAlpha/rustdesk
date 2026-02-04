@@ -535,6 +535,12 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                       isWebDesktop) {
                     child = keyListenerBuilder(context, child);
                   }
+                  if (isWeb) {
+                    child = FocusTraversalGroup(
+                      policy: WidgetOrderTraversalPolicy(),
+                      child: child ?? const SizedBox.shrink(),
+                    );
+                  }
                   if (isLinux) {
                     return buildVirtualWindowFrame(context, child);
                   } else {

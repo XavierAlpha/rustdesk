@@ -741,7 +741,8 @@ class RustdeskImpl {
   }
 
   Future<void> mainChangeId({required String newId, dynamic hint}) {
-    throw UnimplementedError("mainChangeId");
+    return Future(
+        () => js.context.callMethod('setByName', ['my_id', newId.trim()]));
   }
 
   Future<String> mainGetAsyncStatus({dynamic hint}) {
@@ -789,8 +790,8 @@ class RustdeskImpl {
 
   Future<String> mainTestIfValidServer(
       {required String server, required bool testWithProxy, dynamic hint}) {
-    // TODO: implement
-    return Future.value('');
+    return Future(() =>
+        js.context.callMethod('getByName', ['test_if_valid_server', server]));
   }
 
   Future<void> mainSetSocks(
@@ -845,12 +846,11 @@ class RustdeskImpl {
   }
 
   String mainGetPeerSync({required String id, dynamic hint}) {
-    // TODO:
-    throw UnimplementedError("mainGetPeerSync");
+    return js.context.callMethod('getByName', ['peer_sync', id]);
   }
 
   Future<String> mainGetLanPeers({dynamic hint}) {
-    throw UnimplementedError("mainGetLanPeers");
+    return Future(() => js.context.callMethod('getByName', ['load_lan_peers']));
   }
 
   int _webStatusToStatusNum(String rawStatus) {
@@ -891,7 +891,7 @@ class RustdeskImpl {
   }
 
   Future<void> mainDiscover({dynamic hint}) {
-    throw UnimplementedError("mainDiscover");
+    return Future(() => js.context.callMethod('setByName', ['discover']));
   }
 
   Future<String> mainGetApiServer({dynamic hint}) {
@@ -1033,7 +1033,7 @@ class RustdeskImpl {
   }
 
   Future<String> mainGetNewStoredPeers({dynamic hint}) {
-    throw UnimplementedError("mainGetNewStoredPeers");
+    return Future(() => js.context.callMethod('getByName', ['new_stored_peers']));
   }
 
   Future<void> mainForgetPassword({required String id, dynamic hint}) {
@@ -1052,8 +1052,7 @@ class RustdeskImpl {
   }
 
   Future<void> mainLoadRecentPeers({dynamic hint}) {
-    return Future(
-        () => js.context.callMethod('getByName', ['load_recent_peers']));
+    return Future(() => js.context.callMethod('setByName', ['load_recent_peers']));
   }
 
   String mainLoadRecentPeersSync({dynamic hint}) {
@@ -1061,24 +1060,25 @@ class RustdeskImpl {
   }
 
   String mainLoadLanPeersSync({dynamic hint}) {
-    return '{}';
+    return js.context.callMethod('getByName', ['load_lan_peers_sync']);
   }
 
   Future<String> mainLoadRecentPeersForAb(
       {required String filter, dynamic hint}) {
-    throw UnimplementedError("mainLoadRecentPeersForAb");
+    return Future(() =>
+        js.context.callMethod('getByName', ['load_recent_peers_for_ab', filter]));
   }
 
   Future<void> mainLoadFavPeers({dynamic hint}) {
-    return Future(() => js.context.callMethod('getByName', ['load_fav_peers']));
+    return Future(() => js.context.callMethod('setByName', ['load_fav_peers']));
   }
 
   Future<void> mainLoadLanPeers({dynamic hint}) {
-    return Future.value();
+    return Future(() => js.context.callMethod('setByName', ['load_lan_peers']));
   }
 
   Future<void> mainRemoveDiscovered({required String id, dynamic hint}) {
-    throw UnimplementedError("mainRemoveDiscovered");
+    return Future(() => js.context.callMethod('setByName', ['remove_peer', id]));
   }
 
   Future<void> mainChangeTheme({required String dark, dynamic hint}) {
@@ -1186,7 +1186,7 @@ class RustdeskImpl {
   }
 
   Future<String> mainGetFingerprint({dynamic hint}) {
-    return Future.value('');
+    return Future(() => js.context.callMethod('getByName', ['fingerprint']));
   }
 
   Future<String> cmGetClientsState({dynamic hint}) {
@@ -1759,8 +1759,8 @@ class RustdeskImpl {
 
   String mainSupportedInputSource({dynamic hint}) {
     return jsonEncode([
-      ['Input source 1', 'input_source_1_tip'],
-      ['Input source 2', 'input_source_2_tip']
+      ['Input source 1', 'System keyboard input (recommended)'],
+      ['Input source 2', 'Flutter keyboard input']
     ]);
   }
 

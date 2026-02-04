@@ -18,12 +18,8 @@ class WebClientSettingsPage extends StatefulWidget {
 
 class _WebClientSettingsPageState extends State<WebClientSettingsPage> {
   late final TextEditingController _directPortController;
-  late final TextEditingController _permanentPasswordController;
   final FocusNode _directPortFocusNode = FocusNode();
-  bool _obscurePermanentPassword = true;
-  bool _savingPermanentPassword = false;
-  String _temporaryPassword = '';
-  bool _hasPermanentPassword = false;
+  late final Future<_AboutInfo> _aboutFuture;
 
   final List<({String key, String label})> _langs = [];
   bool _langsLoaded = false;
@@ -34,31 +30,15 @@ class _WebClientSettingsPageState extends State<WebClientSettingsPage> {
     _directPortController = TextEditingController(
       text: bind.mainGetOptionSync(key: kOptionDirectAccessPort),
     );
-    _permanentPasswordController = TextEditingController();
+    _aboutFuture = _loadAboutInfo();
     _loadLanguages();
-    _refreshPasswordState();
   }
 
   @override
   void dispose() {
     _directPortController.dispose();
-    _permanentPasswordController.dispose();
     _directPortFocusNode.dispose();
     super.dispose();
-  }
-
-  Future<void> _refreshPasswordState() async {
-    try {
-      final temporary = (await bind.mainGetTemporaryPassword()).trim();
-      final permanent = (await bind.mainGetPermanentPassword()).trim();
-      if (!mounted) return;
-      setState(() {
-        _temporaryPassword = temporary;
-        _hasPermanentPassword = permanent.isNotEmpty;
-      });
-    } catch (_) {
-      // Ignore transient bridge failures.
-    }
   }
 
   Future<void> _loadLanguages() async {
@@ -84,6 +64,17 @@ class _WebClientSettingsPageState extends State<WebClientSettingsPage> {
         setState(() {});
       }
     }
+  }
+
+  Future<_AboutInfo> _loadAboutInfo() async {
+    final version = await bind.mainGetVersion();
+    final buildDate = await bind.mainGetBuildDate();
+    final fingerprint = await bind.mainGetFingerprint();
+    return _AboutInfo(
+      version: version,
+      buildDate: buildDate,
+      fingerprint: fingerprint,
+    );
   }
 
   Future<void> _setBoolOption(String key, bool value) async {
@@ -143,139 +134,132 @@ class _WebClientSettingsPageState extends State<WebClientSettingsPage> {
     final errMsgs = [idErr, relayErr, apiErr];
     var isInProgress = false;
 
-    try {
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) {
-          return StatefulBuilder(
-            builder: (context, setDialogState) {
-              Future<void> submit() async {
-                setDialogState(() {
-                  isInProgress = true;
-                });
-                final ok = await setServerConfig(
-                  controllers,
-                  errMsgs,
-                  ServerConfig(
-                    idServer: idCtrl.text.trim(),
-                    relayServer: relayCtrl.text.trim(),
-                    apiServer: apiCtrl.text.trim(),
-                    key: keyCtrl.text.trim(),
-                  ),
-                );
-                if (!dialogContext.mounted) {
-                  return;
-                }
-                setDialogState(() {
-                  isInProgress = false;
-                });
-                if (ok) {
-                  Navigator.of(dialogContext).pop();
-                  showToast(translate('Successful'));
-                  if (mounted) {
-                    setState(() {});
-                  }
-                } else {
-                  setDialogState(() {});
-                  showToast(translate('Failed'));
-                }
-              }
-
-              Widget buildField({
-                required String label,
-                required TextEditingController controller,
-                required String error,
-                String? hint,
-              }) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: controller,
-                      decoration: InputDecoration(
-                        isDense: true,
-                        hintText: hint,
-                        errorText: error.isEmpty ? null : error,
-                        border: const OutlineInputBorder(),
-                      ),
-                    ),
-                  ],
-                );
-              }
-
-              return AlertDialog(
-                title: Row(
-                  children: [
-                    Expanded(child: Text(translate('ID/Relay Server'))),
-                    ...ServerConfigImportExportWidgets(controllers, errMsgs),
-                  ],
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> submit() async {
+              setDialogState(() {
+                isInProgress = true;
+              });
+              final ok = await setServerConfig(
+                null,
+                errMsgs,
+                ServerConfig(
+                  idServer: idCtrl.text.trim(),
+                  relayServer: relayCtrl.text.trim(),
+                  apiServer: apiCtrl.text.trim(),
+                  key: keyCtrl.text.trim(),
                 ),
-                content: SizedBox(
-                  width: 580,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        buildField(
-                          label: translate('ID Server'),
-                          controller: idCtrl,
-                          error: idErr.value,
-                          hint: 'host[:port]',
-                        ),
-                        const SizedBox(height: 10),
-                        buildField(
-                          label: translate('Relay Server'),
-                          controller: relayCtrl,
-                          error: relayErr.value,
-                          hint: 'host[:port]',
-                        ),
-                        const SizedBox(height: 10),
-                        buildField(
-                          label: translate('API Server'),
-                          controller: apiCtrl,
-                          error: apiErr.value,
-                          hint: 'https://api.example.com',
-                        ),
-                        const SizedBox(height: 10),
-                        buildField(
-                          label: 'Key',
-                          controller: keyCtrl,
-                          error: '',
-                        ),
-                        if (isInProgress) ...[
-                          const SizedBox(height: 12),
-                          const LinearProgressIndicator(),
-                        ],
-                      ],
+              );
+              if (!dialogContext.mounted) {
+                return;
+              }
+              setDialogState(() {
+                isInProgress = false;
+              });
+              if (ok) {
+                Navigator.of(dialogContext).pop();
+                showToast(translate('Successful'));
+                if (mounted) {
+                  setState(() {});
+                }
+              } else {
+                setDialogState(() {});
+                showToast(translate('Failed'));
+              }
+            }
+
+            Widget buildField({
+              required String label,
+              required TextEditingController controller,
+              required String error,
+              String? hint,
+            }) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: controller,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: hint,
+                      errorText: error.isEmpty ? null : error,
+                      border: const OutlineInputBorder(),
                     ),
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                    child: Text(translate('Cancel')),
-                  ),
-                  FilledButton(
-                    onPressed: isInProgress ? null : submit,
-                    child: Text(translate('OK')),
                   ),
                 ],
               );
-            },
-          );
-        },
-      );
-    } finally {
-      idCtrl.dispose();
-      relayCtrl.dispose();
-      apiCtrl.dispose();
-      keyCtrl.dispose();
-    }
+            }
+
+            return AlertDialog(
+              title: Row(
+                children: [
+                  Expanded(child: Text(translate('ID/Relay Server'))),
+                  ...ServerConfigImportExportWidgets(controllers, errMsgs),
+                ],
+              ),
+              content: SizedBox(
+                width: 580,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      buildField(
+                        label: translate('ID Server'),
+                        controller: idCtrl,
+                        error: idErr.value,
+                        hint: 'host[:port]',
+                      ),
+                      const SizedBox(height: 10),
+                      buildField(
+                        label: translate('Relay Server'),
+                        controller: relayCtrl,
+                        error: relayErr.value,
+                        hint: 'host[:port]',
+                      ),
+                      const SizedBox(height: 10),
+                      buildField(
+                        label: translate('API Server'),
+                        controller: apiCtrl,
+                        error: apiErr.value,
+                        hint: 'https://api.example.com',
+                      ),
+                      const SizedBox(height: 10),
+                      buildField(
+                        label: 'Key',
+                        controller: keyCtrl,
+                        error: '',
+                      ),
+                      if (isInProgress) ...[
+                        const SizedBox(height: 12),
+                        const LinearProgressIndicator(),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: Text(translate('Cancel')),
+                ),
+                FilledButton(
+                  onPressed: isInProgress ? null : submit,
+                  child: Text(translate('OK')),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _applyDirectAccessPort() async {
@@ -290,44 +274,13 @@ class _WebClientSettingsPageState extends State<WebClientSettingsPage> {
     }
   }
 
-  Future<void> _regenerateOneTimePassword() async {
-    await bind.mainUpdateTemporaryPassword();
-    await _refreshPasswordState();
-  }
-
-  Future<void> _savePermanentPassword() async {
-    final password = _permanentPasswordController.text;
-    if (password.trim().isEmpty) {
-      showToast('Password cannot be empty');
-      return;
-    }
-    setState(() {
-      _savingPermanentPassword = true;
-    });
-    try {
-      await bind.mainSetPermanentPassword(password: password);
-      await Future.delayed(const Duration(milliseconds: 350));
-      final saved = (await bind.mainGetPermanentPassword()).trim();
-      if (!mounted) return;
-      if (saved == password) {
-        _permanentPasswordController.clear();
-        _hasPermanentPassword = true;
-        showToast(translate('Successful'));
-      } else {
-        showToast(translate('Failed'));
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _savingPermanentPassword = false;
-        });
-      }
-    }
-  }
 
   String _otherLabel(String raw) {
     if (raw == 'show_monitors_tip') {
       return translate('Show monitors toolbar');
+    }
+    if (raw == 'swap-left-right-mouse') {
+      return translate('Swap left and right mouse buttons');
     }
     return translate(raw);
   }
@@ -390,31 +343,20 @@ class _WebClientSettingsPageState extends State<WebClientSettingsPage> {
       _directPortController.text = storedDirectPort;
     }
 
-    final verificationMethodRaw =
-        bind.mainGetOptionSync(key: kOptionVerificationMethod);
-    final verificationMethod = const {
-      'use-both-passwords',
-      'use-temporary-password',
-      'use-permanent-password',
-    }.contains(verificationMethodRaw)
-        ? verificationMethodRaw
-        : 'use-both-passwords';
-    final tempPasswordLengthRaw =
-        bind.mainGetOptionSync(key: 'temporary-password-length');
-    final tempPasswordLength = const {'6', '8', '10'}.contains(tempPasswordLengthRaw)
-        ? tempPasswordLengthRaw
-        : '6';
-    final allowNumericOtp =
-        mainGetBoolOptionSync(kOptionAllowNumericOneTimePassword);
-
     final viewStyleRaw = bind.mainGetUserDefaultOption(key: kOptionViewStyle);
     final viewStyle = const {
       kRemoteViewStyleOriginal,
       kRemoteViewStyleAdaptive,
-      kRemoteViewStyleCustom,
     }.contains(viewStyleRaw)
         ? viewStyleRaw
         : kRemoteViewStyleOriginal;
+    final scrollStyleRaw = bind.mainGetUserDefaultOption(key: kOptionScrollStyle);
+    final scrollStyle = const {
+      kRemoteScrollStyleAuto,
+      kRemoteScrollStyleBar,
+    }.contains(scrollStyleRaw)
+        ? scrollStyleRaw
+        : kRemoteScrollStyleAuto;
     final imageQualityRaw = bind.mainGetUserDefaultOption(key: kOptionImageQuality);
     final imageQuality = const {
       kRemoteImageQualityBest,
@@ -557,126 +499,6 @@ class _WebClientSettingsPageState extends State<WebClientSettingsPage> {
               ),
           ]),
           const SizedBox(height: 12),
-          _sectionCard('Security', [
-            _dropdownTile(
-              icon: Icons.verified_user_outlined,
-              title: 'Verification method',
-              value: verificationMethod,
-              items: const [
-                DropdownMenuItem(
-                  value: 'use-both-passwords',
-                  child: Text('Use both passwords'),
-                ),
-                DropdownMenuItem(
-                  value: 'use-temporary-password',
-                  child: Text('Use one-time password'),
-                ),
-                DropdownMenuItem(
-                  value: 'use-permanent-password',
-                  child: Text('Use permanent password'),
-                ),
-              ],
-              onChanged: isOptionFixed(kOptionVerificationMethod)
-                  ? null
-                  : (v) => _setOption(kOptionVerificationMethod, v ?? ''),
-            ),
-            const Divider(height: 1),
-            _dropdownTile(
-              icon: Icons.password,
-              title: 'Set one-time password length',
-              value: tempPasswordLength,
-              items: const [
-                DropdownMenuItem(value: '6', child: Text('6')),
-                DropdownMenuItem(value: '8', child: Text('8')),
-                DropdownMenuItem(value: '10', child: Text('10')),
-              ],
-              onChanged: isOptionFixed('temporary-password-length')
-                  ? null
-                  : (v) async {
-                      await _setOption('temporary-password-length', v ?? '6');
-                      await bind.mainUpdateTemporaryPassword();
-                    },
-            ),
-            const Divider(height: 1),
-            SwitchListTile(
-              value: allowNumericOtp,
-              onChanged: isOptionFixed(kOptionAllowNumericOneTimePassword)
-                  ? null
-                  : (v) => _setBoolOption(kOptionAllowNumericOneTimePassword, v),
-              title: Text(translate('Allow only one-time password')),
-              subtitle: const Text(
-                'When enabled, only one-time password is accepted. Useful for temporary support sessions.',
-              ),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.vpn_key_outlined),
-              title: Text(translate('One-time password')),
-              subtitle: Text(
-                _temporaryPassword.isEmpty
-                    ? translate('Generating ...')
-                    : _temporaryPassword,
-              ),
-              trailing: IconButton(
-                tooltip: translate('Refresh'),
-                onPressed: _regenerateOneTimePassword,
-                icon: const Icon(Icons.refresh),
-              ),
-            ),
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    translate('Permanent Password'),
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _hasPermanentPassword
-                        ? translate('Configured')
-                        : translate('Not configured'),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _permanentPasswordController,
-                          obscureText: _obscurePermanentPassword,
-                          maxLength: bind.mainMaxEncryptLen(),
-                          decoration: InputDecoration(
-                            isDense: true,
-                            hintText: translate('Permanent Password'),
-                            suffixIcon: IconButton(
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePermanentPassword =
-                                      !_obscurePermanentPassword;
-                                });
-                              },
-                              icon: Icon(_obscurePermanentPassword
-                                  ? Icons.visibility_off
-                                  : Icons.visibility),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      ElevatedButton(
-                        onPressed:
-                            _savingPermanentPassword ? null : _savePermanentPassword,
-                        child: Text(translate('Apply')),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ]),
-          const SizedBox(height: 12),
           _sectionCard('Display', [
             _dropdownTile(
               icon: Icons.desktop_windows_outlined,
@@ -687,11 +509,25 @@ class _WebClientSettingsPageState extends State<WebClientSettingsPage> {
                     value: kRemoteViewStyleOriginal, child: Text('Scale original')),
                 DropdownMenuItem(
                     value: kRemoteViewStyleAdaptive, child: Text('Scale adaptive')),
-                DropdownMenuItem(value: kRemoteViewStyleCustom, child: Text('Custom')),
               ],
               onChanged: isOptionFixed(kOptionViewStyle)
                   ? null
                   : (v) => _setUserDefaultOption(kOptionViewStyle, v ?? ''),
+            ),
+            const Divider(height: 1),
+            _dropdownTile(
+              icon: Icons.swap_vert_outlined,
+              title: 'Default Scroll Style',
+              value: scrollStyle,
+              items: const [
+                DropdownMenuItem(
+                    value: kRemoteScrollStyleAuto, child: Text('ScrollAuto')),
+                DropdownMenuItem(
+                    value: kRemoteScrollStyleBar, child: Text('Scrollbar')),
+              ],
+              onChanged: isOptionFixed(kOptionScrollStyle)
+                  ? null
+                  : (v) => _setUserDefaultOption(kOptionScrollStyle, v ?? ''),
             ),
             const Divider(height: 1),
             _dropdownTile(
@@ -711,6 +547,11 @@ class _WebClientSettingsPageState extends State<WebClientSettingsPage> {
                   ? null
                   : (v) => _setUserDefaultOption(kOptionImageQuality, v ?? ''),
             ),
+            if (imageQuality == kRemoteImageQualityCustom)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                child: customImageQualitySetting(),
+              ),
             const Divider(height: 1),
             _dropdownTile(
               icon: Icons.video_settings_outlined,
@@ -743,8 +584,66 @@ class _WebClientSettingsPageState extends State<WebClientSettingsPage> {
               );
             }),
           ]),
+          const SizedBox(height: 12),
+          _sectionCard('About', [
+            FutureBuilder<_AboutInfo>(
+              future: _aboutFuture,
+              builder: (context, snapshot) {
+                final info = snapshot.data;
+                final version = info?.version ?? '';
+                final buildDate = info?.buildDate ?? '';
+                final fingerprint = info?.fingerprint ?? '';
+                final year = DateTime.now().year;
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SelectionArea(
+                        child: Text(
+                          '${translate('Version')}: ${version.isEmpty ? '-' : version}',
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      SelectionArea(
+                        child: Text(
+                          '${translate('Build Date')}: ${buildDate.isEmpty ? '-' : buildDate}',
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      SelectionArea(
+                        child: Text(
+                          '${translate('Fingerprint')}: ${fingerprint.isEmpty ? '-' : fingerprint}',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Copyright © $year CamelliaCorp.',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.black54,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ]),
         ],
       ),
     );
   }
+}
+
+class _AboutInfo {
+  const _AboutInfo({
+    required this.version,
+    required this.buildDate,
+    required this.fingerprint,
+  });
+
+  final String version;
+  final String buildDate;
+  final String fingerprint;
 }

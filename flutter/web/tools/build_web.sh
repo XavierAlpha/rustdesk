@@ -3,6 +3,7 @@
 set -euo pipefail
 
 MODE=${MODE:=release}
+RUN=false
 SKIP_JS=false
 SKIP_DEPS=false
 SKIP_ICONS=false
@@ -12,6 +13,10 @@ while [[ $# -gt 0 ]]; do
     --mode)
       MODE="$2"
       shift 2
+      ;;
+    --run)
+      RUN=true
+      shift
       ;;
     --skip-js)
       SKIP_JS=true
@@ -46,6 +51,11 @@ WEB_INDEX="${WEB_DIR}/index.html"
 WEB_JS_DIR="${WEB_DIR}/js"
 WEB_JS_PKG="${WEB_JS_DIR}/package.json"
 REPO_ROOT="$(cd "${FLUTTER_ROOT}/.." && pwd)"
+PUBSPEC_FILE="${FLUTTER_ROOT}/pubspec.yaml"
+APP_VERSION_VALUE="${APP_VERSION:-}"
+if [[ -z "$APP_VERSION_VALUE" && -f "$PUBSPEC_FILE" ]]; then
+  APP_VERSION_VALUE="$(grep -E '^version:' "$PUBSPEC_FILE" | head -n 1 | sed -E 's/^version:[[:space:]]*//')"
+fi
 
 if [[ ! -f "$WEB_INDEX" ]]; then
   echo "Missing web assets: $WEB_INDEX. Ensure flutter/web has index.html, manifest.json, and favicon assets before building." >&2
@@ -90,7 +100,17 @@ if [[ "$SKIP_DEPS" == "false" ]]; then
   rm -f "$DEPS_TAR"
 fi
 
-FLUTTER_BUILD_ARGS=("build" "web" "--${MODE}")
+FLUTTER_BUILD_ARGS=()
+if [[ "$RUN" == "true" ]]; then
+  FLUTTER_BUILD_ARGS=("run" "-d" "chrome" "-v")
+  if [[ "$MODE" == "release" ]]; then
+    FLUTTER_BUILD_ARGS+=("--release")
+  elif [[ "$MODE" == "profile" ]]; then
+    FLUTTER_BUILD_ARGS+=("--profile")
+  fi
+else
+  FLUTTER_BUILD_ARGS=("build" "web" "--${MODE}")
+fi
 if [[ -n "${RS_PUB_KEY:-}" ]]; then
   FLUTTER_BUILD_ARGS+=("--dart-define=RS_PUB_KEY=${RS_PUB_KEY}")
 fi
@@ -100,5 +120,10 @@ fi
 if [[ -n "${API_SERVER:-}" ]]; then
   FLUTTER_BUILD_ARGS+=("--dart-define=API_SERVER=${API_SERVER}")
 fi
+if [[ -n "$APP_VERSION_VALUE" ]]; then
+  FLUTTER_BUILD_ARGS+=("--dart-define=APP_VERSION=${APP_VERSION_VALUE}")
+fi
+BUILD_DATE_VALUE="$(date '+%Y-%m-%d %H:%M')"
+FLUTTER_BUILD_ARGS+=("--dart-define=BUILD_DATE=${BUILD_DATE_VALUE}")
 
 flutter "${FLUTTER_BUILD_ARGS[@]}"

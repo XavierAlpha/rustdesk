@@ -2,7 +2,7 @@ import { Logger } from '../core/logger';
 import { EventDispatcher } from '../core/events';
 import { WebSocketTransport } from './transport';
 import { ConnectRequest, ConnectionState, SessionContext, SessionMode } from './types';
-import { loadProtos, ProtoRoots } from './proto';
+import { decodeProtoObject, loadProtos, ProtoRoots } from './proto';
 import { ConnectionRoute, RendezvousClient, RelayInfo } from './rendezvous';
 import { MessageInbox } from './inbox';
 import { SecretBoxCipher, createSymmetricKey, decodeBase64, signOpen } from './crypto';
@@ -145,11 +145,18 @@ export class WebSession {
     return this.state;
   }
 
+  getPeerId(): string {
+    return this.request.id;
+  }
+
   async connect(context: SessionContext): Promise<void> {
     this.context = context;
     this.state = 'connecting';
     this.events.emit({ name: 'conn_status', status: 'connecting' });
     this.proto = await loadProtos();
+    this.logger.info(
+      `Session context: version=${context.version || '-'}, buildDate=${context.buildDate || '-'}`
+    );
 
     const directTarget = this.isDirectAccessTarget(this.request.id);
     const directEndpoint = this.resolveDirectAccessEndpoint(context);
@@ -188,7 +195,7 @@ export class WebSession {
       {
         appName: context.myName,
         version: context.version,
-        buildDate: '',
+        buildDate: context.buildDate,
         apiServer: context.apiServer,
         isPublicServer: true,
         rendezvousServers: [],
@@ -213,6 +220,9 @@ export class WebSession {
       forceRelay: Boolean(this.request.forceRelay),
       version: context.version
     });
+    this.logger.info(
+      `Route selected: ${route.kind === 'direct' ? 'direct' : 'relay'}`
+    );
     const routeResult = await this.connectWithRoute(route, rendezvous, context);
     const isDirect = routeResult === 'direct';
 
@@ -382,6 +392,7 @@ export class WebSession {
     context: SessionContext
   ): Promise<void> {
     this.signedIdPk = direct.signedIdPk;
+    this.logger.info(`Connecting direct via ${direct.endpoint}`);
     await this.transport.connect(direct.endpoint);
     const inbox = new MessageInbox(this.transport);
     try {
@@ -393,6 +404,7 @@ export class WebSession {
 
   private async connectRelay(relayInfo: RelayInfo, context: SessionContext): Promise<void> {
     this.signedIdPk = relayInfo.signedIdPk;
+    this.logger.info(`Connecting relay via ${relayInfo.relayEndpoint}`);
     await this.transport.connect(relayInfo.relayEndpoint);
     const inbox = new MessageInbox(this.transport);
     try {
@@ -1114,38 +1126,61 @@ export class WebSession {
       throw new Error('Missing rendezvous public key');
     }
     if (!this.signedIdPk || this.signedIdPk.length === 0) {
-      throw new Error('Missing signed peer identity from rendezvous');
+      throw new Error(
+        'Missing signed peer identity from rendezvous. Ensure the target is online and the ID server has a private key configured (RS_PRIV_KEY) matching your RS_PUB_KEY.'
+      );
     }
     const rsPk = decodeBase64(context.key);
     let signPk: Uint8Array | null = null;
     const idPkBytes = signOpen(this.signedIdPk, rsPk);
-    const idPk = this.proto.idPkType.decode(idPkBytes).toObject({
-      bytes: Uint8Array,
-      defaults: false
-    }) as { id?: string; pk?: Uint8Array };
+    const idPk = decodeProtoObject<{ id?: string; pk?: Uint8Array }>(
+      this.proto.idPkType,
+      idPkBytes,
+      {
+        bytes: Uint8Array,
+        defaults: false
+      }
+    );
     if (idPk.id === this.request.id && idPk.pk) {
       signPk = idPk.pk;
     }
     if (!signPk) {
       throw new Error('Rendezvous signature verification failed');
     }
-    const first = await inbox.next(15000);
-    const msg = this.proto.messageType
-      .decode(first)
-      .toObject({
+    let first: Uint8Array;
+    try {
+      first = await inbox.next(15000);
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('timeout')) {
+        throw new Error(
+          'Handshake timed out waiting for the peer. Ensure the target is online, ' +
+            'registered on the same ID server, and supports secure connections.'
+        );
+      }
+      throw err;
+    }
+    const msg = decodeProtoObject<Record<string, unknown>>(
+      this.proto.messageType,
+      first,
+      {
         longs: String,
         bytes: Uint8Array,
         defaults: false
-      }) as Record<string, unknown>;
+      }
+    );
     const signedId = msg.signedId as { id?: Uint8Array } | undefined;
     if (!signedId || !signedId.id) {
       throw new Error('Peer did not provide a signed identity');
     }
     const peerIdPkBytes = signOpen(signedId.id, signPk);
-    const peerIdPk = this.proto.idPkType.decode(peerIdPkBytes).toObject({
-      bytes: Uint8Array,
-      defaults: false
-    }) as { id?: string; pk?: Uint8Array };
+    const peerIdPk = decodeProtoObject<{ id?: string; pk?: Uint8Array }>(
+      this.proto.idPkType,
+      peerIdPkBytes,
+      {
+        bytes: Uint8Array,
+        defaults: false
+      }
+    );
     if (peerIdPk.id !== this.request.id || !peerIdPk.pk) {
       throw new Error('Peer identity verification failed');
     }
@@ -1166,13 +1201,15 @@ export class WebSession {
     }
     let msg: Record<string, unknown>;
     try {
-      msg = this.proto.messageType
-        .decode(data)
-        .toObject({
+      msg = decodeProtoObject<Record<string, unknown>>(
+        this.proto.messageType,
+        data,
+        {
           longs: String,
           bytes: Uint8Array,
           defaults: false
-        }) as Record<string, unknown>;
+        }
+      );
     } catch (err) {
       this.logger.warn('Failed to decode message', err);
       return;

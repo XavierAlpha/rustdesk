@@ -1,6 +1,7 @@
 param(
   [ValidateSet('release', 'profile', 'debug')]
   [string]$Mode = 'release',
+  [switch]$Run,
   [switch]$SkipJs,
   [switch]$SkipDeps,
   [switch]$SkipIcons
@@ -30,6 +31,14 @@ $webIndex = Join-Path $webDir 'index.html'
 $webJsDir = Join-Path $webDir 'js'
 $webJsPkg = Join-Path $webJsDir 'package.json'
 $repoRoot = (Resolve-Path (Join-Path $flutterRoot '..')).Path
+$pubspecPath = Join-Path $flutterRoot 'pubspec.yaml'
+$appVersion = $env:APP_VERSION
+if ([string]::IsNullOrWhiteSpace($appVersion) -and (Test-Path $pubspecPath)) {
+  $versionLine = Select-String -Path $pubspecPath -Pattern '^\s*version:\s*(.+)\s*$' | Select-Object -First 1
+  if ($versionLine) {
+    $appVersion = $versionLine.Matches[0].Groups[1].Value.Trim()
+  }
+}
 
 if (-not (Test-Path $webIndex)) {
   throw "Missing web assets: $webIndex. Ensure flutter/web has index.html, manifest.json, and favicon assets before building."
@@ -68,7 +77,19 @@ if (-not $SkipDeps) {
   Pop-Location
 }
 
-$flutterArgs = @("build", "web", "--$Mode")
+$flutterArgs = @()
+if ($Run) {
+  $flutterArgs = @("run", "-d", "chrome", "-v")
+  if ($Mode -eq 'release') {
+    $flutterArgs += "--release"
+  }
+  elseif ($Mode -eq 'profile') {
+    $flutterArgs += "--profile"
+  }
+}
+else {
+  $flutterArgs = @("build", "web", "--$Mode")
+}
 if (-not [string]::IsNullOrWhiteSpace($env:RS_PUB_KEY)) {
   $flutterArgs += "--dart-define=RS_PUB_KEY=$($env:RS_PUB_KEY)"
 }
@@ -78,5 +99,10 @@ if (-not [string]::IsNullOrWhiteSpace($env:RENDEZVOUS_SERVERS)) {
 if (-not [string]::IsNullOrWhiteSpace($env:API_SERVER)) {
   $flutterArgs += "--dart-define=API_SERVER=$($env:API_SERVER)"
 }
+if (-not [string]::IsNullOrWhiteSpace($appVersion)) {
+  $flutterArgs += "--dart-define=APP_VERSION=$appVersion"
+}
+$buildDate = (Get-Date).ToString('yyyy-MM-dd HH:mm')
+$flutterArgs += "--dart-define=BUILD_DATE=$buildDate"
 
 & $flutter @flutterArgs

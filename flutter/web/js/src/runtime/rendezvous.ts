@@ -3,7 +3,7 @@ import { RuntimeConfig } from '../core/config';
 import { generateUuid } from '../core/uuid';
 import { SecretBoxCipher, createSymmetricKey, decodeBase64, signOpen } from './crypto';
 import { MessageInbox } from './inbox';
-import { ProtoRoots } from './proto';
+import { decodeProtoObject, ProtoRoots } from './proto';
 import { WebSocketTransport } from './transport';
 
 export type RelayInfo = {
@@ -37,7 +37,15 @@ export type RendezvousOptions = {
 
 const DEFAULT_RENDEZVOUS_PORT = 21116;
 const DEFAULT_RELAY_PORT = 21117;
+const DIRECT_PROBE_ATTEMPTS = 1;
+const DIRECT_PROBE_TIMEOUT_MS = 1200;
 type RouteKind = 'auto' | 'rendezvous' | 'relay';
+const FATAL_DIRECT_FAILURES = new Set([
+  'ID does not exist',
+  'Remote desktop is offline',
+  'Key mismatch',
+  'Key overuse'
+]);
 
 export class RendezvousClient {
   private readonly logger: Logger;
@@ -51,17 +59,38 @@ export class RendezvousClient {
   }
 
   async requestConnectionRoute(options: RendezvousOptions): Promise<ConnectionRoute> {
+    this.logger.info(
+      `Selecting route: peer=${options.peerId}, forceRelay=${Boolean(options.forceRelay)}`
+    );
     if (options.forceRelay) {
+      this.logger.info('Force relay enabled; skipping direct probe.');
       const relay = await this.requestRelay(options);
       return { kind: 'relay', relay };
     }
-    const directProbe = await this.requestDirect(options);
+    let directProbe: { direct?: DirectInfo; relay?: RelayInfo } | null = null;
+    try {
+      directProbe = await this.requestDirect(options);
+    } catch (err) {
+      if (isFatalDirectError(err)) {
+        throw err;
+      }
+      this.logger.warn('Direct connection probe failed', err);
+    }
+    if (directProbe?.direct) {
+      this.logger.info(`Direct route available: ${directProbe.direct.endpoint}`);
+    }
+    if (directProbe?.relay) {
+      this.logger.info(
+        `Relay route suggested by rendezvous: ${directProbe.relay.relayEndpoint}`
+      );
+    }
     if (directProbe?.direct) {
       return { kind: 'direct', direct: directProbe.direct };
     }
     if (directProbe?.relay) {
       return { kind: 'relay', relay: directProbe.relay };
     }
+    this.logger.info('Direct route unavailable; requesting relay from rendezvous server.');
     const relay = await this.requestRelay(options);
     return { kind: 'relay', relay };
   }
@@ -74,62 +103,88 @@ export class RendezvousClient {
       'rendezvous',
       options.rendezvousServer
     );
+    if (!endpoint) {
+      throw new Error('Rendezvous server not configured');
+    }
+    this.logger.info(`Requesting relay via ${endpoint}`);
     const transport = new WebSocketTransport('rendezvous');
     await transport.connect(endpoint);
     const inbox = new MessageInbox(transport);
+    try {
+      await this.secureIfNeeded(transport, inbox, options.key ?? '', endpoint);
 
-    await this.secureIfNeeded(transport, inbox, options.key ?? '', endpoint);
+      const uuid = generateUuid();
+      const requestRelay = {
+        id: options.peerId,
+        uuid,
+        relayServer: options.relayServer ?? '',
+        secure: options.secure,
+        connType: options.connType,
+        licenceKey: options.key ?? '',
+        token: options.token ?? ''
+      };
+      const payload = this.proto.rendezvousType.encode({ requestRelay }).finish();
+      transport.send(payload);
 
-    const uuid = generateUuid();
-    const requestRelay = {
-      id: options.peerId,
-      uuid,
-      relayServer: options.relayServer ?? '',
-      secure: options.secure,
-      connType: options.connType,
-      token: options.token ?? ''
-    };
-    const payload = this.proto.rendezvousType.encode({ requestRelay }).finish();
-    transport.send(payload);
-
-    for (;;) {
-      const data = await inbox.next(15000);
-      const msg = this.proto.rendezvousType
-        .decode(data)
-        .toObject({
-          longs: String,
-          bytes: Uint8Array,
-          defaults: false
-        }) as Record<string, unknown>;
-      const relayResponse = msg.relayResponse as
-        | {
-            relayServer?: string;
-            uuid?: string;
-            pk?: Uint8Array;
-            refuseReason?: string;
+      for (;;) {
+        const data = await inbox.next(15000);
+        const msg = decodeProtoObject<Record<string, unknown>>(
+          this.proto.rendezvousType,
+          data,
+          {
+            longs: String,
+            bytes: Uint8Array,
+            defaults: false
           }
-        | undefined;
-      if (relayResponse) {
-        if (relayResponse.refuseReason) {
-          throw new Error(relayResponse.refuseReason);
-        }
-        const relayServer = relayResponse.relayServer || options.relayServer;
-        const relayEndpoint = checkWsEndpoint(
-          relayServer,
-          relayServer,
-          options.apiServer,
-          'relay',
-          options.rendezvousServer
         );
-        inbox.close();
-        transport.close();
-        return {
-          relayServer,
-          relayEndpoint,
-          uuid: relayResponse.uuid ?? uuid,
-          signedIdPk: relayResponse.pk ?? new Uint8Array()
-        };
+        const relayResponse = msg.relayResponse as
+          | {
+              relayServer?: string;
+              uuid?: string;
+              pk?: Uint8Array;
+              refuseReason?: string;
+              id?: string;
+              version?: string;
+            }
+          | undefined;
+        if (relayResponse) {
+          if (relayResponse.refuseReason) {
+            throw new Error(relayResponse.refuseReason);
+          }
+          const pkLen = relayResponse.pk?.length ?? 0;
+          const relayId = relayResponse.id ?? '';
+          const relayVersion = relayResponse.version ?? '';
+          this.logger.info(
+            `Relay response details: pk_len=${pkLen}, id=${relayId || '-'}, version=${relayVersion || '-'}`
+          );
+          const relayServer = relayResponse.relayServer || options.relayServer;
+          const relayEndpoint = checkWsEndpoint(
+            relayServer,
+            relayServer,
+            options.apiServer,
+            'relay',
+            options.rendezvousServer
+          );
+          this.logger.info(`Relay response received: ${relayEndpoint}`);
+          return {
+            relayServer,
+            relayEndpoint,
+            uuid: relayResponse.uuid ?? uuid,
+            signedIdPk: relayResponse.pk ?? new Uint8Array()
+          };
+        }
       }
+    } catch (err) {
+      if (isTimeoutError(err)) {
+        throw new Error(
+          `Timeout waiting for relay response from ${endpoint}. ` +
+            'Check the target is online and the ID/Relay server matches your other clients.'
+        );
+      }
+      throw err;
+    } finally {
+      inbox.close();
+      transport.close();
     }
   }
 
@@ -151,7 +206,7 @@ export class RendezvousClient {
     try {
       await transport.connect(endpoint);
       await this.secureIfNeeded(transport, inbox, options.key ?? '', endpoint);
-      for (let attempt = 1; attempt <= 3; attempt++) {
+      for (let attempt = 1; attempt <= DIRECT_PROBE_ATTEMPTS; attempt++) {
         const punchHoleRequest = {
           id: options.peerId,
           natType: 0,
@@ -168,7 +223,7 @@ export class RendezvousClient {
         transport.send(request);
         let data: Uint8Array;
         try {
-          data = await inbox.next(attempt * 3000);
+          data = await inbox.next(DIRECT_PROBE_TIMEOUT_MS);
         } catch {
           continue;
         }
@@ -198,7 +253,12 @@ export class RendezvousClient {
         }
         const socketAddr = punch.socketAddr;
         if (!socketAddr || socketAddr.length === 0) {
-          throw new Error(this.parsePunchHoleFailure(punch.failure));
+          const reason = this.parsePunchHoleFailure(punch.failure);
+          if (reason !== 'Punch hole failed') {
+            throw new Error(reason);
+          }
+          this.logger.warn('Direct punch hole failed; falling back to relay');
+          return null;
         }
         const peerAddress = decodeAddrMangle(socketAddr);
         if (!peerAddress) {
@@ -230,13 +290,15 @@ export class RendezvousClient {
   }
 
   private decodeRendezvousMessage(data: Uint8Array): Record<string, unknown> {
-    return this.proto.rendezvousType
-      .decode(data)
-      .toObject({
+    return decodeProtoObject<Record<string, unknown>>(
+      this.proto.rendezvousType,
+      data,
+      {
         longs: String,
         bytes: Uint8Array,
         defaults: false
-      }) as Record<string, unknown>;
+      }
+    );
   }
 
   private parseRelayResponse(
@@ -249,6 +311,8 @@ export class RendezvousClient {
           uuid?: string;
           pk?: Uint8Array;
           refuseReason?: string;
+          id?: string;
+          version?: string;
         }
       | undefined;
     if (!relayResponse) {
@@ -257,7 +321,16 @@ export class RendezvousClient {
     if (relayResponse.refuseReason) {
       throw new Error(relayResponse.refuseReason);
     }
+    const pkLen = relayResponse.pk?.length ?? 0;
+    const relayId = relayResponse.id ?? '';
+    const relayVersion = relayResponse.version ?? '';
+    this.logger.info(
+      `Relay response details: pk_len=${pkLen}, id=${relayId || '-'}, version=${relayVersion || '-'}`
+    );
     const relayServer = relayResponse.relayServer || options.relayServer;
+    if (!relayResponse.pk || relayResponse.pk.length === 0) {
+      this.logger.warn('Relay response missing signed peer identity');
+    }
     return {
       relayServer,
       relayEndpoint: checkWsEndpoint(
@@ -306,13 +379,15 @@ export class RendezvousClient {
     const rsPk = decodeBase64(key);
     try {
       const data = await inbox.next(8000);
-      const msg = this.proto.rendezvousType
-        .decode(data)
-        .toObject({
+      const msg = decodeProtoObject<Record<string, unknown>>(
+        this.proto.rendezvousType,
+        data,
+        {
           longs: String,
           bytes: Uint8Array,
           defaults: false
-        }) as Record<string, unknown>;
+        }
+      );
       const keyExchange = msg.keyExchange as { keys?: Uint8Array[] } | undefined;
       if (!keyExchange || !keyExchange.keys || keyExchange.keys.length !== 1) {
         inbox.pushFront(data);
@@ -507,6 +582,29 @@ function isIpv4Address(value: string): boolean {
     const number = Number.parseInt(part, 10);
     return number >= 0 && number <= 255;
   });
+}
+
+function isFatalDirectError(err: unknown): boolean {
+  const message =
+    err instanceof Error
+      ? err.message
+      : typeof err === 'string'
+        ? err
+        : '';
+  return FATAL_DIRECT_FAILURES.has(message);
+}
+
+function isTimeoutError(err: unknown): boolean {
+  if (!err) {
+    return false;
+  }
+  const message =
+    err instanceof Error
+      ? err.message
+      : typeof err === 'string'
+        ? err
+        : '';
+  return message.toLowerCase().includes('timeout');
 }
 
 function decodeAddrMangle(bytes: Uint8Array): string | null {

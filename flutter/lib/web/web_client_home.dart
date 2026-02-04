@@ -80,9 +80,8 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
   Iterable<Peer> _autocompleteOpts = [];
   bool _idEmpty = true;
   bool _isFieldFocused = false;
-  String _myId = '';
-  String _oneTimePassword = '';
   Timer? _statusTimer;
+  String _myId = '';
 
   @override
   void initState() {
@@ -120,6 +119,7 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
       _handleUnilink(context);
     });
     _syncClientStatus();
+    _refreshMyId();
     _statusTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       _syncClientStatus();
     });
@@ -159,58 +159,70 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
       stateGlobal.svcStatus.value = SvcStatus.notReady;
     }
 
+    // Control-only web client: no local ID/password status to refresh.
+    if (_myId.isEmpty) {
+      _refreshMyId();
+    }
+  }
+
+  Future<void> _refreshMyId() async {
     try {
-      final myId = (await bind.mainGetMyId()).trim();
-      final oneTimePassword = (await bind.mainGetTemporaryPassword()).trim();
-      if (!mounted) {
-        return;
-      }
-      if (myId != _myId || oneTimePassword != _oneTimePassword) {
+      final id = await bind.mainGetMyId();
+      if (mounted && id.isNotEmpty && id != _myId) {
         setState(() {
-          _myId = myId;
-          _oneTimePassword = oneTimePassword;
+          _myId = id;
         });
       }
     } catch (_) {
-      // Ignore transient bridge failures and keep last UI state.
+      // Ignore ID refresh failures; keep last known value.
     }
   }
+
+  Future<void> _rotateMyId() async {
+    try {
+      await bind.mainChangeId(newId: '');
+      await _refreshMyId();
+    } catch (_) {
+      // Ignore rotation errors for now.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     Provider.of<FfiModel>(context);
     return Scaffold(
       backgroundColor: _camelliaCream,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFF9FBFF),
-              Color(0xFFF3F7FD),
-              Color(0xFFEFF3FA),
-            ],
+      body: FocusTraversalGroup(
+        policy: WidgetOrderTraversalPolicy(),
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFFF9FBFF),
+                Color(0xFFF3F7FD),
+                Color(0xFFEFF3FA),
+              ],
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: LayoutBuilder(builder: (context, constraints) {
-            final isNarrow = constraints.maxWidth < 1060;
-            final isPhone = constraints.maxWidth < 640;
-            final contentWidth =
-                constraints.maxWidth > 1260 ? 1260.0 : constraints.maxWidth;
-            return Stack(
-              children: [
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: _buildBackgroundDecoration(),
+          child: SafeArea(
+            child: LayoutBuilder(builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 1060;
+              final isPhone = constraints.maxWidth < 640;
+              final contentWidth =
+                  constraints.maxWidth > 1260 ? 1260.0 : constraints.maxWidth;
+              return Stack(
+                children: [
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: _buildBackgroundDecoration(),
+                    ),
                   ),
-                ),
-                Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: contentWidth),
-                    child: FocusTraversalGroup(
-                      policy: WidgetOrderTraversalPolicy(),
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: contentWidth),
                       child: CustomScrollView(
                         slivers: [
                           const SliverToBoxAdapter(
@@ -239,10 +251,10 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
                       ),
                     ),
                   ),
-                ),
-              ],
-            );
-          }),
+                ],
+              );
+            }),
+          ),
         ),
       ),
     );
@@ -769,28 +781,35 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
           }),
           rowGap,
           _buildStatusRow(
-            icon: Icons.badge_outlined,
+            icon: Icons.lock_outline,
             color: _camelliaSlate,
-            title: translate('ID'),
-            value: _myId.isEmpty ? translate('Generating ...') : _myId,
+            title: translate('Mode'),
+            value: translate('Control-only'),
+            trailing: Tooltip(
+              message: translate(
+                  'Web client does not accept incoming connections. Use desktop/mobile to be controlled.'),
+              child: const Icon(Icons.info_outline, size: 16),
+            ),
           ),
           rowGap,
           _buildStatusRow(
-            icon: Icons.key_outlined,
-            color: _camelliaGold,
-            title: translate('One-time password'),
-            value: _oneTimePassword.isEmpty
-                ? translate('Generating ...')
-                : _oneTimePassword,
-            trailing: IconButton(
-              tooltip: translate('Refresh'),
-              onPressed: () async {
-                await bind.mainUpdateTemporaryPassword();
-                await _syncClientStatus();
-              },
-              icon: const Icon(Icons.refresh, size: 16),
-              visualDensity: VisualDensity.compact,
-            ),
+            icon: Icons.badge_outlined,
+            color: _camelliaSlate,
+            title: translate('Your ID'),
+            value: _myId.isEmpty ? '—' : _myId,
+            trailing: isChangeIdDisabled()
+                ? null
+                : Tooltip(
+                    message: translate('Change ID'),
+                    child: IconButton(
+                      onPressed: _rotateMyId,
+                      icon: const Icon(Icons.autorenew_rounded),
+                      iconSize: 16,
+                      padding: EdgeInsets.zero,
+                      color: _camelliaRose,
+                      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                    ),
+                  ),
           ),
           rowGap,
           _buildStatusRow(

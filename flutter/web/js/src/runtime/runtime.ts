@@ -6,7 +6,7 @@ import { EventDispatcher } from '../core/events';
 import { Logger } from '../core/logger';
 import { ConnectRequest, SessionContext, SessionMode } from './types';
 import { WebSession } from './session';
-import { loadProtos, ProtoRoots } from './proto';
+import { decodeProtoObject, loadProtos, ProtoRoots } from './proto';
 import { MessageInbox } from './inbox';
 import { WebSocketTransport } from './transport';
 import { checkWsEndpoint } from './rendezvous';
@@ -30,6 +30,8 @@ type OidcAuthQueryResponse = {
 };
 type BootstrapConfigPayload = {
   appName?: string;
+  version?: string;
+  buildDate?: string;
   apiServer?: string;
   rendezvousServers?: string[] | string;
   relayServers?: string[] | string;
@@ -109,10 +111,15 @@ export class WebRuntime {
         return this.toggleOption(String(arg0 ?? ''));
       case 'option:session':
       case 'option:local':
+      case 'option:peer':
       case 'option:flutter:peer':
       case 'option:flutter:local':
       case 'option:user:default':
-        this.setOptionPayload(name, arg0, arg1);
+        if (name === 'option:peer') {
+          this.setPeerOptionPayload(arg0);
+        } else {
+          this.setOptionPayload(name, arg0, arg1);
+        }
         return '';
       case 'option':
         this.setOptionPayload('option', arg0, arg1);
@@ -120,6 +127,12 @@ export class WebRuntime {
       case 'common':
         this.setCommonPayload(arg0);
         return '';
+      case 'my_id': {
+        const trimmed = String(arg0 ?? '').trim();
+        const next = trimmed || this.generateNumericId();
+        this.store.set('my_id', next);
+        return '';
+      }
       case 'options':
         this.setOptionsPayload(arg0);
         return '';
@@ -128,6 +141,11 @@ export class WebRuntime {
         return '';
       case 'fav':
         this.store.set('fav', arg0 ?? '');
+        return '';
+      case 'remove_peer':
+        if (typeof arg0 === 'string') {
+          this.removePeerById(arg0);
+        }
         return '';
       case 'save_ab':
         this.store.set('address_book', arg0 ?? '');
@@ -533,6 +551,19 @@ export class WebRuntime {
           window.onLoadGroupFinished(this.store.get('groups', '[]'));
         }
         return '';
+      case 'load_recent_peers':
+        this.emitPeerLoadEvent('load_recent_peers', this.getRecentPeers());
+        return '';
+      case 'load_fav_peers':
+        this.emitPeerLoadEvent('load_fav_peers', this.getFavoritePeers());
+        return '';
+      case 'load_lan_peers':
+        this.emitPeerLoadEvent('load_lan_peers', this.getLanPeers());
+        return '';
+      case 'discover':
+        // Browser runtime cannot perform native LAN discovery; reuse cached LAN peers.
+        this.emitPeerLoadEvent('load_lan_peers', this.getLanPeers());
+        return '';
       case 'query_onlines':
         this.handleQueryOnlines(arg0);
         return '';
@@ -583,6 +614,8 @@ export class WebRuntime {
         return this.config.version;
       case 'build_date':
         return this.config.buildDate;
+      case 'fingerprint':
+        return this.ensureFingerprint();
       case 'api_server':
         return this.resolveApiServer();
       case 'is_using_public_server':
@@ -610,9 +643,13 @@ export class WebRuntime {
         return this.store.get(`option:toggle:${String(arg0 ?? '')}`, 'false');
       case 'option:session':
       case 'option:local':
+      case 'option:peer':
       case 'option:flutter:peer':
       case 'option:flutter:local':
       case 'option:user:default':
+        if (name === 'option:peer') {
+          return this.getPeerOptionValueFromArg(arg0);
+        }
         return this.getScopedOption(name, String(arg0 ?? ''));
       case 'option':
         return this.getOption(String(arg0 ?? ''));
@@ -624,9 +661,14 @@ export class WebRuntime {
         return this.store.get('fav', '[]');
       case 'load_recent_peers':
       case 'load_recent_peers_sync':
-        return this.store.get('recent_peers', '[]');
+        return JSON.stringify(this.getRecentPeers());
       case 'load_fav_peers':
-        return this.store.get('fav', '[]');
+        return JSON.stringify(this.getFavoritePeers());
+      case 'load_lan_peers':
+      case 'load_lan_peers_sync':
+        return JSON.stringify(this.getLanPeers());
+      case 'load_recent_peers_for_ab':
+        return this.getRecentPeersForAb(arg0);
       case 'load_ab':
         return this.store.get('address_book', '[]');
       case 'load_group':
@@ -654,8 +696,28 @@ export class WebRuntime {
       case 'image_quality':
         return this.store.get('image_quality', '0');
       case 'peer_has_password':
-      case 'peer_exists':
+        if (typeof arg0 === 'string') {
+          const peer = this.findPeerById(arg0);
+          return peer && String(peer.password ?? '').trim() ? 'true' : 'false';
+        }
         return 'false';
+      case 'peer_exists':
+        if (typeof arg0 === 'string') {
+          return this.findPeerById(arg0) ? 'true' : 'false';
+        }
+        return 'false';
+      case 'peer_sync':
+        if (typeof arg0 === 'string') {
+          return this.getPeerSync(arg0);
+        }
+        return '{}';
+      case 'new_stored_peers': {
+        const value = this.store.get('new_stored_peers', '[]');
+        this.store.set('new_stored_peers', '[]');
+        return value;
+      }
+      case 'test_if_valid_server':
+        return this.testIfValidServer(String(arg0 ?? ''));
       case 'enable_trusted_devices':
         return this.store.get('enable_trusted_devices', '');
       case 'conn_session_id':
@@ -759,6 +821,98 @@ export class WebRuntime {
     }
   }
 
+  private setPeerOptionPayload(arg0?: unknown): void {
+    const payload = this.parsePeerOptionPayload(arg0);
+    if (!payload) {
+      return;
+    }
+    const value = payload.value ?? '';
+    this.setPeerOptionValue(payload.id, payload.name, value);
+  }
+
+  private getPeerOptionValueFromArg(arg0?: unknown): string {
+    const payload = this.parsePeerOptionPayload(arg0);
+    if (!payload) {
+      return '';
+    }
+    return this.getPeerOptionValue(payload.id, payload.name);
+  }
+
+  private parsePeerOptionPayload(
+    input?: unknown
+  ): { id: string; name: string; value?: string } | null {
+    if (!input) {
+      return null;
+    }
+    let payload: Record<string, unknown> | null = null;
+    if (typeof input === 'string') {
+      const trimmed = input.trim();
+      if (!trimmed) {
+        return null;
+      }
+      if (trimmed.startsWith('{')) {
+        payload = this.safeJson(trimmed) as Record<string, unknown>;
+      } else {
+        return null;
+      }
+    } else if (typeof input === 'object') {
+      payload = input as Record<string, unknown>;
+    }
+    if (!payload) {
+      return null;
+    }
+    const id = String(payload.id ?? '').trim();
+    const name = String(payload.name ?? '').trim();
+    if (!id || !name) {
+      return null;
+    }
+    return {
+      id,
+      name,
+      value:
+        payload.value !== undefined && payload.value !== null
+          ? String(payload.value)
+          : undefined
+    };
+  }
+
+  private peerOptionKey(id: string): string {
+    return `peer_option:${id}`;
+  }
+
+  private getPeerOptions(id: string): Record<string, string> {
+    if (!id) {
+      return {};
+    }
+    return this.store.getJson<Record<string, string>>(this.peerOptionKey(id), {});
+  }
+
+  private getPeerOptionValue(id: string, name: string): string {
+    if (!id || !name) {
+      return '';
+    }
+    const options = this.getPeerOptions(id);
+    return options[name] ?? '';
+  }
+
+  private setPeerOptionValue(id: string, name: string, value: string): void {
+    if (!id || !name) {
+      return;
+    }
+    const options = this.getPeerOptions(id);
+    const normalized = String(value ?? '');
+    if (normalized) {
+      options[name] = normalized;
+    } else {
+      delete options[name];
+    }
+    this.store.setJson(this.peerOptionKey(id), options);
+  }
+
+  private isForceAlwaysRelayEnabled(id: string): boolean {
+    return this.getPeerOptionValue(id, 'force-always-relay') === 'Y';
+  }
+
   private setScopedOption(prefix: string, key: string, value: unknown): void {
     if (prefix === 'option') {
       this.setOptionValue(key, value);
@@ -847,6 +1001,13 @@ export class WebRuntime {
     }
     if (prefix === 'option:local') {
       return this.localOptionDefaults.get(key) ?? '';
+    }
+    if (prefix === 'option:session') {
+      return (
+        this.userDefaultOptionDefaults.get(key) ??
+        this.optionDefaults.get(key) ??
+        ''
+      );
     }
     if (prefix === 'option:flutter:local') {
       return this.flutterLocalOptionDefaults.get(key) ?? '';
@@ -1156,13 +1317,15 @@ export class WebRuntime {
         } catch {
           continue;
         }
-        const msg = proto.rendezvousType
-          .decode(data)
-          .toObject({
+        const msg = decodeProtoObject<Record<string, unknown>>(
+          proto.rendezvousType,
+          data,
+          {
             longs: String,
             bytes: Uint8Array,
             defaults: false
-          }) as Record<string, unknown>;
+          }
+        );
         if (msg.keyExchange) {
           continue;
         }
@@ -1471,6 +1634,12 @@ export class WebRuntime {
     if (typeof payload.appName === 'string' && payload.appName.trim()) {
       this.config.appName = payload.appName.trim();
     }
+    if (typeof payload.version === 'string' && payload.version.trim()) {
+      this.config.version = payload.version.trim();
+    }
+    if (typeof payload.buildDate === 'string' && payload.buildDate.trim()) {
+      this.config.buildDate = payload.buildDate.trim();
+    }
     if (typeof payload.apiServer === 'string' && payload.apiServer.trim()) {
       this.config.apiServer = this.normalizeApiServer(payload.apiServer.trim());
     }
@@ -1525,6 +1694,7 @@ export class WebRuntime {
     this.optionDefaults.set('disable-udp', 'Y');
 
     this.localOptionDefaults.clear();
+    this.localOptionDefaults.set('lang', 'default');
     this.localOptionDefaults.set('disable-group-panel', 'N');
     this.localOptionDefaults.set('disable-discovery-panel', 'Y');
     this.localOptionDefaults.set('input-source', 'Input source 1');
@@ -1545,7 +1715,27 @@ export class WebRuntime {
     this.userDefaultOptionDefaults.set('custom_image_quality', '100');
     this.userDefaultOptionDefaults.set('custom-fps', '60');
     this.userDefaultOptionDefaults.set('show_remote_cursor', 'Y');
+    this.userDefaultOptionDefaults.set('view_only', 'N');
+    this.userDefaultOptionDefaults.set('show_monitors_toolbar', 'N');
+    this.userDefaultOptionDefaults.set('collapse_toolbar', 'N');
+    this.userDefaultOptionDefaults.set('follow_remote_cursor', 'N');
+    this.userDefaultOptionDefaults.set('follow_remote_window', 'N');
+    this.userDefaultOptionDefaults.set('zoom-cursor', 'N');
+    this.userDefaultOptionDefaults.set('show_quality_monitor', 'N');
+    this.userDefaultOptionDefaults.set('disable_audio', 'N');
     this.userDefaultOptionDefaults.set('enable-file-copy-paste', 'Y');
+    this.userDefaultOptionDefaults.set('disable_clipboard', 'N');
+    this.userDefaultOptionDefaults.set('lock_after_session_end', 'N');
+    this.userDefaultOptionDefaults.set('privacy_mode', 'N');
+    this.userDefaultOptionDefaults.set('i444', 'N');
+    this.userDefaultOptionDefaults.set('reverse_mouse_wheel', 'N');
+    this.userDefaultOptionDefaults.set('swap-left-right-mouse', 'N');
+    this.userDefaultOptionDefaults.set('displays_as_individual_windows', 'N');
+    this.userDefaultOptionDefaults.set(
+      'use_all_my_displays_for_the_remote_session',
+      'N'
+    );
+    this.userDefaultOptionDefaults.set('terminal-persistent', 'N');
     this.userDefaultOptionDefaults.set('edge-scroll-edge-thickness', '100');
     this.userDefaultOptionDefaults.set('trackpad-speed', '100');
 
@@ -1901,12 +2091,410 @@ export class WebRuntime {
         empty_recent_tip: 'No recent sessions yet.',
         empty_favorite_tip: 'No favorite devices yet.',
         empty_lan_tip: 'No LAN devices discovered yet.',
-        empty_address_book_tip: 'Address book is empty.'
+        empty_address_book_tip: 'Address book is empty.',
+        verify_rustdesk_password_tip: 'Verify Camellia password',
+        remember_account_tip: 'Remember this account',
+        'Password Required': 'Password required',
+        'Logging in...': 'Logging in...'
       };
       return fallback[text] ?? text;
     } catch {
       return '';
     }
+  }
+
+  private parseJsonArray(input: unknown): unknown[] {
+    if (Array.isArray(input)) {
+      return input;
+    }
+    if (typeof input !== 'string') {
+      return [];
+    }
+    try {
+      const parsed = JSON.parse(input) as unknown;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private normalizePeerRecord(input: unknown): Record<string, unknown> | null {
+    if (!input || typeof input !== 'object') {
+      return null;
+    }
+    const peer = input as Record<string, unknown>;
+    const id = String(peer.id ?? '').trim();
+    if (!id) {
+      return null;
+    }
+    const record: Record<string, unknown> = {
+      id,
+      hash: String(peer.hash ?? ''),
+      password: String(peer.password ?? ''),
+      username: String(peer.username ?? ''),
+      hostname: String(peer.hostname ?? ''),
+      platform: String(peer.platform ?? ''),
+      alias: String(peer.alias ?? ''),
+      tags: Array.isArray(peer.tags) ? peer.tags : [],
+      forceAlwaysRelay: String(peer.forceAlwaysRelay ?? 'false'),
+      rdpPort: String(peer.rdpPort ?? ''),
+      rdpUsername: String(peer.rdpUsername ?? ''),
+      loginName: String(peer.loginName ?? peer.login_name ?? ''),
+      device_group_name: String(peer.device_group_name ?? ''),
+      note: String(peer.note ?? ''),
+      same_server: peer.same_server
+    };
+    const options = this.getPeerOptions(id);
+    if (options.alias) {
+      record.alias = options.alias;
+    }
+    if (options.password) {
+      record.password = options.password;
+    }
+    if (options.rdp_port) {
+      record.rdpPort = options.rdp_port;
+    }
+    if (options.rdp_username) {
+      record.rdpUsername = options.rdp_username;
+    }
+    if (options.note) {
+      record.note = options.note;
+    }
+    if (options['force-always-relay']) {
+      record.forceAlwaysRelay = options['force-always-relay'] === 'Y' ? 'true' : 'false';
+    }
+    return record;
+  }
+
+  private peerSkeleton(id: string): Record<string, unknown> {
+    return this.normalizePeerRecord({ id }) as Record<string, unknown>;
+  }
+
+  private parsePeersFromRecentStore(): Record<string, unknown>[] {
+    const peers = this.parseJsonArray(this.store.get('recent_peers', '[]'));
+    return peers
+      .map((peer) => this.normalizePeerRecord(peer))
+      .filter((peer): peer is Record<string, unknown> => peer !== null);
+  }
+
+  private parsePeersFromAddressBookStore(): Record<string, unknown>[] {
+    const raw = this.store.get('address_book', '');
+    if (!raw) {
+      return [];
+    }
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((peer) => this.normalizePeerRecord(peer))
+          .filter((peer): peer is Record<string, unknown> => peer !== null);
+      }
+      const entries = Array.isArray(parsed.ab_entries) ? parsed.ab_entries : [];
+      const result: Record<string, unknown>[] = [];
+      for (const entry of entries) {
+        if (!entry || typeof entry !== 'object') {
+          continue;
+        }
+        const peers = Array.isArray((entry as Record<string, unknown>).peers)
+          ? ((entry as Record<string, unknown>).peers as unknown[])
+          : [];
+        for (const peer of peers) {
+          const normalized = this.normalizePeerRecord(peer);
+          if (normalized) {
+            result.push(normalized);
+          }
+        }
+      }
+      return result;
+    } catch {
+      return [];
+    }
+  }
+
+  private parsePeersFromGroupStore(): Record<string, unknown>[] {
+    const raw = this.store.get('groups', '');
+    if (!raw) {
+      return [];
+    }
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const peers = Array.isArray(parsed.peers) ? parsed.peers : [];
+      return peers
+        .map((peer) => this.normalizePeerRecord(peer))
+        .filter((peer): peer is Record<string, unknown> => peer !== null);
+    } catch {
+      return [];
+    }
+  }
+
+  private parsePeersFromLanStore(): Record<string, unknown>[] {
+    const peers = this.parseJsonArray(this.store.get('lan_peers', '[]'));
+    return peers
+      .map((peer) => this.normalizePeerRecord(peer))
+      .filter((peer): peer is Record<string, unknown> => peer !== null);
+  }
+
+  private getRecentPeers(): Record<string, unknown>[] {
+    return this.parsePeersFromRecentStore();
+  }
+
+  private getLanPeers(): Record<string, unknown>[] {
+    return this.parsePeersFromLanStore();
+  }
+
+  private getAllKnownPeers(): Record<string, unknown>[] {
+    const merged = new Map<string, Record<string, unknown>>();
+    for (const source of [
+      this.parsePeersFromRecentStore(),
+      this.parsePeersFromAddressBookStore(),
+      this.parsePeersFromGroupStore(),
+      this.parsePeersFromLanStore()
+    ]) {
+      for (const peer of source) {
+        const id = String(peer.id ?? '').trim();
+        if (!id) {
+          continue;
+        }
+        if (!merged.has(id)) {
+          merged.set(id, peer);
+        } else {
+          merged.set(id, { ...merged.get(id), ...peer });
+        }
+      }
+    }
+    return Array.from(merged.values());
+  }
+
+  private findPeerById(id: string): Record<string, unknown> | null {
+    const target = id.trim();
+    if (!target) {
+      return null;
+    }
+    return this.getAllKnownPeers().find((peer) => String(peer.id ?? '') === target) ?? null;
+  }
+
+  private getFavoritePeers(): Record<string, unknown>[] {
+    const favIds = this.parseJsonArray(this.store.get('fav', '[]'))
+      .map((id) => String(id).trim())
+      .filter((id) => id.length > 0);
+    if (favIds.length === 0) {
+      return [];
+    }
+    const known = new Map<string, Record<string, unknown>>();
+    for (const peer of this.getAllKnownPeers()) {
+      known.set(String(peer.id ?? ''), peer);
+    }
+    const peers: Record<string, unknown>[] = [];
+    for (const id of favIds) {
+      peers.push(known.get(id) ?? this.peerSkeleton(id));
+    }
+    return peers;
+  }
+
+  private emitPeerLoadEvent(name: string, peers: Record<string, unknown>[]): void {
+    this.events.emit({
+      name,
+      peers: JSON.stringify(peers),
+      ids: ''
+    });
+  }
+
+  private recordRecentPeer(id: string): void {
+    const peerId = id.trim();
+    if (!peerId) {
+      return;
+    }
+    const peers = this.parsePeersFromRecentStore();
+    const index = peers.findIndex((peer) => String(peer.id ?? '') === peerId);
+    const base = this.findPeerById(peerId) ?? this.peerSkeleton(peerId);
+    if (index >= 0) {
+      peers.splice(index, 1);
+    }
+    peers.unshift(base);
+    if (peers.length > 200) {
+      peers.length = 200;
+    }
+    this.store.set('recent_peers', JSON.stringify(peers));
+
+    const newStored = this.parseJsonArray(this.store.get('new_stored_peers', '[]'))
+      .map((entry) => String(entry))
+      .filter((entry) => entry.length > 0);
+    if (!newStored.includes(peerId)) {
+      newStored.push(peerId);
+      this.store.set('new_stored_peers', JSON.stringify(newStored));
+    }
+
+    this.emitPeerLoadEvent('load_recent_peers', peers);
+    this.emitPeerLoadEvent('load_fav_peers', this.getFavoritePeers());
+  }
+
+  private removePeerById(id: string): void {
+    const peerId = id.trim();
+    if (!peerId) {
+      return;
+    }
+    const peers = this.parsePeersFromRecentStore().filter(
+      (peer) => String(peer.id ?? '') !== peerId
+    );
+    this.store.set('recent_peers', JSON.stringify(peers));
+    const lanPeers = this.parsePeersFromLanStore().filter(
+      (peer) => String(peer.id ?? '') !== peerId
+    );
+    this.store.set('lan_peers', JSON.stringify(lanPeers));
+    const fav = this.parseJsonArray(this.store.get('fav', '[]'))
+      .map((entry) => String(entry))
+      .filter((entry) => entry.length > 0 && entry !== peerId);
+    this.store.set('fav', JSON.stringify(fav));
+    const newStored = this.parseJsonArray(this.store.get('new_stored_peers', '[]'))
+      .map((entry) => String(entry))
+      .filter((entry) => entry.length > 0 && entry !== peerId);
+    this.store.set('new_stored_peers', JSON.stringify(newStored));
+    this.emitPeerLoadEvent('load_recent_peers', peers);
+    this.emitPeerLoadEvent('load_fav_peers', this.getFavoritePeers());
+    this.emitPeerLoadEvent('load_lan_peers', lanPeers);
+  }
+
+  private getRecentPeersForAb(arg0?: unknown): string {
+    const peers = this.getRecentPeers();
+    let filters: string[] = [];
+    if (typeof arg0 === 'string' && arg0.trim()) {
+      filters = this.parseJsonArray(arg0)
+        .map((id) => String(id).trim())
+        .filter((id) => id.length > 0);
+    }
+    if (filters.length === 0) {
+      return JSON.stringify(peers);
+    }
+    const filterSet = new Set(filters);
+    return JSON.stringify(
+      peers.filter((peer) => filterSet.has(String(peer.id ?? '').trim()))
+    );
+  }
+
+  private getPeerSync(id: string): string {
+    const peer = this.findPeerById(id);
+    if (!peer) {
+      return '{}';
+    }
+    const info = {
+      hostname: String(peer.hostname ?? ''),
+      username: String(peer.username ?? ''),
+      platform: String(peer.platform ?? '')
+    };
+    return JSON.stringify({
+      ...peer,
+      info
+    });
+  }
+
+  private testIfValidServer(server: string): string {
+    const raw = server.trim();
+    if (!raw) {
+      return 'invalid server';
+    }
+    if (raw.includes('://') || /[/?#]/.test(raw)) {
+      return 'invalid server';
+    }
+    if (raw.startsWith('[')) {
+      const end = raw.indexOf(']');
+      if (end <= 1) {
+        return 'invalid server';
+      }
+      const host = raw.slice(1, end);
+      const rest = raw.slice(end + 1);
+      if (!this.isIpv6Literal(host)) {
+        return 'invalid server';
+      }
+      if (!rest) {
+        return '';
+      }
+      if (!rest.startsWith(':')) {
+        return 'invalid server';
+      }
+      return this.isValidPort(rest.slice(1)) ? '' : 'invalid server';
+    }
+    const colonCount = (raw.match(/:/g) ?? []).length;
+    if (colonCount === 0) {
+      return this.isValidHost(raw) ? '' : 'invalid server';
+    }
+    if (colonCount === 1) {
+      const idx = raw.lastIndexOf(':');
+      const host = raw.slice(0, idx);
+      const port = raw.slice(idx + 1);
+      if (!this.isValidHost(host)) {
+        return 'invalid server';
+      }
+      return this.isValidPort(port) ? '' : 'invalid server';
+    }
+    return this.isIpv6Literal(raw) ? '' : 'invalid server';
+  }
+
+  private isValidHost(host: string): boolean {
+    const value = host.trim();
+    if (!value) {
+      return false;
+    }
+    if (this.isIpv4Literal(value) || this.isIpv6Literal(value)) {
+      return true;
+    }
+    return this.isDomainLike(value);
+  }
+
+  private isValidPort(portRaw: string): boolean {
+    if (!/^\d+$/.test(portRaw)) {
+      return false;
+    }
+    const port = Number.parseInt(portRaw, 10);
+    return Number.isInteger(port) && port > 0 && port <= 65535;
+  }
+
+  private isIpv4Literal(value: string): boolean {
+    const parts = value.split('.');
+    if (parts.length !== 4) {
+      return false;
+    }
+    return parts.every((part) => {
+      if (!/^\d+$/.test(part)) {
+        return false;
+      }
+      const number = Number.parseInt(part, 10);
+      return number >= 0 && number <= 255;
+    });
+  }
+
+  private isIpv6Literal(value: string): boolean {
+    if (!value || !value.includes(':')) {
+      return false;
+    }
+    try {
+      // URL parser handles IPv6 normalization (compressed/expanded forms).
+      new URL(`http://[${value}]`);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private isDomainLike(value: string): boolean {
+    const host = value.toLowerCase();
+    if (host === 'localhost') {
+      return true;
+    }
+    if (!/^[a-z0-9.-]+$/.test(host)) {
+      return false;
+    }
+    if (host.startsWith('.') || host.endsWith('.') || host.includes('..')) {
+      return false;
+    }
+    for (const label of host.split('.')) {
+      if (!label || label.length > 63) {
+        return false;
+      }
+      if (label.startsWith('-') || label.endsWith('-')) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private handleSessionAdd(arg0?: unknown): string {
@@ -1929,11 +2517,13 @@ export class WebRuntime {
         : parsed.isTerminal
         ? 'terminal'
         : 'remote';
+      const forceRelay =
+        Boolean(parsed.forceRelay) || this.isForceAlwaysRelayEnabled(parsed.id);
       const request: ConnectRequest = {
         id: parsed.id,
         password: parsed.password,
         mode,
-        forceRelay: Boolean(parsed.forceRelay)
+        forceRelay
       };
       this.currentSession = new WebSession(request, this.events);
       this.store.set('conn_session_id', generateUuid());
@@ -1956,6 +2546,7 @@ export class WebRuntime {
     this.setServiceStatus('connecting');
     try {
       await this.currentSession.connect(context);
+      this.recordRecentPeer(this.currentSession.getPeerId());
       this.store.set('session_conn_status', 'connected');
       this.setServiceStatus('connected');
     } catch (err) {
@@ -2088,6 +2679,32 @@ export class WebRuntime {
     return next;
   }
 
+  private ensureFingerprint(): string {
+    const current = this.store.get('fingerprint', '');
+    if (current) {
+      return current;
+    }
+    const bytes = new Uint8Array(32);
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+      crypto.getRandomValues(bytes);
+    } else {
+      for (let i = 0; i < bytes.length; i += 1) {
+        bytes[i] = Math.floor(Math.random() * 256);
+      }
+    }
+    const fingerprint = this.formatFingerprint(bytes);
+    this.store.set('fingerprint', fingerprint);
+    return fingerprint;
+  }
+
+  private formatFingerprint(bytes: Uint8Array): string {
+    let hex = '';
+    for (let i = 0; i < bytes.length; i += 1) {
+      hex += bytes[i].toString(16).padStart(2, '0');
+    }
+    return hex.replace(/(.{4})/g, '$1 ').trim();
+  }
+
   private matchesTemporaryPasswordRule(
     value: string,
     length: number,
@@ -2156,6 +2773,11 @@ export class WebRuntime {
     const token = this.getOption('access_token') || '';
     const allowDirectIpAccess = this.isOptionEnabled('enable-direct-server');
     const directAccessPort = this.resolveDirectAccessPort();
+    const version =
+      this.config.version?.trim() ||
+      this.getEnv('APP_VERSION', 'app_version') ||
+      'web';
+    const buildDate = this.config.buildDate?.trim() || '';
     return {
       rendezvousServer,
       relayServer,
@@ -2166,7 +2788,8 @@ export class WebRuntime {
       directAccessPort,
       myId: this.store.get('my_id', this.config.profile.id ?? ''),
       myName: this.store.get('my_name', this.config.profile.name ?? 'Web User'),
-      version: this.config.version ?? '',
+      version,
+      buildDate,
       platform: 'Web'
     };
   }

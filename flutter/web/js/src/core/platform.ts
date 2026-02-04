@@ -28,9 +28,26 @@ export function isMobileDevice(): boolean {
 }
 
 export function screenInfo(): string {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const dpr = window.devicePixelRatio || 1;
   return JSON.stringify({
-    width: window.innerWidth,
-    height: window.innerHeight,
-    dpr: window.devicePixelRatio
+    // Keep the same shape expected by desktop toolbar code.
+    frame: {
+      l: 0,
+      t: 0,
+      r: width,
+      b: height
+    },
+    visibleFrame: {
+      l: 0,
+      t: 0,
+      r: width,
+      b: height
+    },
+    scaleFactor: dpr,
+    width,
+    height,
+    dpr
   });
 }

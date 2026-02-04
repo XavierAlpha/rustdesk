@@ -8,6 +8,7 @@ import 'package:flutter_hbb/common/widgets/login.dart';
 import 'package:flutter_hbb/models/state_model.dart';
 import 'package:flutter_hbb/web/bridge.dart';
 import 'package:flutter_hbb/web/js_interop_bridge.dart' as js;
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:uuid/uuid.dart';
 import 'package:web/web.dart' as web;
 
@@ -21,6 +22,10 @@ const String _buildRendezvousServers =
     String.fromEnvironment('RENDEZVOUS_SERVERS', defaultValue: '');
 const String _buildRsPubKey =
     String.fromEnvironment('RS_PUB_KEY', defaultValue: '');
+const String _buildAppVersion =
+    String.fromEnvironment('APP_VERSION', defaultValue: '');
+const String _buildBuildDate =
+    String.fromEnvironment('BUILD_DATE', defaultValue: '');
 
 typedef HandleEvent = Future<void> Function(Map<String, dynamic> evt);
 
@@ -49,7 +54,8 @@ class PlatformFFI {
   RustdeskImpl get ffiBind => _ffiBind;
 
   static Future<String> getVersion() async {
-    throw UnimplementedError();
+    final info = await PackageInfo.fromPlatform();
+    return info.version;
   }
 
   bool registerEventHandler(
@@ -114,7 +120,7 @@ class PlatformFFI {
 
   Future<void> init(String appType) async {
     final completer = Completer<void>();
-    _applyBuildBootstrapConfig();
+    await _applyBuildBootstrapConfig();
     js.context["onInitFinished"] = (() {
       completer.complete();
     }).toJS;
@@ -156,26 +162,45 @@ class PlatformFFI {
     return completer.future;
   }
 
-  void _applyBuildBootstrapConfig() {
+  Future<void> _applyBuildBootstrapConfig() async {
     final apiServer = _buildApiServer.trim();
     final rsPubKey = _buildRsPubKey.trim();
+    var appVersion = _buildAppVersion.trim();
+    if (appVersion.isEmpty) {
+      try {
+        appVersion = (await PackageInfo.fromPlatform()).version.trim();
+      } catch (_) {
+        // Keep default fallback below.
+      }
+    }
+    if (appVersion.isEmpty) {
+      appVersion = 'web';
+    }
+    final buildDate = _buildBuildDate.trim();
     final rendezvousServers = _buildRendezvousServers
         .split(',')
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toList(growable: false);
 
-    if (apiServer.isEmpty && rsPubKey.isEmpty && rendezvousServers.isEmpty) {
+    if (apiServer.isEmpty &&
+        rsPubKey.isEmpty &&
+        rendezvousServers.isEmpty &&
+        appVersion.isEmpty &&
+        buildDate.isEmpty) {
       return;
     }
 
     final payload = <String, dynamic>{
       if (apiServer.isNotEmpty) 'apiServer': apiServer,
       if (rsPubKey.isNotEmpty) 'rsPubKey': rsPubKey,
+      if (appVersion.isNotEmpty) 'version': appVersion,
+      if (buildDate.isNotEmpty) 'buildDate': buildDate,
       if (rendezvousServers.isNotEmpty) 'rendezvousServers': rendezvousServers,
       'env': {
         if (apiServer.isNotEmpty) 'API_SERVER': apiServer,
         if (rsPubKey.isNotEmpty) 'RS_PUB_KEY': rsPubKey,
+        if (appVersion.isNotEmpty) 'APP_VERSION': appVersion,
         if (rendezvousServers.isNotEmpty)
           'RENDEZVOUS_SERVERS': rendezvousServers.join(','),
       }

@@ -34,5 +34,6 @@ export type SessionContext = {
   myId: string;
   myName: string;
   version: string;
+  buildDate: string;
   platform: string;
 };
