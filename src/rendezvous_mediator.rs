@@ -469,10 +469,10 @@ impl RendezvousMediator {
             socket_addr_v6,
             ..Default::default()
         };
+        rr.set_id(Config::get_id());
         if initiate {
             rr.uuid = uuid.clone();
             rr.relay_server = relay_server.clone();
-            rr.set_id(Config::get_id());
         }
         msg_out.set_relay_response(rr);
         socket.send(&msg_out).await?;
