@@ -408,14 +408,8 @@ class _PermissionCheckerState extends State<PermissionChecker> {
                   .marginOnly(bottom: 8)
               : SizedBox.shrink(),
           if (!hideStopService || !serverModel.mediaOk)
-            PermissionRow(
-                translate("Screen Capture"),
-                serverModel.mediaOk,
-                !serverModel.mediaOk &&
-                        gFFI.userModel.userName.value.isEmpty &&
-                        bind.mainGetLocalOption(key: "show-scam-warning") != "N"
-                    ? () => showScamWarning(context, serverModel)
-                    : serverModel.toggleService),
+            PermissionRow(translate("Screen Capture"), serverModel.mediaOk,
+                serverModel.toggleService),
           PermissionRow(
             translate("Input Control"),
             serverModel.inputOk,
