@@ -19,6 +19,11 @@ type SetPolicyMessage = {
   customQuality?: number;
   customFps?: number;
 };
+type SetActiveDisplayMessage = {
+  type: 'set_active_display';
+  display: number;
+  reset?: boolean;
+};
 
 type DecodeMessage = {
   type: 'decode';
@@ -36,6 +41,7 @@ type WorkerRequest =
   | AttachSurfaceMessage
   | ResizeSurfaceMessage
   | SetPolicyMessage
+  | SetActiveDisplayMessage
   | DecodeMessage
   | DetachSurfaceMessage
   | CloseMessage;
@@ -98,6 +104,7 @@ let lastQueueOverflowLogMs = 0;
 let renderQualityPreference: 'low' | 'balanced' | 'best' | 'custom' = 'balanced';
 let customImageQuality = 100;
 let customFps = 60;
+let activeDisplay: number | null = null;
 
 const workerSelf = self as any;
 const workerCapabilities = {
@@ -146,6 +153,9 @@ workerSelf.onmessage = (event: { data: WorkerRequest }) => {
       if (Number.isFinite(message.customFps) && Number(message.customFps) > 0) {
         customFps = Math.round(clampNumber(Number(message.customFps), 5, 120));
       }
+      break;
+    case 'set_active_display':
+      setActiveDisplay(message.display, Boolean(message.reset));
       break;
     case 'decode':
       void decodeVideo(message);
@@ -196,6 +206,9 @@ async function decodeVideo(message: DecodeMessage): Promise<void> {
   if (!surfaceCanvas || !surfaceContext) {
     return;
   }
+  if (!shouldRenderDisplay(message.display)) {
+    return;
+  }
   const decoder = await getDecoder(message.codec, message.display);
   if (!decoder) {
     return;
@@ -216,6 +229,8 @@ async function decodeVideo(message: DecodeMessage): Promise<void> {
     decoder.decode(chunk);
   } catch (err) {
     decoderNeedsKeyFrame.set(key, true);
+    needRefreshLastSentAt.delete(key);
+    requestRefresh(message.display, key);
     postDecodeError(key, err);
   }
 }
@@ -235,6 +250,7 @@ function shouldDropFrame(
     }
     decoderNeedsKeyFrame.set(decoderStateKey, false);
     decoderBackpressureOverflowState.delete(decoderStateKey);
+    needRefreshLastSentAt.delete(decoderStateKey);
   }
   if (key) {
     decoderBackpressureOverflowState.delete(decoderStateKey);
@@ -264,6 +280,7 @@ function shouldDropFrame(
   }
   decoderBackpressureOverflowState.delete(decoderStateKey);
   decoderNeedsKeyFrame.set(decoderStateKey, true);
+  needRefreshLastSentAt.delete(decoderStateKey);
   requestRefresh(display, decoderStateKey);
   if (now - lastQueueOverflowLogMs > 1500) {
     lastQueueOverflowLogMs = now;
@@ -305,6 +322,14 @@ async function getDecoder(codec: CodecType, display: number): Promise<VideoDecod
   decoderBooting.set(key, task);
   const decoder = await task;
   decoderBooting.delete(key);
+  if (decoder && !shouldRenderDisplay(display)) {
+    try {
+      decoder.close();
+    } catch {
+      // ignore
+    }
+    return null;
+  }
   if (decoder) {
     decoders.set(key, decoder);
   }
@@ -321,12 +346,15 @@ async function createDecoder(codec: CodecType, display: number): Promise<VideoDe
     output: (frame) => handleFrame(display, frame),
     error: (err) => {
       decoderNeedsKeyFrame.set(key, true);
+      needRefreshLastSentAt.delete(key);
+      requestRefresh(display, key);
       postLog('warn', `Worker decoder error${formatError(err)}`);
     }
   });
   try {
     decoder.configure(config);
     decoderNeedsKeyFrame.set(key, true);
+    needRefreshLastSentAt.delete(key);
     decoderLastPts.delete(key);
     decodeErrorSuppressed.delete(key);
     decodeErrorLastLogAt.delete(key);
@@ -394,6 +422,10 @@ async function pickConfig(codec: CodecType): Promise<VideoDecoderConfig | null> 
 }
 
 function handleFrame(display: number, frame: VideoFrame): void {
+  if (!shouldRenderDisplay(display)) {
+    frame.close();
+    return;
+  }
   const old = pendingFrames.get(display);
   if (old) {
     markDisplayStaleDrop(display);
@@ -418,7 +450,7 @@ function handleFrame(display: number, frame: VideoFrame): void {
 function renderFrame(display: number, frame: VideoFrame): void {
   const start = nowMs();
   try {
-    if (!surfaceCanvas || !surfaceContext) {
+    if (!surfaceCanvas || !surfaceContext || !shouldRenderDisplay(display)) {
       return;
     }
     const width = frame.displayWidth;
@@ -531,6 +563,136 @@ function clearDisplayCodecState(display: number, keepCodec?: CodecType): void {
     decoderBackpressureOverflowState.delete(key);
     decodeErrorSuppressed.delete(key);
     decodeErrorLastLogAt.delete(key);
+    needRefreshLastSentAt.delete(key);
+  }
+  for (const key of [...decoderBooting.keys()]) {
+    if (key.startsWith(prefix) && key !== keepKey) {
+      decoderBooting.delete(key);
+    }
+  }
+  for (const key of [...decoderNeedsKeyFrame.keys()]) {
+    if (key.startsWith(prefix) && key !== keepKey) {
+      decoderNeedsKeyFrame.delete(key);
+    }
+  }
+  for (const key of [...decoderLastPts.keys()]) {
+    if (key.startsWith(prefix) && key !== keepKey) {
+      decoderLastPts.delete(key);
+    }
+  }
+  for (const key of [...decoderBackpressureOverflowState.keys()]) {
+    if (key.startsWith(prefix) && key !== keepKey) {
+      decoderBackpressureOverflowState.delete(key);
+    }
+  }
+  for (const key of [...decodeErrorSuppressed.keys()]) {
+    if (key.startsWith(prefix) && key !== keepKey) {
+      decodeErrorSuppressed.delete(key);
+    }
+  }
+  for (const key of [...decodeErrorLastLogAt.keys()]) {
+    if (key.startsWith(prefix) && key !== keepKey) {
+      decodeErrorLastLogAt.delete(key);
+    }
+  }
+  for (const key of [...needRefreshLastSentAt.keys()]) {
+    if (key.startsWith(prefix) && key !== keepKey) {
+      needRefreshLastSentAt.delete(key);
+    }
+  }
+}
+
+function clearPendingFrame(display: number): void {
+  const frame = pendingFrames.get(display);
+  if (frame) {
+    frame.close();
+    pendingFrames.delete(display);
+  }
+  renderScheduled.delete(display);
+}
+
+function resetDisplayState(display: number): void {
+  clearPendingFrame(display);
+  clearDisplayCodecState(display);
+  displayPerf.delete(display);
+  notifiedFrameSize.delete(display);
+  lastPerfReportAt.delete(display);
+}
+
+function clearInactiveDisplayState(targetDisplay: number): void {
+  for (const display of [...pendingFrames.keys()]) {
+    if (display !== targetDisplay) {
+      clearPendingFrame(display);
+    }
+  }
+  for (const display of [...displayPerf.keys()]) {
+    if (display !== targetDisplay) {
+      displayPerf.delete(display);
+    }
+  }
+  for (const display of [...notifiedFrameSize.keys()]) {
+    if (display !== targetDisplay) {
+      notifiedFrameSize.delete(display);
+    }
+  }
+  for (const display of [...lastPerfReportAt.keys()]) {
+    if (display !== targetDisplay) {
+      lastPerfReportAt.delete(display);
+    }
+  }
+  const prefix = `${targetDisplay}:`;
+  for (const [key, decoder] of decoders.entries()) {
+    if (key.startsWith(prefix)) {
+      continue;
+    }
+    try {
+      decoder.close();
+    } catch {
+      // ignore
+    }
+    decoders.delete(key);
+    decoderBooting.delete(key);
+    decoderNeedsKeyFrame.delete(key);
+    decoderLastPts.delete(key);
+    decoderBackpressureOverflowState.delete(key);
+    decodeErrorSuppressed.delete(key);
+    decodeErrorLastLogAt.delete(key);
+    needRefreshLastSentAt.delete(key);
+  }
+  for (const key of [...decoderBooting.keys()]) {
+    if (!key.startsWith(prefix)) {
+      decoderBooting.delete(key);
+    }
+  }
+  for (const key of [...decoderNeedsKeyFrame.keys()]) {
+    if (!key.startsWith(prefix)) {
+      decoderNeedsKeyFrame.delete(key);
+    }
+  }
+  for (const key of [...decoderLastPts.keys()]) {
+    if (!key.startsWith(prefix)) {
+      decoderLastPts.delete(key);
+    }
+  }
+  for (const key of [...decoderBackpressureOverflowState.keys()]) {
+    if (!key.startsWith(prefix)) {
+      decoderBackpressureOverflowState.delete(key);
+    }
+  }
+  for (const key of [...decodeErrorSuppressed.keys()]) {
+    if (!key.startsWith(prefix)) {
+      decodeErrorSuppressed.delete(key);
+    }
+  }
+  for (const key of [...decodeErrorLastLogAt.keys()]) {
+    if (!key.startsWith(prefix)) {
+      decodeErrorLastLogAt.delete(key);
+    }
+  }
+  for (const key of [...needRefreshLastSentAt.keys()]) {
+    if (!key.startsWith(prefix)) {
+      needRefreshLastSentAt.delete(key);
+    }
   }
 }
 
@@ -572,6 +734,9 @@ function closeWorker(): void {
 }
 
 function requestRefresh(display: number, decoderStateKey: string): void {
+  if (!shouldRenderDisplay(display)) {
+    return;
+  }
   const now = Date.now();
   const last = needRefreshLastSentAt.get(decoderStateKey) ?? 0;
   if (now - last < 900) {
@@ -583,6 +748,31 @@ function requestRefresh(display: number, decoderStateKey: string): void {
     display
   };
   workerSelf.postMessage(payload);
+}
+
+function normalizeDisplay(display: number): number | null {
+  const normalized = Math.floor(Number(display));
+  if (!Number.isFinite(normalized) || normalized < 0) {
+    return null;
+  }
+  return normalized;
+}
+
+function shouldRenderDisplay(display: number): boolean {
+  const normalized = normalizeDisplay(display);
+  return activeDisplay === null || normalized === activeDisplay;
+}
+
+function setActiveDisplay(display: number, reset: boolean): void {
+  const normalized = normalizeDisplay(display);
+  activeDisplay = normalized;
+  if (normalized === null) {
+    return;
+  }
+  clearInactiveDisplayState(normalized);
+  if (reset) {
+    resetDisplayState(normalized);
+  }
 }
 
 function normalizeTimestamp(key: string, pts: number): number {
