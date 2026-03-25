@@ -171,7 +171,7 @@ Asigură-te că rulezi aceste comenzi din rădăcina repository-ului Camellia, a
 - **[src/rendezvous_mediator.rs](https://github.com/CamelliaCorp/camellia/tree/master/src/rendezvous_mediator.rs)**: comunică cu [Camellia server](https://github.com/CamelliaCorp/camellia), așteaptă conexiune directă remote (TCP hole punching) sau prin relay
 - **[src/platform](https://github.com/CamelliaCorp/camellia/tree/master/src/platform)**: cod specific platformei
 - **[flutter](https://github.com/CamelliaCorp/camellia/tree/master/flutter)**: cod Flutter pentru desktop și mobil
-- **[flutter/web/js](https://github.com/CamelliaCorp/camellia/tree/master/flutter/web/v1/js)**: JavaScript pentru clientul Flutter web
+- **[flutter/web/js](https://github.com/CamelliaCorp/camellia/tree/master/flutter/web/js)**: JavaScript pentru clientul Flutter web
 
 ## Capturi de ecran
 

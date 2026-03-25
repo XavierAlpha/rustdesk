@@ -14,6 +14,7 @@ import '../../common/widgets/remote_input.dart';
 import '../../common.dart';
 import '../../common/widgets/dialog.dart';
 import '../../common/widgets/toolbar.dart';
+import '../../common/widgets/web_video_surface.dart';
 import '../../models/model.dart';
 import '../../models/input_model.dart';
 import '../../models/platform_model.dart';
@@ -823,6 +824,13 @@ class _ImagePaintState extends State<ImagePaint> {
 
   Widget _buildScrollbarNonTextureRender(
       ImageModel m, Size imageSize, double s) {
+    if (isWebDesktop) {
+      return SizedBox(
+        width: imageSize.width,
+        height: imageSize.height,
+        child: WebVideoSurface(peerId: id),
+      );
+    }
     return CustomPaint(
       size: imageSize,
       painter: ImagePainter(image: m.image, x: 0, y: 0, scale: s),
@@ -837,6 +845,28 @@ class _ImagePaintState extends State<ImagePaint> {
       if (displays.isNotEmpty) {
         sizeScale = s / displays[0].scale;
       }
+    }
+    if (isWebDesktop) {
+      final paintSize = Size(c.size.width, c.size.height);
+      final surfaceWidth = c.getDisplayWidth() * sizeScale;
+      final surfaceHeight = c.getDisplayHeight() * sizeScale;
+      return ClipRect(
+        child: SizedBox(
+          width: paintSize.width,
+          height: paintSize.height,
+          child: Stack(
+            children: [
+              Positioned(
+                left: c.x,
+                top: c.y,
+                width: surfaceWidth,
+                height: surfaceHeight,
+                child: WebVideoSurface(peerId: id),
+              ),
+            ],
+          ),
+        ),
+      );
     }
     return CustomPaint(
       size: Size(c.size.width, c.size.height),

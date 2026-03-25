@@ -1327,6 +1327,10 @@ class _CustomScaleMenuControlsState
               iconSize: 16,
               padding: EdgeInsets.all(1),
               constraints: smallBtnConstraints,
+              splashRadius: 11,
+              style: IconButton.styleFrom(
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
               icon: const Icon(Icons.remove),
               onPressed: () => nudgeScale(-1),
             ),
@@ -1338,6 +1342,10 @@ class _CustomScaleMenuControlsState
               iconSize: 16,
               padding: EdgeInsets.all(1),
               constraints: smallBtnConstraints,
+              splashRadius: 11,
+              style: IconButton.styleFrom(
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
               icon: const Icon(Icons.add),
               onPressed: () => nudgeScale(1),
             ),
@@ -1555,7 +1563,11 @@ class _ResolutionsMenuState extends State<_ResolutionsMenu> {
     final String mainDisplay = bind.mainGetMainDisplay();
     if (mainDisplay.isNotEmpty) {
       try {
-        final display = json.decode(mainDisplay);
+        final normalized = mainDisplay.trim();
+        if (isWeb && !normalized.startsWith('{')) {
+          return;
+        }
+        final display = json.decode(normalized);
         if (display['w'] != null && display['h'] != null) {
           _localResolution = Resolution(display['w'], display['h']);
           if (isWeb) {

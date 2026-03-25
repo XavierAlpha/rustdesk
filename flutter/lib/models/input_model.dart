@@ -814,8 +814,12 @@ class InputModel {
     } else {
       down = false;
     }
-    inputRawKey(
-        e.character ?? '', platformCode, positionCode, down, iosCapsLock);
+    final keyName = isWeb
+        ? (physicalKeyMap[e.physicalKey.usbHidUsage] ??
+            logicalKeyMap[e.logicalKey.keyId] ??
+            e.logicalKey.keyLabel)
+        : (e.character ?? '');
+    inputRawKey(keyName, platformCode, positionCode, down, iosCapsLock);
   }
 
   /// Send raw Key Event
