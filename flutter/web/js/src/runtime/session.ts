@@ -19,6 +19,7 @@ import {
   VideoPipeline,
   detectDecodingSupport
 } from './video';
+import { MACOS_ISO_SWAP, USB_HID_TARGET_KEYCODES } from './keycode_maps';
 
 type CodecProbe = {
   supported: boolean;
@@ -213,12 +214,14 @@ export class WebSession {
   private qualityTickTs = Date.now();
   private displayIds: number[] = [0];
   private currentDisplay = 0;
+  private requestedDisplays: number[] = [];
   private lastDelayMs?: number;
   private lastTargetBitrate?: number;
   private lastCodecFormat?: string;
   private lastChroma = '4:2:0';
   private keepaliveTimer?: number;
   private initialVideoRefreshTimer?: number;
+  private initialVideoRefreshDisplay: number | null = null;
   private initialVideoRefreshAttempts = 0;
   private firstDecodedVideoFrameSeen = false;
   private reconnectTimer?: number;
@@ -239,15 +242,14 @@ export class WebSession {
         }
       },
       (display, _width, _height) => {
-        if (!this.firstDecodedVideoFrameSeen) {
+        if (this.shouldRenderDisplay(display) && !this.firstDecodedVideoFrameSeen) {
           this.firstDecodedVideoFrameSeen = true;
           this.stopInitialVideoRefreshLoop();
         }
-        this.currentDisplay = Number.isFinite(display) ? display : this.currentDisplay;
       },
       (display) => {
-        if (this.isVideoSession()) {
-          this.refreshVideo(display);
+        if (this.isVideoSession() && this.shouldRenderDisplay(display)) {
+          this.requestInitialVideoRefresh(display);
         }
       }
     );
@@ -320,6 +322,9 @@ export class WebSession {
         });
         this.startKeepalive();
         this.startInitialVideoRefreshLoop();
+        if (this.requestedDisplays.length > 0) {
+          this.switchDisplay(this.requestedDisplays);
+        }
         this.reconnectAttempts = 0;
         this.logger.info('Connected in direct IP access mode (unencrypted)');
         return;
@@ -387,6 +392,9 @@ export class WebSession {
       this.attachTransportMessageHandler();
       this.startKeepalive();
       this.startInitialVideoRefreshLoop();
+      if (this.requestedDisplays.length > 0) {
+        this.switchDisplay(this.requestedDisplays);
+      }
       this.reconnectAttempts = 0;
     } catch (err) {
       this.stopKeepalive();
@@ -745,26 +753,115 @@ export class WebSession {
     const name = String(payload.name ?? '');
     const usbHid = Number(payload.usb_hid ?? 0);
     const down = payload.down === 'true' || payload.down === true;
-    if (!down) {
+    if (name === 'flutter_key') {
+      const controlKey = flutterSpecialKey(usbHid);
+      if (!controlKey) {
+        return;
+      }
+      this.sendMessage({
+        keyEvent: {
+          mode: 'Translate',
+          controlKey,
+          down
+        }
+      });
       return;
     }
-    if (name && name !== 'flutter_key') {
+
+    const isMapMode = this.isFlutterMapMode(payload);
+    if (isMapMode) {
+      const keyEvent = this.buildFlutterMapKeyEvent(payload, usbHid, down);
+      if (keyEvent) {
+        this.sendMessage({ keyEvent });
+      }
+      return;
+    }
+
+    if (down && name) {
       const keyEvent = {
         mode: 'Translate',
         seq: name,
         press: true
       };
       this.sendMessage({ keyEvent });
-      return;
     }
-    const controlKey = flutterSpecialKey(usbHid);
-    if (controlKey) {
-      const keyEvent = {
-        mode: 'Legacy',
-        controlKey,
-        down: true
-      };
-      this.sendMessage({ keyEvent });
+  }
+
+  private isFlutterMapMode(payload: Record<string, unknown>): boolean {
+    const mode = String(payload.keyboard_mode ?? '')
+      .trim()
+      .toLowerCase();
+    return mode === '' || mode === 'map';
+  }
+
+  private buildFlutterMapKeyEvent(
+    payload: Record<string, unknown>,
+    usbHid: number,
+    down: boolean
+  ): Record<string, unknown> | null {
+    if (!Number.isFinite(usbHid) || usbHid <= 0) {
+      return null;
+    }
+    const chr = this.resolveFlutterMapKeycode(usbHid, payload);
+    if (chr === null) {
+      return null;
+    }
+    const keyEvent: Record<string, unknown> = {
+      mode: 'Map',
+      chr,
+      down
+    };
+    const mapping = USB_HID_TARGET_KEYCODES[usbHid];
+    const lockModes = Number(payload.lock_modes ?? 0);
+    const modifiers = buildFlutterLockModeModifiers(lockModes, mapping?.key);
+    if (modifiers.length > 0) {
+      keyEvent.modifiers = modifiers;
+    }
+    return keyEvent;
+  }
+
+  private resolveFlutterMapKeycode(
+    usbHid: number,
+    payload: Record<string, unknown>
+  ): number | null {
+    const mapping = USB_HID_TARGET_KEYCODES[usbHid];
+    const platform = normalizeFlutterPeerPlatform(this.peerInfoSnapshot.platform);
+    if (platform === 'ios') {
+      return usbHid;
+    }
+    if (platform === 'unknown') {
+      return null;
+    }
+    if (!mapping) {
+      return null;
+    }
+    switch (platform) {
+      case 'win':
+        return normalizePlatformKeycode(mapping.win, false);
+      case 'linux':
+        return normalizePlatformKeycode(mapping.linux, false);
+      case 'android':
+        return normalizePlatformKeycode(mapping.android, false);
+      case 'mac': {
+        const code = normalizePlatformKeycode(mapping.mac, true);
+        if (code === null) {
+          return null;
+        }
+        const kbLayout = String(payload.kb_layout ?? '')
+          .trim()
+          .toUpperCase();
+        if (kbLayout === 'ISO') {
+          if (code === MACOS_ISO_SWAP.grave) {
+            return MACOS_ISO_SWAP.section;
+          }
+          if (code === MACOS_ISO_SWAP.section) {
+            return MACOS_ISO_SWAP.grave;
+          }
+        }
+        return code;
+      }
+      default:
+        return null;
     }
   }
 
@@ -932,31 +1029,23 @@ export class WebSession {
     }
     const targets = displays
       .map((value) => Number(value))
-      .filter((value) => Number.isFinite(value));
+      .filter((value) => Number.isFinite(value) && value >= 0)
+      .map((value) => Math.floor(value));
     if (targets.length === 0) {
       return;
     }
-    if (targets.length === 1) {
-      this.sendMessage({
-        misc: {
-          switchDisplay: {
-            display: targets[0]
-          }
-        }
-      });
-      this.refreshVideo(targets[0]);
-      return;
-    }
+    const target = [...new Set(targets)][0];
+    this.requestedDisplays = [target];
+    this.currentDisplay = target;
+    this.video.switchDisplay(target);
     this.sendMessage({
       misc: {
-        captureDisplays: {
-          set: targets
+        switchDisplay: {
+          display: target
         }
       }
     });
-    for (const display of targets) {
-      this.refreshVideo(display);
-    }
+    this.requestInitialVideoRefresh(target);
   }
 
   changeResolution(display: number, width: number, height: number): void {
@@ -1606,6 +1695,7 @@ export class WebSession {
       );
     }
     this.currentDisplay = this.peerInfoSnapshot.currentDisplay;
+    this.video.setActiveDisplay(this.getActiveDisplay());
     if (pi.username !== undefined) {
       this.peerInfoSnapshot.username = String(pi.username ?? '');
     }
@@ -1702,6 +1792,9 @@ export class WebSession {
   private handleVideoFrame(frame: Record<string, unknown>): void {
     const f = frame as any;
     const display = Number(f.display ?? 0);
+    if (!this.shouldRenderDisplay(display)) {
+      return;
+    }
     if (f.vp8s) {
       const frames = (f.vp8s as any).frames as Array<Record<string, unknown>>;
       this.decodeFrames('vp8', display, frames);
@@ -2243,34 +2336,40 @@ export class WebSession {
     if (payload.switchDisplay) {
       const sw = payload.switchDisplay as any;
       const display = this.toFiniteNumber(sw.display, this.currentDisplay);
-      this.currentDisplay = display;
-      if (!this.displayIds.includes(display)) {
-        this.displayIds = [...this.displayIds, display];
+      const requestedDisplay = this.requestedDisplays[0];
+      const shouldAdoptDisplay =
+        requestedDisplay === undefined || requestedDisplay === display;
+      if (shouldAdoptDisplay) {
+        this.currentDisplay = display;
+        this.video.setActiveDisplay(display);
+        if (!this.displayIds.includes(display)) {
+          this.displayIds = [...this.displayIds, display];
+        }
+        const originalResolution = sw.originalResolution as any;
+        const snapshot = {
+          x: this.toFiniteNumber(sw.x, 0),
+          y: this.toFiniteNumber(sw.y, 0),
+          width: this.toFiniteNumber(sw.width, 0),
+          height: this.toFiniteNumber(sw.height, 0),
+          cursorEmbedded: Boolean(sw.cursorEmbedded),
+          originalWidth: this.toFiniteNumber(originalResolution?.width, -1),
+          originalHeight: this.toFiniteNumber(originalResolution?.height, -1),
+          resolutions: sw.resolutions ?? {}
+        };
+        this.events.emit({
+          name: 'switch_display',
+          display: String(display),
+          x: String(snapshot.x),
+          y: String(snapshot.y),
+          width: String(snapshot.width),
+          height: String(snapshot.height),
+          cursor_embedded: snapshot.cursorEmbedded ? '1' : '0',
+          original_width: String(snapshot.originalWidth),
+          original_height: String(snapshot.originalHeight),
+          resolutions: JSON.stringify(snapshot.resolutions ?? {})
+        });
+        this.requestInitialVideoRefresh();
       }
-      const originalResolution = sw.originalResolution as any;
-      const snapshot = {
-        x: this.toFiniteNumber(sw.x, 0),
-        y: this.toFiniteNumber(sw.y, 0),
-        width: this.toFiniteNumber(sw.width, 0),
-        height: this.toFiniteNumber(sw.height, 0),
-        cursorEmbedded: Boolean(sw.cursorEmbedded),
-        originalWidth: this.toFiniteNumber(originalResolution?.width, -1),
-        originalHeight: this.toFiniteNumber(originalResolution?.height, -1),
-        resolutions: sw.resolutions ?? {}
-      };
-      this.events.emit({
-        name: 'switch_display',
-        display: String(display),
-        x: String(snapshot.x),
-        y: String(snapshot.y),
-        width: String(snapshot.width),
-        height: String(snapshot.height),
-        cursor_embedded: snapshot.cursorEmbedded ? '1' : '0',
-        original_width: String(snapshot.originalWidth),
-        original_height: String(snapshot.originalHeight),
-        resolutions: JSON.stringify(snapshot.resolutions ?? {})
-      });
-      this.requestInitialVideoRefresh();
     }
     if (payload.permissionInfo) {
       const info = payload.permissionInfo as any;
@@ -2726,11 +2825,12 @@ export class WebSession {
     );
   }
 
-  private startInitialVideoRefreshLoop(): void {
+  private startInitialVideoRefreshLoop(targetDisplay = this.getActiveDisplay()): void {
     this.stopInitialVideoRefreshLoop();
     if (!this.isVideoSession() || this.state !== 'connected' || !this.proto) {
       return;
     }
+    this.initialVideoRefreshDisplay = targetDisplay;
     this.initialVideoRefreshAttempts = 0;
     this.firstDecodedVideoFrameSeen = false;
     const tick = () => {
@@ -2762,36 +2862,60 @@ export class WebSession {
       window.clearTimeout(this.initialVideoRefreshTimer);
       this.initialVideoRefreshTimer = undefined;
     }
+    this.initialVideoRefreshDisplay = null;
   }
 
-  private requestInitialVideoRefresh(): void {
+  private requestInitialVideoRefresh(display?: number): void {
     if (!this.isVideoSession() || this.manualClose || this.state !== 'connected' || !this.proto) {
       return;
     }
+    if (
+      display !== undefined &&
+      Number.isFinite(display) &&
+      display >= 0 &&
+      !this.shouldRenderDisplay(Math.floor(display))
+    ) {
+      return;
+    }
+    const targetDisplay = this.getActiveDisplay();
     this.refreshKnownDisplays();
-    this.startInitialVideoRefreshLoop();
+    if (
+      this.initialVideoRefreshTimer !== undefined &&
+      this.initialVideoRefreshDisplay === targetDisplay
+    ) {
+      return;
+    }
+    this.startInitialVideoRefreshLoop(targetDisplay);
   }
 
   private refreshKnownDisplays(): void {
     if (!this.proto) {
       return;
     }
-    const targets = new Set<number>();
-    if (Number.isFinite(this.currentDisplay) && this.currentDisplay >= 0) {
-      targets.add(this.currentDisplay);
-    }
-    for (const display of this.displayIds) {
-      if (Number.isFinite(display) && display >= 0) {
-        targets.add(display);
-      }
-    }
-    if (targets.size === 0) {
+    const target = this.getActiveDisplay();
+    if (target === null) {
       this.refreshVideo();
       return;
     }
-    for (const display of targets) {
-      this.refreshVideo(display);
+    this.refreshVideo(target);
+  }
+
+  private getActiveDisplay(): number | null {
+    if (this.requestedDisplays.length > 0) {
+      const display = this.requestedDisplays[0];
+      if (Number.isFinite(display) && display >= 0) {
+        return display;
+      }
     }
+    if (Number.isFinite(this.currentDisplay) && this.currentDisplay >= 0) {
+      return this.currentDisplay;
+    }
+    return null;
+  }
+
+  private shouldRenderDisplay(display: number): boolean {
+    const activeDisplay = this.getActiveDisplay();
+    return activeDisplay === null || activeDisplay === display;
   }
 
   private toFiniteNumber(value: unknown, fallback: number): number {
@@ -3109,6 +3233,7 @@ const ControlKey = {
   Tab: 31,
   UpArrow: 32,
   Insert: 58,
+  NumLock: 63,
   VolumeMute: 76,
   VolumeUp: 77,
   VolumeDown: 78,
@@ -3180,6 +3305,63 @@ function flutterSpecialKey(usbHid: number): number | null {
     default:
       return null;
   }
+}
+
+function normalizeFlutterPeerPlatform(
+  platform: string
+): 'win' | 'linux' | 'mac' | 'android' | 'ios' | 'unknown' {
+  const normalized = platform.trim().toLowerCase();
+  if (normalized.startsWith('win')) {
+    return 'win';
+  }
+  if (normalized.startsWith('linux')) {
+    return 'linux';
+  }
+  if (normalized.startsWith('mac')) {
+    return 'mac';
+  }
+  if (normalized.startsWith('android')) {
+    return 'android';
+  }
+  if (normalized.startsWith('ios')) {
+    return 'ios';
+  }
+  return 'unknown';
+}
+
+function normalizePlatformKeycode(
+  code: number | undefined,
+  allowZero: boolean
+): number | null {
+  if (typeof code !== 'number' || !Number.isFinite(code)) {
+    return null;
+  }
+  if (!allowZero && code <= 0) {
+    return null;
+  }
+  return Math.trunc(code);
+}
+
+function buildFlutterLockModeModifiers(
+  lockModes: number,
+  keyName?: string
+): number[] {
+  if (!Number.isFinite(lockModes) || !keyName) {
+    return [];
+  }
+  const modifiers: number[] = [];
+  if (/^Key[A-Z]$/.test(keyName) && (lockModes & (1 << 1)) !== 0) {
+    modifiers.push(ControlKey.CapsLock);
+  }
+  if (
+    /^Kp(?:[0-9]|Decimal|Divide|Multiply|Minus|Plus|Return|Equal|Comma)$/.test(
+      keyName
+    ) &&
+    (lockModes & (1 << 2)) !== 0
+  ) {
+    modifiers.push(ControlKey.NumLock);
+  }
+  return modifiers;
 }
 
 function mouseTypeValue(type: string): number {

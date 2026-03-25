@@ -59,6 +59,11 @@ type WorkerNeedRefreshMessage = {
   type: 'need_refresh';
   display: number;
 };
+type WorkerSetActiveDisplayMessage = {
+  type: 'set_active_display';
+  display: number;
+  reset?: boolean;
+};
 type WorkerMessage =
   | WorkerReadyMessage
   | WorkerFrameMessage
@@ -248,6 +253,7 @@ export class VideoPipeline {
     string,
     { count: number; at: number }
   >();
+  private readonly needRefreshLastSentAt = new Map<string, number>();
   private readonly canvases = new Map<number, OffscreenCanvas | HTMLCanvasElement>();
   private readonly contexts = new Map<number, Canvas2dContext>();
   private readonly softwareSourceCanvases = new Map<number, OffscreenCanvas | HTMLCanvasElement>();
@@ -291,6 +297,7 @@ export class VideoPipeline {
   private workerFallbackTried = false;
   private workerDecodeFailureWindowStart = 0;
   private workerDecodeFailureCount = 0;
+  private activeDisplay: number | null = null;
 
   constructor(
     sink: RgbaSink,
@@ -364,6 +371,9 @@ export class VideoPipeline {
   }
 
   decode(input: DecodeInput): void {
+    if (!this.isActiveDisplay(input.display)) {
+      return;
+    }
     if (this.isSoftwareBackedCodec(input.codec) && this.directSurfaceUseWorker) {
       this.detachSurfaceFromWorker();
     }
@@ -392,6 +402,15 @@ export class VideoPipeline {
           for (const entry of buffered) {
             void this.decodeWithSoftwareFallback(entry);
           }
+          return;
+        }
+        if (!this.isActiveDisplay(input.display)) {
+          try {
+            ready.close();
+          } catch {
+            // ignore
+          }
+          this.decoders.delete(key);
           return;
         }
         for (const entry of buffered) {
@@ -424,6 +443,7 @@ export class VideoPipeline {
     this.decoderNeedsKeyFrame.clear();
     this.decoderLastPts.clear();
     this.decoderBackpressureOverflowState.clear();
+    this.needRefreshLastSentAt.clear();
     this.decoderConfigCache.clear();
     this.softwareDecoders.clear();
     this.canvases.clear();
@@ -437,6 +457,31 @@ export class VideoPipeline {
     this.notifiedFrameSize.clear();
     this.detachSurface();
     this.shutdownWorker();
+  }
+
+  setActiveDisplay(display: number | null): void {
+    const normalized = this.normalizeDisplay(display);
+    const changed = normalized !== this.activeDisplay;
+    this.activeDisplay = normalized;
+    if (normalized !== null) {
+      this.directSurfaceActiveDisplay = normalized;
+    }
+    if (changed) {
+      this.clearInactiveDisplayState(normalized);
+    }
+    this.syncWorkerActiveDisplay(false);
+  }
+
+  switchDisplay(display: number): void {
+    const normalized = this.normalizeDisplay(display);
+    if (normalized === null) {
+      return;
+    }
+    this.activeDisplay = normalized;
+    this.directSurfaceActiveDisplay = normalized;
+    this.clearInactiveDisplayState(normalized);
+    this.resetDisplayState(normalized);
+    this.syncWorkerActiveDisplay(true);
   }
 
   private async ensureDecoder(codec: CodecType, display: number): Promise<VideoDecoder | null> {
@@ -454,11 +499,14 @@ export class VideoPipeline {
       output: (frame) => this.handleFrame(display, frame),
       error: (err) => {
         this.decoderNeedsKeyFrame.set(key, true);
+        this.needRefreshLastSentAt.delete(key);
+        this.requestRefresh(display, key);
         this.logDecoderError(err);
       }
     });
     decoder.configure(config);
     this.decoderNeedsKeyFrame.set(key, true);
+    this.needRefreshLastSentAt.delete(key);
     this.decoderLastPts.delete(key);
     this.decoders.set(key, decoder);
     return decoder;
@@ -516,15 +564,33 @@ export class VideoPipeline {
   }
 
   private async decodeWithSoftwareFallback(input: DecodeInput): Promise<void> {
+    const key = this.decoderKey(input.display, input.codec);
+    if (this.shouldWaitForKeyframe(key, input.display, input.key)) {
+      return;
+    }
     const softwareDecoder = await this.ensureSoftwareDecoder(
       input.codec,
       input.display
     );
     if (!softwareDecoder) {
       this.logger.error(`No video decoder available for ${input.codec}`);
+      this.decoderNeedsKeyFrame.set(key, true);
+      this.needRefreshLastSentAt.delete(key);
+      this.requestRefresh(input.display, key);
       return;
     }
-    await softwareDecoder.decode(input);
+    if (!this.isActiveDisplay(input.display)) {
+      softwareDecoder.close();
+      this.softwareDecoders.delete(key);
+      return;
+    }
+    const ok = await softwareDecoder.decode(input);
+    if (!ok) {
+      this.clearDisplayCodecState(input.display, input.codec);
+      this.decoderNeedsKeyFrame.set(key, true);
+      this.needRefreshLastSentAt.delete(key);
+      this.requestRefresh(input.display, key);
+    }
   }
 
   private async ensureSoftwareDecoder(
@@ -539,6 +605,10 @@ export class VideoPipeline {
     if (existing) {
       return existing;
     }
+    this.clearDisplayCodecState(display, codec);
+    this.decoderNeedsKeyFrame.set(key, true);
+    this.needRefreshLastSentAt.delete(key);
+    this.decoderLastPts.delete(key);
     const created = this.createSoftwareDecoder(codec, display);
     this.softwareDecoders.set(key, created);
     return created;
@@ -566,6 +636,10 @@ export class VideoPipeline {
   }
 
   private handleFrame(display: number, frame: VideoFrame): void {
+    if (!this.isActiveDisplay(display)) {
+      frame.close();
+      return;
+    }
     const old = this.pendingFrames.get(display);
     if (old) {
       this.markDisplayStaleDrop(display);
@@ -598,6 +672,9 @@ export class VideoPipeline {
   private renderFrame(display: number, frame: VideoFrame): void {
     const start = nowMs();
     try {
+      if (!this.isActiveDisplay(display)) {
+        return;
+      }
       const width = frame.displayWidth;
       const height = frame.displayHeight;
       if (width === 0 || height === 0) {
@@ -1475,10 +1552,14 @@ export class VideoPipeline {
       this.workerDecodeFailureCount = 0;
       this.logger.info(`Video worker ready (${this.workerMode ?? 'unknown'})`);
       this.syncWorkerRenderPolicy();
+      this.syncWorkerActiveDisplay(false);
       this.tryUpgradeDirectSurfaceToWorker();
       return;
     }
     if (message.type === 'frame') {
+      if (!this.isActiveDisplay(message.display)) {
+        return;
+      }
       this.directSurfaceSourceWidth = Math.max(1, Math.floor(message.width || 0));
       this.directSurfaceSourceHeight = Math.max(1, Math.floor(message.height || 0));
       this.mergeWorkerFramePerf(message);
@@ -1487,7 +1568,7 @@ export class VideoPipeline {
       return;
     }
     if (message.type === 'need_refresh') {
-      if (this.onNeedRefresh) {
+      if (this.onNeedRefresh && this.isActiveDisplay(message.display)) {
         const display = Number(message.display);
         this.onNeedRefresh(
           Number.isFinite(display) && display >= 0 ? Math.floor(display) : 0
@@ -1547,6 +1628,47 @@ export class VideoPipeline {
       this.decoderNeedsKeyFrame.delete(key);
       this.decoderLastPts.delete(key);
       this.decoderBackpressureOverflowState.delete(key);
+      this.needRefreshLastSentAt.delete(key);
+    }
+    for (const [key, decoder] of this.softwareDecoders.entries()) {
+      if (!key.startsWith(prefix) || key === keepKey) {
+        continue;
+      }
+      void decoder.then((item) => item.close());
+      this.softwareDecoders.delete(key);
+      this.decoderNeedsKeyFrame.delete(key);
+      this.decoderLastPts.delete(key);
+      this.needRefreshLastSentAt.delete(key);
+    }
+    for (const key of [...this.decoderBooting.keys()]) {
+      if (key.startsWith(prefix) && key !== keepKey) {
+        this.decoderBooting.delete(key);
+      }
+    }
+    for (const key of [...this.pendingDecodeInputs.keys()]) {
+      if (key.startsWith(prefix) && key !== keepKey) {
+        this.pendingDecodeInputs.delete(key);
+      }
+    }
+    for (const key of [...this.decoderNeedsKeyFrame.keys()]) {
+      if (key.startsWith(prefix) && key !== keepKey) {
+        this.decoderNeedsKeyFrame.delete(key);
+      }
+    }
+    for (const key of [...this.decoderLastPts.keys()]) {
+      if (key.startsWith(prefix) && key !== keepKey) {
+        this.decoderLastPts.delete(key);
+      }
+    }
+    for (const key of [...this.decoderBackpressureOverflowState.keys()]) {
+      if (key.startsWith(prefix) && key !== keepKey) {
+        this.decoderBackpressureOverflowState.delete(key);
+      }
+    }
+    for (const key of [...this.needRefreshLastSentAt.keys()]) {
+      if (key.startsWith(prefix) && key !== keepKey) {
+        this.needRefreshLastSentAt.delete(key);
+      }
     }
   }
 
@@ -1567,7 +1689,7 @@ export class VideoPipeline {
 
   private decodeWithDecoder(decoder: VideoDecoder, input: DecodeInput): void {
     const key = this.decoderKey(input.display, input.codec);
-    if (this.shouldWaitForKeyframe(key, input.key)) {
+    if (this.shouldWaitForKeyframe(key, input.display, input.key)) {
       return;
     }
     if (this.shouldDropForBackpressure(decoder, input, key)) {
@@ -1584,20 +1706,28 @@ export class VideoPipeline {
       decoder.decode(chunk);
     } catch (err) {
       this.decoderNeedsKeyFrame.set(key, true);
+      this.needRefreshLastSentAt.delete(key);
+      this.requestRefresh(input.display, key);
       this.logDecodeError(err);
     }
   }
 
-  private shouldWaitForKeyframe(decoderKey: string, isKeyFrame: boolean): boolean {
+  private shouldWaitForKeyframe(
+    decoderKey: string,
+    display: number,
+    isKeyFrame: boolean
+  ): boolean {
     const needsKey = this.decoderNeedsKeyFrame.get(decoderKey) !== false;
     if (!needsKey) {
       return false;
     }
     if (!isKeyFrame) {
+      this.requestRefresh(display, decoderKey);
       return true;
     }
     this.decoderNeedsKeyFrame.set(decoderKey, false);
     this.decoderBackpressureOverflowState.delete(decoderKey);
+    this.needRefreshLastSentAt.delete(decoderKey);
     return false;
   }
 
@@ -1644,9 +1774,8 @@ export class VideoPipeline {
     }
     this.decoderBackpressureOverflowState.delete(decoderKey);
     this.decoderNeedsKeyFrame.set(decoderKey, true);
-    if (this.onNeedRefresh) {
-      this.onNeedRefresh(input.display);
-    }
+    this.needRefreshLastSentAt.delete(decoderKey);
+    this.requestRefresh(input.display, decoderKey);
     if (now - this.lastQueueOverflowLogMs > 1500) {
       this.lastQueueOverflowLogMs = now;
       this.logger.warn(
@@ -1982,6 +2111,173 @@ export class VideoPipeline {
     });
   }
 
+  private normalizeDisplay(display: number | null | undefined): number | null {
+    const normalized = Math.floor(Number(display));
+    if (!Number.isFinite(normalized) || normalized < 0) {
+      return null;
+    }
+    return normalized;
+  }
+
+  private isActiveDisplay(display: number): boolean {
+    const normalized = this.normalizeDisplay(display);
+    return this.activeDisplay === null || normalized === this.activeDisplay;
+  }
+
+  private clearPendingFrame(display: number): void {
+    const pending = this.pendingFrames.get(display);
+    if (pending) {
+      pending.close();
+      this.pendingFrames.delete(display);
+    }
+    this.renderScheduled.delete(display);
+  }
+
+  private resetDisplayState(display: number): void {
+    this.clearPendingFrame(display);
+    this.clearDisplayCodecState(display);
+    this.displayPerf.delete(display);
+    this.adaptiveRenderState.delete(display);
+    this.adaptiveStartupUntil.delete(display);
+    this.notifiedFrameSize.delete(display);
+    this.canvases.delete(display);
+    this.contexts.delete(display);
+    this.softwareSourceCanvases.delete(display);
+  }
+
+  private clearInactiveDisplayState(activeDisplay: number | null): void {
+    if (activeDisplay === null) {
+      return;
+    }
+    for (const display of [...this.pendingFrames.keys()]) {
+      if (display !== activeDisplay) {
+        this.clearPendingFrame(display);
+      }
+    }
+    for (const display of [...this.displayPerf.keys()]) {
+      if (display !== activeDisplay) {
+        this.displayPerf.delete(display);
+      }
+    }
+    for (const display of [...this.adaptiveRenderState.keys()]) {
+      if (display !== activeDisplay) {
+        this.adaptiveRenderState.delete(display);
+      }
+    }
+    for (const display of [...this.adaptiveStartupUntil.keys()]) {
+      if (display !== activeDisplay) {
+        this.adaptiveStartupUntil.delete(display);
+      }
+    }
+    for (const display of [...this.notifiedFrameSize.keys()]) {
+      if (display !== activeDisplay) {
+        this.notifiedFrameSize.delete(display);
+      }
+    }
+    for (const display of [...this.canvases.keys()]) {
+      if (display !== activeDisplay) {
+        this.canvases.delete(display);
+      }
+    }
+    for (const display of [...this.contexts.keys()]) {
+      if (display !== activeDisplay) {
+        this.contexts.delete(display);
+      }
+    }
+    for (const display of [...this.softwareSourceCanvases.keys()]) {
+      if (display !== activeDisplay) {
+        this.softwareSourceCanvases.delete(display);
+      }
+    }
+    this.clearInactiveCodecState(activeDisplay);
+  }
+
+  private clearInactiveCodecState(activeDisplay: number): void {
+    const prefix = `${activeDisplay}:`;
+    for (const [key, decoder] of this.decoders.entries()) {
+      if (key.startsWith(prefix)) {
+        continue;
+      }
+      try {
+        decoder.close();
+      } catch {
+        // ignore
+      }
+      this.decoders.delete(key);
+      this.decoderBooting.delete(key);
+      this.pendingDecodeInputs.delete(key);
+      this.decoderNeedsKeyFrame.delete(key);
+      this.decoderLastPts.delete(key);
+      this.decoderBackpressureOverflowState.delete(key);
+      this.needRefreshLastSentAt.delete(key);
+    }
+    for (const [key, decoder] of this.softwareDecoders.entries()) {
+      if (key.startsWith(prefix)) {
+        continue;
+      }
+      void decoder.then((item) => item.close());
+      this.softwareDecoders.delete(key);
+      this.decoderNeedsKeyFrame.delete(key);
+      this.decoderLastPts.delete(key);
+      this.needRefreshLastSentAt.delete(key);
+    }
+    for (const key of [...this.decoderBooting.keys()]) {
+      if (!key.startsWith(prefix)) {
+        this.decoderBooting.delete(key);
+      }
+    }
+    for (const key of [...this.pendingDecodeInputs.keys()]) {
+      if (!key.startsWith(prefix)) {
+        this.pendingDecodeInputs.delete(key);
+      }
+    }
+    for (const key of [...this.decoderNeedsKeyFrame.keys()]) {
+      if (!key.startsWith(prefix)) {
+        this.decoderNeedsKeyFrame.delete(key);
+      }
+    }
+    for (const key of [...this.decoderLastPts.keys()]) {
+      if (!key.startsWith(prefix)) {
+        this.decoderLastPts.delete(key);
+      }
+    }
+    for (const key of [...this.decoderBackpressureOverflowState.keys()]) {
+      if (!key.startsWith(prefix)) {
+        this.decoderBackpressureOverflowState.delete(key);
+      }
+    }
+    for (const key of [...this.needRefreshLastSentAt.keys()]) {
+      if (!key.startsWith(prefix)) {
+        this.needRefreshLastSentAt.delete(key);
+      }
+    }
+  }
+
+  private requestRefresh(display: number, decoderKey: string): void {
+    if (!this.onNeedRefresh || !this.isActiveDisplay(display)) {
+      return;
+    }
+    const now = Date.now();
+    const last = this.needRefreshLastSentAt.get(decoderKey) ?? 0;
+    if (now - last < 900) {
+      return;
+    }
+    this.needRefreshLastSentAt.set(decoderKey, now);
+    this.onNeedRefresh(display);
+  }
+
+  private syncWorkerActiveDisplay(reset = false): void {
+    if (!this.worker || !this.workerReady || this.activeDisplay === null) {
+      return;
+    }
+    const message: WorkerSetActiveDisplayMessage = {
+      type: 'set_active_display',
+      display: this.activeDisplay,
+      reset
+    };
+    this.worker.postMessage(message);
+  }
+
   private logDecodeError(err: unknown): void {
     const now = Date.now();
     if (now - this.lastDecodeErrorLogMs > 3000) {
@@ -2036,7 +2332,7 @@ export class VideoPipeline {
 
 class SoftwareDecoder {
   private readonly ready: Promise<void>;
-  private queue = Promise.resolve();
+  private queue = Promise.resolve(true);
 
   constructor(
     private readonly display: number,
@@ -2060,13 +2356,13 @@ class SoftwareDecoder {
     this.module.close();
   }
 
-  async decode(input: DecodeInput): Promise<void> {
+  async decode(input: DecodeInput): Promise<boolean> {
     await this.ready;
     this.queue = this.queue.then(() => this.decodeFrame(input));
-    await this.queue;
+    return this.queue;
   }
 
-  private async decodeFrame(input: DecodeInput): Promise<void> {
+  private async decodeFrame(input: DecodeInput): Promise<boolean> {
     const ok = await new Promise<boolean>((resolve) => {
       this.module.processFrame(copyToArrayBuffer(input.data), (success) =>
         resolve(success)
@@ -2076,11 +2372,11 @@ class SoftwareDecoder {
       if (input.key) {
         this.logger.warn(`Software ${input.codec} decoder rejected a key frame`);
       }
-      return;
+      return false;
     }
     const frame = this.module.frameBuffer;
     if (!frame) {
-      return;
+      return false;
     }
     try {
       const format = frame.format;
@@ -2097,8 +2393,10 @@ class SoftwareDecoder {
         displayWidth,
         displayHeight
       );
+      return true;
     } catch (err) {
       this.logger.error('Software video decode failed', err);
+      return false;
     } finally {
       this.module.recycleFrame?.(frame);
     }

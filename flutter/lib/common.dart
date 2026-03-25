@@ -381,7 +381,7 @@ class MyTheme {
     appBarTheme: AppBarTheme(
       shadowColor: Colors.transparent,
     ),
-    dialogTheme: DialogThemeData(
+    dialogTheme: DialogTheme(
       elevation: 15,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18.0),
@@ -412,7 +412,7 @@ class MyTheme {
     cardColor: grayBg,
     hintColor: Color(0xFFAAAAAA),
     visualDensity: VisualDensity.adaptivePlatformDensity,
-    tabBarTheme: const TabBarThemeData(
+    tabBarTheme: const TabBarTheme(
       labelColor: Colors.black87,
     ),
     tooltipTheme: tooltipTheme(),
@@ -479,7 +479,7 @@ class MyTheme {
     appBarTheme: AppBarTheme(
       shadowColor: Colors.transparent,
     ),
-    dialogTheme: DialogThemeData(
+    dialogTheme: DialogTheme(
       elevation: 15,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18.0),
@@ -513,7 +513,7 @@ class MyTheme {
     ),
     cardColor: Color(0xFF24252B),
     visualDensity: VisualDensity.adaptivePlatformDensity,
-    tabBarTheme: const TabBarThemeData(
+    tabBarTheme: const TabBarTheme(
       labelColor: Colors.white70,
     ),
     tooltipTheme: tooltipTheme(),
@@ -3505,6 +3505,22 @@ Future<bool> setServerConfig(
   List<RxString>? errMsgs,
   ServerConfig config,
 ) async {
+  String? validateApiServer(String input) {
+    final uri = Uri.tryParse(input);
+    if (uri == null ||
+        !uri.hasScheme ||
+        !(uri.scheme == 'http' || uri.scheme == 'https')) {
+      return 'invalid_http';
+    }
+    if (uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasFragment ||
+        uri.query.isNotEmpty) {
+      return 'invalid server';
+    }
+    return null;
+  }
+
   String removeEndSlash(String input) {
     if (input.endsWith('/')) {
       return input.substring(0, input.length - 1);
@@ -3522,28 +3538,40 @@ Future<bool> setServerConfig(
     controllers[2].text = config.apiServer;
     controllers[3].text = config.key;
   }
+  if (errMsgs != null) {
+    for (final msg in errMsgs) {
+      msg.value = '';
+    }
+  }
   // id
-  if (config.idServer.isNotEmpty && errMsgs != null) {
-    errMsgs[0].value = translate(await bind.mainTestIfValidServer(
+  if (config.idServer.isNotEmpty) {
+    final idError = translate(await bind.mainTestIfValidServer(
         server: config.idServer, testWithProxy: true));
-    if (errMsgs[0].isNotEmpty) {
+    if (errMsgs != null) {
+      errMsgs[0].value = idError;
+    }
+    if (idError.isNotEmpty) {
       return false;
     }
   }
   // relay
-  if (config.relayServer.isNotEmpty && errMsgs != null) {
-    errMsgs[1].value = translate(await bind.mainTestIfValidServer(
+  if (config.relayServer.isNotEmpty) {
+    final relayError = translate(await bind.mainTestIfValidServer(
         server: config.relayServer, testWithProxy: true));
-    if (errMsgs[1].isNotEmpty) {
+    if (errMsgs != null) {
+      errMsgs[1].value = relayError;
+    }
+    if (relayError.isNotEmpty) {
       return false;
     }
   }
   // api
-  if (config.apiServer.isNotEmpty && errMsgs != null) {
-    if (!config.apiServer.startsWith('http://') &&
-        !config.apiServer.startsWith('https://')) {
-      errMsgs[2].value =
-          '${translate("API Server")}: ${translate("invalid_http")}';
+  if (config.apiServer.isNotEmpty) {
+    final apiError = validateApiServer(config.apiServer);
+    if (apiError != null) {
+      if (errMsgs != null) {
+        errMsgs[2].value = '${translate("API Server")}: ${translate(apiError)}';
+      }
       return false;
     }
   }

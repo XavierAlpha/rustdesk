@@ -74,6 +74,7 @@ export class WebRuntime {
   private protoPromise?: Promise<ProtoRoots>;
   private accountAuthNonce = 0;
   private accountAuthAbort?: AbortController;
+  private accountAuthPopup: Window | null = null;
   private connectStatusTimer?: number;
   private connectStatusDebounceTimer?: number;
   private cleanupHandlersBound = false;
@@ -259,6 +260,9 @@ export class WebRuntime {
         if (this.currentSession && typeof arg0 === 'string') {
           const payload = this.safeJson(arg0);
           this.applyLocalFlutterKeyOptions(payload);
+          payload.keyboard_mode =
+            this.getScopedOption('option:session', 'keyboard_mode') || 'map';
+          payload.kb_layout = this.getScopedOption('option:local', 'kb_layout');
           this.currentSession.flutterKeyEvent(payload);
         }
         return '';
@@ -2372,6 +2376,7 @@ export class WebRuntime {
     }
 
     this.cancelAccountAuth(false);
+    this.accountAuthPopup = this.openAccountAuthPopup();
     const nonce = ++this.accountAuthNonce;
     const controller = new AbortController();
     this.accountAuthAbort = controller;
@@ -2405,9 +2410,51 @@ export class WebRuntime {
       this.accountAuthAbort.abort();
       this.accountAuthAbort = undefined;
     }
+    this.closeAccountAuthPopup();
     if (clearResult) {
       this.store.set('account_auth_result', '');
     }
+  }
+
+  private openAccountAuthPopup(): Window | null {
+    try {
+      const popup = window.open('', '_blank');
+      if (!popup) {
+        return null;
+      }
+      try {
+        popup.opener = null;
+      } catch {}
+      return popup;
+    } catch {
+      return null;
+    }
+  }
+
+  private launchAccountAuthUrl(url: string): boolean {
+    if (!url) {
+      return false;
+    }
+    const popup = this.accountAuthPopup;
+    if (popup && !popup.closed) {
+      try {
+        popup.location.replace(url);
+        popup.focus();
+        return true;
+      } catch {}
+    }
+    return false;
+  }
+
+  private closeAccountAuthPopup(): void {
+    const popup = this.accountAuthPopup;
+    this.accountAuthPopup = null;
+    if (!popup || popup.closed) {
+      return;
+    }
+    try {
+      popup.close();
+    } catch {}
   }
 
   private async performAccountAuth(args: {
@@ -2422,6 +2469,7 @@ export class WebRuntime {
   }): Promise<void> {
     const { nonce, apiServer, op, remember, id, uuid, deviceInfo, signal } = args;
     let authUrl = '';
+    let urlLaunched = false;
     try {
       const authResponse = (await this.fetchJson(
         `${apiServer}/api/oidc/auth`,
@@ -2442,6 +2490,7 @@ export class WebRuntime {
         return;
       }
       if (authResponse.error) {
+        this.closeAccountAuthPopup();
         this.updateAccountAuthResult({
           state_msg: 'Requesting account auth',
           failed_msg: authResponse.error,
@@ -2451,6 +2500,7 @@ export class WebRuntime {
         return;
       }
       if (!authResponse.code || !authResponse.url) {
+        this.closeAccountAuthPopup();
         this.updateAccountAuthResult({
           state_msg: 'Requesting account auth',
           failed_msg: 'Invalid auth response',
@@ -2461,11 +2511,12 @@ export class WebRuntime {
       }
 
       authUrl = authResponse.url;
+      urlLaunched = this.launchAccountAuthUrl(authUrl);
       this.updateAccountAuthResult({
         state_msg: 'Waiting account auth',
         failed_msg: '',
         url: authUrl,
-        url_launched: false
+        url_launched: urlLaunched
       });
 
       const queryUrl = new URL(`${apiServer}/api/oidc/auth-query`);
@@ -2501,7 +2552,7 @@ export class WebRuntime {
               state_msg: 'Waiting account auth',
               failed_msg: errText,
               url: authUrl,
-              url_launched: false
+              url_launched: urlLaunched
             });
             return;
           }
@@ -2509,11 +2560,12 @@ export class WebRuntime {
           if (remember && queryResponse.type === 'access_token') {
             this.storeAuthToken(queryResponse);
           }
+          this.closeAccountAuthPopup();
           this.updateAccountAuthResult({
             state_msg: 'Login account auth',
             failed_msg: '',
             url: authUrl,
-            url_launched: false,
+            url_launched: urlLaunched,
             auth_body: queryResponse
           });
           return;
@@ -2527,12 +2579,15 @@ export class WebRuntime {
           state_msg: 'Waiting account auth',
           failed_msg: 'timeout',
           url: authUrl,
-          url_launched: false
+          url_launched: urlLaunched
         });
       }
     } catch (err) {
       if (!this.isAccountAuthActive(nonce)) {
         return;
+      }
+      if (!authUrl) {
+        this.closeAccountAuthPopup();
       }
       const message =
         err instanceof Error ? err.message : 'Failed to request auth';
@@ -2540,7 +2595,7 @@ export class WebRuntime {
         state_msg: 'Requesting account auth',
         failed_msg: message,
         url: authUrl,
-        url_launched: false
+        url_launched: urlLaunched
       });
     }
   }
@@ -3279,6 +3334,8 @@ export class WebRuntime {
         empty_favorite_tip: 'No favorite devices yet.',
         empty_lan_tip: 'No LAN devices discovered yet.',
         empty_address_book_tip: 'Address book is empty.',
+        input_source_1_tip: 'Input source 1',
+        input_source_2_tip: 'Input source 2',
         verify_rustdesk_password_tip: 'Verify Camellia password',
         privacy_mode_impl_mag_tip: 'Mode 1',
         privacy_mode_impl_virtual_display_tip: 'Mode 2',
@@ -3827,11 +3884,20 @@ export class WebRuntime {
     if (typeof arg0 !== 'string') {
       return;
     }
+    const payload = this.safeJson(arg0) as { displays?: unknown } | null;
+    const requestedDisplays = Array.isArray(payload?.displays)
+      ? payload.displays
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value) && value >= 0)
+      : [];
     const context = this.buildSessionContext();
     this.store.set('session_conn_status', 'connecting');
     this.setServiceStatus('connecting');
     try {
       await this.connectWithCandidates(context);
+      if (requestedDisplays.length > 0) {
+        this.currentSession.switchDisplay(requestedDisplays);
+      }
       this.recordRecentPeer(this.currentSession.getPeerId());
       this.store.set('session_conn_status', 'connected');
       this.setServiceStatus('connected');
