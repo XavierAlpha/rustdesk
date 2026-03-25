@@ -266,6 +266,10 @@ class PlatformFFI {
 
   void setRgbaCallback(void Function(int, Uint8List, int, int) fun) async {}
 
+  void setVideoFrameCallback(void Function(int, int, int) fun) {}
+
+  void clearVideoFrameCallback() {}
+
   void startDesktopWebListener() {}
 
   void stopDesktopWebListener() {}

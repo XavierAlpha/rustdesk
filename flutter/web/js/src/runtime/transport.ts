@@ -187,7 +187,9 @@ export class WebSocketTransport {
     }
     try {
       const payload = this.cipher ? this.cipher.encrypt(data) : data;
-      socket.send(payload);
+      // TypeScript 6 narrows WebSocket.send() to ArrayBuffer-backed views.
+      // Copy to a fresh Uint8Array so the backing buffer is always ArrayBuffer.
+      socket.send(payload.slice());
       return true;
     } catch (err) {
       this.state = 'error';

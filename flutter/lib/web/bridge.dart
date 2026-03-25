@@ -117,7 +117,14 @@ class RustdeskImpl {
       required String id,
       required Int32List displays,
       dynamic hint}) {
-    throw UnimplementedError("sessionStartWithDisplays");
+    js.context.callMethod('setByName', [
+      'session_start',
+      jsonEncode({
+        'id': id,
+        'displays': displays.toList(growable: false),
+      })
+    ]);
+    return Stream.empty();
   }
 
   Future<bool?> sessionGetRemember(
@@ -980,11 +987,7 @@ class RustdeskImpl {
   String mainGetInputSource({dynamic hint}) {
     final inputSource =
         js.context.callMethod('getByName', ['option:local', 'input-source']);
-    // // js grab mode
-    // export const CONFIG_INPUT_SOURCE_1 = "Input source 1";
-    // // flutter grab mode
-    // export const CONFIG_INPUT_SOURCE_2 = "Input source 2";
-    return inputSource != '' ? inputSource : 'Input source 1';
+    return inputSource == 'Input source 2' ? inputSource : 'Input source 1';
   }
 
   Future<void> mainSetInputSource(
@@ -1793,8 +1796,8 @@ class RustdeskImpl {
 
   String mainSupportedInputSource({dynamic hint}) {
     return jsonEncode([
-      ['Input source 1', 'System keyboard input (recommended)'],
-      ['Input source 2', 'Flutter keyboard input']
+      ['Input source 1', 'input_source_1_tip'],
+      ['Input source 2', 'input_source_2_tip'],
     ]);
   }
 

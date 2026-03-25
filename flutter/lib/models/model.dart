@@ -1884,7 +1884,19 @@ class ImageModel with ChangeNotifier {
   bool _webDecodingRgba = false;
   int _webRgbaMismatchLogCount = 0;
   final List<_WebRgbaFrame> _webRgbaList = List.empty(growable: true);
+
+  bool _shouldRenderWebDisplay(int display) {
+    final currentDisplay = parent.target?.ffiModel.pi.currentDisplay;
+    if (currentDisplay == null || currentDisplay == kAllDisplayValue) {
+      return true;
+    }
+    return currentDisplay == display;
+  }
+
   webOnRgba(int display, Uint8List rgba, int width, int height) async {
+    if (!_shouldRenderWebDisplay(display)) {
+      return;
+    }
     // deep copy needed, otherwise "Cannot perform Construct on a detached ArrayBuffer"
     _webRgbaList.add(_WebRgbaFrame(
       display: display,
@@ -1928,6 +1940,9 @@ class ImageModel with ChangeNotifier {
     int? frameWidth,
     int? frameHeight,
   }) async {
+    if (!_shouldRenderWebDisplay(display)) {
+      return;
+    }
     final pid = parent.target?.id;
     var width = frameWidth ?? 0;
     var height = frameHeight ?? 0;
@@ -1956,7 +1971,13 @@ class ImageModel with ChangeNotifier {
           ? ui.PixelFormat.rgba8888
           : ui.PixelFormat.bgra8888,
     );
-    if (parent.target?.id != pid) return;
+    if (image == null) {
+      return;
+    }
+    if (parent.target?.id != pid || !_shouldRenderWebDisplay(display)) {
+      image.dispose();
+      return;
+    }
     await update(image);
   }
 
