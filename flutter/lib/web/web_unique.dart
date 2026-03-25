@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:js' as js;
+import 'package:flutter_hbb/web/js_interop_bridge.dart' as js;
 
 Future<void> webselectFiles({required bool is_folder}) async {
   return Future(
@@ -25,6 +25,16 @@ Future<void> webSendLocalFiles(
           'file_num': fileNum,
           'include_hidden': includeHidden,
           'is_remote': isRemote,
+        })
+      ]));
+}
+
+Future<void> webRegisterDroppedFiles(
+    {required List<Map<String, dynamic>> files}) {
+  return Future(() => js.context.callMethod('setByName', [
+        'register_drop_files',
+        jsonEncode({
+          'files': files,
         })
       ]));
 }

@@ -1,8 +1,7 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
 
-import 'package:extended_text/extended_text.dart';
+import 'package:flutter_hbb/common/widgets/extended_text_compat.dart';
 import 'package:flutter_hbb/common/widgets/dialog.dart';
 import 'package:flutter_hbb/desktop/widgets/dragable_divider.dart';
 import 'package:percent_indicator/percent_indicator.dart';
@@ -19,6 +18,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:flutter_hbb/web/dummy.dart'
     if (dart.library.html) 'package:flutter_hbb/web/web_unique.dart';
+import 'file_manager_drop_stub.dart'
+    if (dart.library.io) 'file_manager_drop_native.dart';
 
 import '../../consts.dart';
 import '../../desktop/widgets/material_mod_popup_menu.dart' as mod_menu;
@@ -367,21 +368,29 @@ class _FileManagerPageState extends State<FileManagerPage>
     );
   }
 
-  void handleDragDone(DropDoneDetails details, bool isLocal) {
+  Future<void> handleDragDone(DropDoneDetails details, bool isLocal) async {
     if (isLocal) {
       // ignore local
       return;
     }
-    final items = SelectedItems(isLocal: false);
-    for (var file in details.files) {
-      final f = File(file.path);
-      items.add(Entry()
-        ..path = file.path
-        ..name = file.name
-        ..size = FileSystemEntity.isDirectorySync(f.path) ? 0 : f.lengthSync());
+    if (isWeb) {
+      final files = <Map<String, dynamic>>[];
+      for (final file in details.files) {
+        files.add({
+          'uri': file.path,
+          'name': file.name,
+          'mime_type': file.mimeType ?? '',
+          'last_modified': (await file.lastModified()).millisecondsSinceEpoch,
+        });
+      }
+      if (files.isNotEmpty) {
+        await webRegisterDroppedFiles(files: files);
+      }
+      return;
     }
+    final items = await buildDroppedItems(details.files, isLocal: false);
     final otherSideData = model.localController.directoryData();
-    model.remoteController.sendFiles(items, otherSideData);
+    await model.remoteController.sendFiles(items, otherSideData);
   }
 }
 

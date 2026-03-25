@@ -305,6 +305,7 @@ class FileModel {
       emptyDirs = jsonDecode(obj['dirs'] as String);
     } catch (e) {
       debugPrint("Failed to decode sendEmptyDirs: $e");
+      return;
     }
     final otherSideData = remoteController.directoryData();
     final toPath = otherSideData.directory.path;

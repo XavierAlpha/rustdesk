@@ -7,7 +7,6 @@ import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/widgets/dialog.dart';
 import 'package:flutter_hbb/models/model.dart';
 import 'package:flutter_hbb/models/terminal_model.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:xterm/xterm.dart';
 import '../../desktop/pages/terminal_connection_manager.dart';
 import '../../consts.dart';
@@ -42,15 +41,24 @@ class _TerminalPageState extends State<TerminalPage>
   final GlobalKey _keyboardKey = GlobalKey();
   double _keyboardHeight = 0;
   late bool _showTerminalExtraKeys;
+  bool _everTerminalOpened = false;
+  bool _closingByTerminalExit = false;
   // For iOS edge swipe gesture
   double _swipeStartX = 0;
   double _swipeCurrentX = 0;
-
-  // For web only.
-  // 'monospace' does not work on web, use Google Fonts, `??` is only for null safety.
-  final String _robotoMonoFontFamily = isWeb
-      ? (GoogleFonts.robotoMono().fontFamily ?? 'monospace')
-      : 'monospace';
+  static const _webMonoFallback = <String>[
+    'Consolas',
+    'monospace',
+    'Menlo',
+    'Monaco',
+    'Liberation Mono',
+    'Courier New',
+    'Noto Sans Mono CJK SC',
+    'Noto Sans Mono CJK TC',
+    'Noto Sans Mono CJK KR',
+    'Noto Sans Mono CJK JP',
+    'Noto Sans Mono CJK HK',
+  ];
 
   SessionID get sessionId => _ffi.sessionId;
 
@@ -79,6 +87,7 @@ class _TerminalPageState extends State<TerminalPage>
     _terminalModel.onResizeExternal = (w, h, pw, ph) {
       _cellHeight = ph * 1.0;
     };
+    _terminalModel.addListener(_onTerminalStateChanged);
 
     // Register this terminal model with FFI for event routing
     _ffi.registerTerminalModel(widget.terminalId, _terminalModel);
@@ -102,12 +111,34 @@ class _TerminalPageState extends State<TerminalPage>
   @override
   void dispose() {
     // Unregister terminal model from FFI
+    _terminalModel.removeListener(_onTerminalStateChanged);
     _ffi.unregisterTerminalModel(widget.terminalId);
     _terminalModel.dispose();
     _keyboardDebounce?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
     TerminalConnectionManager.releaseConnection(widget.id);
+  }
+
+  void _onTerminalStateChanged() {
+    final opened = _terminalModel.terminalOpened;
+    if (opened) {
+      _everTerminalOpened = true;
+    }
+    if (isWebDesktop &&
+        _everTerminalOpened &&
+        !opened &&
+        !_closingByTerminalExit) {
+      _closingByTerminalExit = true;
+      Future.microtask(() {
+        if (!mounted) return;
+        closeConnection(id: widget.id);
+      });
+      return;
+    }
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -125,20 +156,26 @@ class _TerminalPageState extends State<TerminalPage>
 
   void _updateKeyboardHeight() {
     if (_keyboardKey.currentContext != null) {
-      final renderBox = _keyboardKey.currentContext!.findRenderObject() as RenderBox;
+      final renderBox =
+          _keyboardKey.currentContext!.findRenderObject() as RenderBox;
       _keyboardHeight = renderBox.size.height;
     }
   }
 
   EdgeInsets _calculatePadding(double heightPx) {
     if (_cellHeight == null) {
-      return const EdgeInsets.symmetric(horizontal: 5.0, vertical: 2.0);
+      return const EdgeInsets.symmetric(horizontal: 3.0, vertical: 2.0);
     }
     final realHeight = heightPx - _sysKeyboardHeight - _keyboardHeight;
     final rows = (realHeight / _cellHeight!).floor();
     final extraSpace = realHeight - rows * _cellHeight!;
     final topBottom = max(0.0, extraSpace / 2.0);
-    return EdgeInsets.only(left: 5.0, right: 5.0, top: topBottom, bottom: topBottom + _sysKeyboardHeight + _keyboardHeight);
+    return EdgeInsets.only(
+      left: 3.0,
+      right: 3.0,
+      top: topBottom,
+      bottom: topBottom + _sysKeyboardHeight + _keyboardHeight,
+    );
   }
 
   @override
@@ -155,7 +192,7 @@ class _TerminalPageState extends State<TerminalPage>
 
   Widget buildBody() {
     final scaffold = Scaffold(
-      resizeToAvoidBottomInset: false, // Disable automatic layout adjustment; manually control UI updates to prevent flickering when the keyboard shows/hides
+      resizeToAvoidBottomInset: false,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(
         children: [
@@ -169,8 +206,11 @@ class _TerminalPageState extends State<TerminalPage>
                     _terminalModel.terminal,
                     controller: _terminalModel.terminalController,
                     autofocus: true,
+                    theme: isWeb
+                        ? TerminalThemes.whiteOnBlack
+                        : TerminalThemes.defaultTheme,
                     textStyle: _getTerminalStyle(),
-                    backgroundOpacity: 0.7,
+                    backgroundOpacity: 1.0,
                     // The following comment is from xterm.dart source code:
                     // Workaround to detect delete key for platforms and IMEs that do not
                     // emit a hardware delete event. Preferred on mobile platforms. [false] by
@@ -180,9 +220,11 @@ class _TerminalPageState extends State<TerminalPage>
                     deleteDetection: isIOS,
                     padding: _calculatePadding(heightPx),
                     onSecondaryTapDown: (details, offset) async {
-                      final selection = _terminalModel.terminalController.selection;
+                      final selection =
+                          _terminalModel.terminalController.selection;
                       if (selection != null) {
-                        final text = _terminalModel.terminal.buffer.getText(selection);
+                        final text =
+                            _terminalModel.terminal.buffer.getText(selection);
                         _terminalModel.terminalController.clearSelection();
                         await Clipboard.setData(ClipboardData(text: text));
                       } else {
@@ -198,6 +240,7 @@ class _TerminalPageState extends State<TerminalPage>
               ),
             ),
           ),
+          if (isWebDesktop) _buildWebCloseButton(),
           if (_showTerminalExtraKeys) _buildFloatingKeyboard(),
           // iOS-style circular close button in top-right corner
           if (isIOS) _buildCloseButton(),
@@ -257,6 +300,29 @@ class _TerminalPageState extends State<TerminalPage>
     }
 
     return scaffold;
+  }
+
+  Widget _buildWebCloseButton() {
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.topRight,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 8, right: 8),
+          child: Material(
+            color: Colors.black.withOpacity(0.35),
+            borderRadius: BorderRadius.circular(10),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => clientClose(sessionId, _ffi),
+              child: const Padding(
+                padding: EdgeInsets.all(8),
+                child: Icon(Icons.close_rounded, size: 18, color: Colors.white),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildCloseButton() {
@@ -376,7 +442,7 @@ class _TerminalPageState extends State<TerminalPage>
   }
 
   void _sendKeyToTerminal(String key) {
-    String? send;
+    late String send;
 
     switch (key) {
       case 'Esc':
@@ -420,18 +486,18 @@ class _TerminalPageState extends State<TerminalPage>
         break;
     }
 
-    if (send != null) {
-      _terminalModel.sendVirtualKey(send);
-    }
+    _terminalModel.sendVirtualKey(send);
   }
 
   // https://github.com/TerminalStudio/xterm.dart/issues/42#issuecomment-877495472
   // https://github.com/TerminalStudio/xterm.dart/issues/198#issuecomment-2526548458
   TerminalStyle _getTerminalStyle() {
     return isWeb
-        ? TerminalStyle(
-            fontFamily: _robotoMonoFontFamily,
-            fontSize: 14,
+        ? const TerminalStyle(
+            fontFamily: 'Consolas',
+            fontFamilyFallback: _webMonoFallback,
+            fontSize: 13,
+            height: 1.15,
           )
         : const TerminalStyle();
   }

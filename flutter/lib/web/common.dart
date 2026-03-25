@@ -1,5 +1,4 @@
-import 'dart:js' as js;
-import 'dart:html' as html;
+import 'package:flutter_hbb/web/js_interop_bridge.dart' as js;
 // cycle imports, maybe we can improve this
 import 'package:flutter_hbb/consts.dart';
 

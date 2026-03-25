@@ -174,7 +174,7 @@ target/release/camellia
 - **[src/rendezvous_mediator.rs](https://github.com/CamelliaCorp/camellia/tree/master/src/rendezvous_mediator.rs)**: связь с [сервером RustDesk](https://github.com/CamelliaCorp/camellia), ожидает удаленного прямого (через TCP hole punching) или ретранслируемого соединения
 - **[src/platform](https://github.com/CamelliaCorp/camellia/tree/master/src/platform)**: специфичный для платформы код
 - **[flutter](https://github.com/CamelliaCorp/camellia/tree/master/flutter)**: код Flutter для ПК-версии и мобильных устройств
-- **[flutter/web/js](https://github.com/CamelliaCorp/camellia/tree/master/flutter/web/v1/js)**: JavaScript для Web-клиента Flutter
+- **[flutter/web/js](https://github.com/CamelliaCorp/camellia/tree/master/flutter/web/js)**: JavaScript для Web-клиента Flutter
 
 ## Скриншоты
 
