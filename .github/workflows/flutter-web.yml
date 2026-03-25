@@ -1,0 +1,145 @@
+name: Flutter Web Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "App version written into the web build, for example 1.2.3"
+        required: true
+        type: string
+      upload-artifact:
+        description: "Upload the built web package as a workflow artifact"
+        required: true
+        default: true
+        type: boolean
+      upload-release:
+        description: "Also upload the built web package to the selected GitHub release tag"
+        required: true
+        default: false
+        type: boolean
+      upload-tag:
+        description: "GitHub release tag used for the uploaded web package, for example nightly or v1.2.3"
+        required: true
+        default: "nightly"
+        type: string
+      rs-pub-key:
+        description: "Optional RS_PUB_KEY override. Leave blank to use secrets.RS_PUB_KEY"
+        required: false
+        default: ""
+        type: string
+      rendezvous-servers:
+        description: "Optional RENDEZVOUS_SERVERS override, for example host:21116 or host1:21116,host2:21116"
+        required: false
+        default: ""
+        type: string
+      api-server:
+        description: "Optional API_SERVER override, for example https://api.example.com"
+        required: false
+        default: ""
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+      upload-artifact:
+        type: boolean
+        default: true
+      upload-release:
+        type: boolean
+        default: false
+      upload-tag:
+        type: string
+        default: "nightly"
+      rs-pub-key:
+        type: string
+        default: ""
+      rendezvous-servers:
+        type: string
+        default: ""
+      api-server:
+        type: string
+        default: ""
+
+env:
+  VERSION: "${{ inputs.version }}"
+  UPLOAD_ARTIFACT: "${{ inputs.upload-artifact }}"
+  UPLOAD_RELEASE: "${{ inputs.upload-release }}"
+  TAG_NAME: "${{ inputs.upload-tag }}"
+  RELEASE_NAME: "CamelliaWEBR"
+  RS_PUB_KEY: "${{ inputs.rs-pub-key != '' && inputs.rs-pub-key || secrets.RS_PUB_KEY }}"
+  RENDEZVOUS_SERVERS: "${{ inputs.rendezvous-servers != '' && inputs.rendezvous-servers || secrets.RENDEZVOUS_SERVERS }}"
+  API_SERVER: "${{ inputs.api-server != '' && inputs.api-server || secrets.API_SERVER }}"
+
+jobs:
+  build-rustdesk-web:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Sync version
+        shell: bash
+        run: |
+          sed -i -e "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
+          sed -i -e "s/^version:.*/version: ${{ env.VERSION }}+${{ github.run_number }}/" flutter/pubspec.yaml
+          echo "APP_VERSION=${{ env.VERSION }}+${{ github.run_number }}" >> "$GITHUB_ENV"
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: npm
+          cache-dependency-path: flutter/web/js/package-lock.json
+
+      - name: Install flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+
+      - name: Build web
+        shell: bash
+        env:
+          APP_VERSION: "${{ env.APP_VERSION }}"
+          RS_PUB_KEY: "${{ env.RS_PUB_KEY }}"
+          RENDEZVOUS_SERVERS: "${{ env.RENDEZVOUS_SERVERS }}"
+          API_SERVER: "${{ env.API_SERVER }}"
+        run: |
+          chmod +x flutter/web/tools/build_web.sh
+          ./flutter/web/tools/build_web.sh --mode release
+
+      - name: Pack web artifact
+        shell: bash
+        run: |
+          pushd flutter/build
+          if [[ -f ../web/README.md ]]; then
+            cp ../web/README.md web
+          fi
+          dir_name="camellia-${{ env.VERSION }}-${{ env.RELEASE_NAME }}"
+          rm -rf "${dir_name}" "${dir_name}.tar.gz"
+          mv web "${dir_name}"
+          tar czf "${dir_name}".tar.gz "${dir_name}"
+          sha256sum "${dir_name}".tar.gz
+          popd
+
+      - name: Upload web workflow artifact
+        if: env.UPLOAD_ARTIFACT == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: camellia-${{ env.VERSION }}-${{ env.RELEASE_NAME }}
+          path: flutter/build/camellia-${{ env.VERSION }}-${{ env.RELEASE_NAME }}.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload web release asset
+        if: env.UPLOAD_RELEASE == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          prerelease: true
+          tag_name: ${{ env.TAG_NAME }}
+          files: |
+            flutter/build/camellia-${{ env.VERSION }}-${{ env.RELEASE_NAME }}.tar.gz
