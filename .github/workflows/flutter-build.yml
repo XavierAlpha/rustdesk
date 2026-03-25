@@ -1,5 +1,4 @@
 name: Build the flutter version of the RustDesk
-
 on:
   workflow_call:
     inputs:
@@ -12,6 +11,15 @@ on:
       version:
         type: string
         required: true
+      rs-pub-key:
+        type: string
+        default: ""
+      rendezvous-servers:
+        type: string
+        default: ""
+      api-server:
+        type: string
+        default: ""
 
 # NOTE: F-Droid builder script 'flutter/build_fdroid.sh' reads environment
 # variables from this workflow!
@@ -50,9 +58,9 @@ env:
   UPLOAD_ARTIFACT: "${{ inputs.upload-artifact }}"
   SIGN_BASE_URL: "${{ secrets.SIGN_BASE_URL }}-2"
   # To make a custom build with your own servers set the below secret values
-  RS_PUB_KEY: "${{ secrets.RS_PUB_KEY }}"
-  RENDEZVOUS_SERVERS: "${{ secrets.RENDEZVOUS_SERVERS }}"
-  API_SERVER: "${{ secrets.API_SERVER }}"
+  RS_PUB_KEY: "${{ inputs.rs-pub-key != '' && inputs.rs-pub-key || secrets.RS_PUB_KEY }}"
+  RENDEZVOUS_SERVERS: "${{ inputs.rendezvous-servers != '' && inputs.rendezvous-servers || secrets.RENDEZVOUS_SERVERS }}"
+  API_SERVER: "${{ inputs.api-server != '' && inputs.api-server || secrets.API_SERVER }}"
 
 jobs:
   generate-bridge:
@@ -2155,65 +2163,3 @@ jobs:
           tag_name: ${{ env.TAG_NAME }}
           files: |
             flatpak/camellia-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.flatpak
-
-  build-rustdesk-web:
-    name: build-rustdesk-web
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-    env:
-      RELEASE_NAME: web-basic
-    steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Prepare env
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y wget npm
-
-      - name: Install flutter
-        uses: subosito/flutter-action@v2.12.0 #https://github.com/subosito/flutter-action/issues/277
-        with:
-          channel: "stable"
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-
-      - name: Patch flutter
-        shell: bash
-        run: |
-          cd $(dirname $(dirname $(which flutter)))
-          [[ "3.24.5" == ${{env.FLUTTER_VERSION}} ]] && git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
-
-      - name: Generate launcher icons
-        shell: bash
-        run: |
-          pushd flutter
-          flutter pub get
-          dart run flutter_launcher_icons
-          popd
-      # https://rustdesk.com/docs/en/dev/build/web/
-      - name: Build web
-        shell: bash
-        run: |
-          chmod +x flutter/web/tools/build_web.sh
-          ./flutter/web/tools/build_web.sh --mode release
-          pushd flutter
-          cd build
-          cp ../web/README.md web
-          dir_name="camellia-${{ env.VERSION }}-${{ env.RELEASE_NAME }}"
-          mv web "${dir_name}" && tar czf "${dir_name}".tar.gz "${dir_name}"
-          sha256sum "${dir_name}".tar.gz
-          popd
-
-      - name: Publish web
-        if: env.UPLOAD_ARTIFACT == 'true'
-        uses: softprops/action-gh-release@v1
-        with:
-          prerelease: true
-          tag_name: ${{ env.TAG_NAME }}
-          files: |
-            flutter/build/camellia-${{ env.VERSION }}-${{ env.RELEASE_NAME }}.tar.gz
