@@ -2181,7 +2181,7 @@ pub fn read_custom_client(config: &str) {
         log::error!("Failed to decode custom client config");
         return;
     };
-    const KEY: &str = "qijLYRgPK3-ny33N3VVVeknNVzG6-rSkRVXnehfT9oM";
+    const KEY: &str = "";
     let Some(pk) = get_rs_pk(KEY) else {
         log::error!("Failed to parse public key of custom client");
         return;
@@ -2269,6 +2269,9 @@ pub fn get_hwid() -> Bytes {
 
 #[inline]
 pub fn get_builtin_option(key: &str) -> String {
+    if key == keys::OPTION_HIDE_POWERED_BY_ME {
+        return "Y".to_owned();
+    }
     config::BUILTIN_SETTINGS
         .read()
         .unwrap()
