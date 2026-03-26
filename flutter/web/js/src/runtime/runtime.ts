@@ -1864,9 +1864,13 @@ export class WebRuntime {
       this.emitJobError(payload.id, 'one-way-file-transfer-tip');
       return;
     }
+    const path = String(payload.path ?? '');
+    if (!path) {
+      return;
+    }
     this.currentSession.requestDownload(
       Number(payload.id ?? 0),
-      String(payload.path ?? ''),
+      path,
       Boolean(payload.include_hidden),
       Number(payload.file_num ?? 0)
     );

@@ -1282,11 +1282,10 @@ async fn start_read_job(
             }
 
             // Build FileDirectory from the job's file list and serialize
-            let files = job.files().to_owned();
             let mut dir = FileDirectory::new();
             dir.id = id;
-            dir.path = path_clone.clone();
-            dir.entries = files.clone().into();
+            dir.path = path_clone;
+            dir.entries = job.files().to_owned().into();
 
             let dir_bytes = match dir.write_to_bytes() {
                 Ok(bytes) => bytes,
@@ -1304,6 +1303,10 @@ async fn start_read_job(
                 }
             };
 
+            // Attach connection id so CM can route read blocks back correctly
+            job.conn_id = conn_id;
+            read_jobs.push(job);
+
             if let Err(e) = tx.send(Data::ReadJobInitResult {
                 id,
                 file_num,
@@ -1313,10 +1316,6 @@ async fn start_read_job(
             }) {
                 log::error!("error sending ReadJobInitResult via IPC: {}", e);
             }
-
-            // Attach connection id so CM can route read blocks back correctly
-            job.conn_id = conn_id;
-            read_jobs.push(job);
         }
         Ok(Err(e)) => {
             if let Err(e) = tx.send(Data::ReadJobInitResult {

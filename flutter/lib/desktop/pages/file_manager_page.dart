@@ -276,7 +276,10 @@ class _FileManagerPageState extends State<FileManagerPage>
                               ),
                               Offstage(
                                 offstage: item.type != JobType.transfer ||
-                                    item.state != JobState.inProgress,
+                                    item.effectiveTotalSize <= 0 ||
+                                    (item.state != JobState.inProgress &&
+                                        item.state != JobState.done &&
+                                        item.state != JobState.paused),
                                 child: LinearPercentIndicator(
                                   animateFromLastPercent: true,
                                   center: Text(item.percentText),
@@ -1195,19 +1198,28 @@ class _FileManagerViewState extends State<FileManagerView> {
                                             ? Image(
                                                     image: iconHardDrive,
                                                     fit: BoxFit.scaleDown,
-                                                    color: Theme.of(context)
-                                                        .iconTheme
-                                                        .color
-                                                        ?.withOpacity(0.7))
+                                                    color: selectedItems.items
+                                                            .contains(entry)
+                                                        ? Colors.white
+                                                        : Theme.of(context)
+                                                            .iconTheme
+                                                            .color
+                                                            ?.withOpacity(0.7))
                                                 .paddingAll(4)
                                             : SvgPicture.asset(
                                                 entry.isFile
                                                     ? "assets/file.svg"
-                                                    : "assets/folder.svg",
+                                                    : "assets/folder_new.svg",
                                                 colorFilter: svgColor(
-                                                    Theme.of(context)
-                                                        .tabBarTheme
-                                                        .labelColor),
+                                                  selectedItems.items
+                                                          .contains(entry)
+                                                      ? Colors.white
+                                                      : entry.isFile
+                                                          ? Theme.of(context)
+                                                              .tabBarTheme
+                                                              .labelColor
+                                                          : MyTheme.accent,
+                                                ),
                                               ),
                                         Expanded(
                                             child: Text(entry.name.nonBreaking,
