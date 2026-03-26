@@ -107,6 +107,7 @@ type DownloadJob = {
   lastProgressTime: number;
   lastProgressBytes: number;
   cancelled: boolean;
+  confirmRetryTimer?: number;
 };
 
 enum SupportedDecodingPreferCodec {
@@ -254,6 +255,36 @@ export class WebSession {
       }
     );
     this.transport.onClose((event) => this.handleTransportClose(event));
+  }
+
+  private clearDownloadConfirmRetry(job?: DownloadJob): void {
+    if (!job) {
+      return;
+    }
+    if (job.confirmRetryTimer !== undefined) {
+      window.clearTimeout(job.confirmRetryTimer);
+      job.confirmRetryTimer = undefined;
+    }
+  }
+
+  private scheduleDownloadConfirmRetry(job: DownloadJob, fileNum: number): void {
+    if (job.cancelled || job.currentFileNum === fileNum) {
+      return;
+    }
+    this.clearDownloadConfirmRetry(job);
+    const tick = () => {
+      if (
+        job.cancelled ||
+        job.currentFileNum === fileNum ||
+        !this.downloadJobs.has(job.id)
+      ) {
+        this.clearDownloadConfirmRetry(job);
+        return;
+      }
+      this.sendFileSendConfirm(job.id, fileNum, 0, false);
+      job.confirmRetryTimer = window.setTimeout(tick, 600);
+    };
+    job.confirmRetryTimer = window.setTimeout(tick, 600);
   }
 
   getState(): ConnectionState {
@@ -1250,6 +1281,7 @@ export class WebSession {
     const download = this.downloadJobs.get(id);
     if (download) {
       download.cancelled = true;
+      this.clearDownloadConfirmRetry(download);
       this.downloadJobs.delete(id);
     }
     this.sendMessage({
@@ -1906,19 +1938,13 @@ export class WebSession {
     if (response.dir) {
       const dir = response.dir as any;
       const entries = Array.isArray(dir.entries)
-        ? dir.entries.map((entry: any) => ({
-            entry_type: Number(entry.entryType ?? 4),
-            name: String(entry.name ?? ''),
-            is_hidden: Boolean(entry.isHidden),
-            size: Number(entry.size ?? 0),
-            modified_time: Number(entry.modifiedTime ?? 0)
-          }))
+        ? dir.entries.map((entry: any) => normalizeRemoteFileEntry(entry))
         : [];
       const jobId = Number(dir.id ?? 0);
       if (jobId > 0 && this.downloadJobs.has(jobId)) {
         const job = this.downloadJobs.get(jobId) as DownloadJob;
         job.files = entries.map((entry: any) => ({
-          entryType: Number(entry.entry_type ?? 4),
+          entryType: normalizeFileEntryType(entry.entry_type),
           name: String(entry.name ?? ''),
           size: Number(entry.size ?? 0),
           modifiedTime: Number(entry.modified_time ?? 0),
@@ -1933,6 +1959,10 @@ export class WebSession {
             total_size: job.totalSize
           })
         });
+        if (job.files.length > 0 && job.currentFileNum < 0) {
+          this.sendFileSendConfirm(jobId, 0, 0, false);
+          this.scheduleDownloadConfirmRetry(job, 0);
+        }
       }
       const payload = {
         id: jobId,
@@ -1953,13 +1983,7 @@ export class WebSession {
             id: Number(dir.id ?? 0),
             path: String(dir.path ?? ''),
             entries: Array.isArray(dir.entries)
-              ? dir.entries.map((entry: any) => ({
-                  entry_type: Number(entry.entryType ?? 4),
-                  name: String(entry.name ?? ''),
-                  is_hidden: Boolean(entry.isHidden),
-                  size: Number(entry.size ?? 0),
-                  modified_time: Number(entry.modifiedTime ?? 0)
-                }))
+              ? dir.entries.map((entry: any) => normalizeRemoteFileEntry(entry))
               : []
           }))
         : [];
@@ -1991,6 +2015,7 @@ export class WebSession {
         const download = this.downloadJobs.get(id);
         if (download) {
           download.cancelled = true;
+          this.clearDownloadConfirmRetry(download);
           this.downloadJobs.delete(id);
         }
       }
@@ -2026,6 +2051,7 @@ export class WebSession {
     }
     if (this.downloadJobs.has(id)) {
       this.sendFileSendConfirm(id, fileNum, 0, false);
+      this.scheduleDownloadConfirmRetry(this.downloadJobs.get(id) as DownloadJob, fileNum);
     }
   }
 
@@ -2036,15 +2062,26 @@ export class WebSession {
       return;
     }
     const fileNum = Number(block.fileNum ?? 0);
+    if (job.currentFileNum !== fileNum) {
+      if (job.currentFileNum >= 0) {
+        void this.finalizeDownloadFile(job, job.currentFileNum).catch((err) => {
+          this.logger.warn('Failed to finalize previous web download file', err);
+        });
+      }
+      job.chunks = [];
+      job.currentFileNum = fileNum;
+    }
+    this.clearDownloadConfirmRetry(job);
     const compressed = Boolean(block.compressed);
-    let data = block.data as Uint8Array | undefined;
-    if (!data) {
+    let data = normalizeDownloadChunk(block.data);
+    if (!data || data.byteLength === 0) {
       return;
     }
     if (compressed) {
       try {
-        data = fzstd.decompress(data);
+        data = normalizeDownloadChunk(fzstd.decompress(data));
       } catch (err) {
+        this.clearDownloadConfirmRetry(job);
         this.events.emit({
           name: 'job_error',
           id: String(id),
@@ -2054,16 +2091,20 @@ export class WebSession {
         this.downloadJobs.delete(id);
         return;
       }
-    }
-    if (job.currentFileNum !== fileNum) {
-      if (job.currentFileNum >= 0) {
-        this.finalizeDownloadFile(job, job.currentFileNum);
+      if (!data || data.byteLength === 0) {
+        this.clearDownloadConfirmRetry(job);
+        this.events.emit({
+          name: 'job_error',
+          id: String(id),
+          file_num: String(fileNum),
+          err: 'invalid_file_block'
+        });
+        this.downloadJobs.delete(id);
+        return;
       }
-      job.chunks = [];
-      job.currentFileNum = fileNum;
     }
     job.chunks.push(data);
-    job.receivedBytes += data.length;
+    job.receivedBytes += data.byteLength;
     this.emitJobProgress(id, fileNum, job.receivedBytes, job.startTime);
   }
 
@@ -2072,11 +2113,11 @@ export class WebSession {
     const fileNum = Number(done.fileNum ?? 0);
     const job = this.downloadJobs.get(id);
     if (job && !job.cancelled) {
-      if (job.currentFileNum !== fileNum) {
-        job.currentFileNum = fileNum;
-      }
-      this.finalizeDownloadFile(job, fileNum);
-      this.downloadJobs.delete(id);
+      this.clearDownloadConfirmRetry(job);
+      const completedFileNum =
+        job.currentFileNum >= 0 ? job.currentFileNum : Math.max(0, fileNum - 1);
+      void this.completeDownloadJob(id, fileNum, job, completedFileNum);
+      return;
     }
     this.events.emit({
       name: 'job_done',
@@ -2086,29 +2127,99 @@ export class WebSession {
     });
   }
 
-  private finalizeDownloadFile(job: DownloadJob, fileNum: number): void {
-    if (job.chunks.length === 0) {
+  private async completeDownloadJob(
+    id: number,
+    reportedFileNum: number,
+    job: DownloadJob,
+    completedFileNum: number
+  ): Promise<void> {
+    try {
+      await this.finalizeDownloadFile(job, completedFileNum);
+      const finalFinishedSize =
+        job.totalSize > 0 ? job.totalSize : Math.max(job.receivedBytes, 0);
+      if (finalFinishedSize > 0) {
+        job.totalSize = Math.max(job.totalSize, finalFinishedSize);
+        job.receivedBytes = Math.max(job.receivedBytes, finalFinishedSize);
+        this.events.emit({
+          name: 'job_progress',
+          id: String(id),
+          file_num: String(reportedFileNum),
+          finished_size: String(Math.floor(finalFinishedSize)),
+          speed: '0'
+        });
+      }
+      this.events.emit({
+        name: 'job_done',
+        id: String(id),
+        file_num: String(reportedFileNum),
+        speed: '0'
+      });
+    } catch (err) {
+      this.logger.warn('Failed to finalize web download', err);
+      this.events.emit({
+        name: 'job_error',
+        id: String(id),
+        file_num: String(reportedFileNum),
+        err: 'download_save_failed'
+      });
+    } finally {
+      this.clearDownloadConfirmRetry(job);
+      this.downloadJobs.delete(id);
+    }
+  }
+
+  private async finalizeDownloadFile(
+    job: DownloadJob,
+    fileNum: number
+  ): Promise<void> {
+    const entry = job.files[fileNum];
+    if (job.chunks.length === 0 && entry?.size !== 0) {
       return;
     }
-    const entry = job.files[fileNum];
-    const baseName = entry?.name || job.remotePath;
+    const normalizedRemotePath = job.remotePath.replace(/\\/g, '/');
+    const remoteBaseName =
+      normalizedRemotePath.substring(normalizedRemotePath.lastIndexOf('/') + 1) ||
+      job.remotePath;
+    const baseName =
+      (entry?.name && entry.name.trim().length > 0
+        ? entry.name
+        : remoteBaseName) || job.remotePath;
     const name = sanitizeFileName(baseName) || `download-${job.id}-${fileNum}`;
-    const parts: BlobPart[] = job.chunks.map((chunk) => {
-      const copy = new Uint8Array(chunk.length);
-      copy.set(chunk);
-      return copy;
-    });
+    const parts: BlobPart[] =
+      job.chunks.length > 0
+        ? job.chunks.map((chunk) => {
+            const copy = new Uint8Array(chunk.byteLength);
+            copy.set(chunk);
+            return copy;
+          })
+        : [new Uint8Array(0)];
     const blob = new Blob(parts, { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = name;
-    link.rel = 'noopener';
+    link.rel = 'noopener noreferrer';
     link.style.display = 'none';
     document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    window.requestAnimationFrame(() => {
+      try {
+        link.dispatchEvent(
+          new MouseEvent('click', {
+            view: window,
+            bubbles: true,
+            cancelable: true
+          })
+        );
+      } catch {
+        link.click();
+      }
+      window.setTimeout(() => {
+        if (link.parentNode) {
+          link.parentNode.removeChild(link);
+        }
+      }, 1000);
+    });
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
     job.chunks = [];
   }
 
@@ -3521,6 +3632,27 @@ function getVersionNumber(v: string): number {
   return n;
 }
 
+function normalizeDownloadChunk(data: unknown): Uint8Array | null {
+  if (data instanceof Uint8Array) {
+    return data;
+  }
+  if (data instanceof ArrayBuffer) {
+    return new Uint8Array(data);
+  }
+  if (ArrayBuffer.isView(data)) {
+    const view = data as ArrayBufferView;
+    const copy = new Uint8Array(view.byteLength);
+    copy.set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+    return copy;
+  }
+  if (Array.isArray(data)) {
+    return Uint8Array.from(
+      data.map((value) => Math.max(0, Math.min(255, Number(value) || 0)))
+    );
+  }
+  return null;
+}
+
 function sanitizeFileName(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -3530,4 +3662,18 @@ function sanitizeFileName(value: string): string {
   const safe = normalized.replace(/[\\/]/g, '_');
   const cleaned = safe.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_');
   return cleaned || 'download.bin';
+}
+
+function normalizeFileEntryType(value: unknown): number {
+  return Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : 0;
+}
+
+function normalizeRemoteFileEntry(entry: Record<string, unknown>): Record<string, unknown> {
+  return {
+    entry_type: normalizeFileEntryType(entry.entryType ?? entry.entry_type),
+    name: String(entry.name ?? ''),
+    is_hidden: Boolean(entry.isHidden ?? entry.is_hidden),
+    size: Number(entry.size ?? 0),
+    modified_time: Number(entry.modifiedTime ?? entry.modified_time ?? 0)
+  };
 }
