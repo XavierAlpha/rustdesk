@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common.dart';
@@ -973,14 +974,41 @@ class JobController {
 
   void tryUpdateJobProgress(Map<String, dynamic> evt) {
     try {
-      int id = int.parse(evt['id']);
+      final id = int.tryParse(evt['id']?.toString() ?? '');
+      if (id == null) {
+        return;
+      }
       // id = index + 1
       final jobIndex = getJob(id);
       if (jobIndex >= 0 && jobTable.length > jobIndex) {
         final job = jobTable[jobIndex];
-        job.fileNum = int.parse(evt['file_num']);
-        job.speed = double.parse(evt['speed']);
-        job.finishedSize = int.parse(evt['finished_size']);
+        final fileNum = int.tryParse(evt['file_num']?.toString() ?? '');
+        final speed = double.tryParse(evt['speed']?.toString() ?? '');
+        final finishedSize =
+            num.tryParse(evt['finished_size']?.toString() ?? '');
+        if (fileNum != null) {
+          job.fileNum = fileNum;
+          if (job.fileCount <= fileNum) {
+            job.fileCount = fileNum + 1;
+          }
+        }
+        if (speed != null && speed.isFinite) {
+          job.speed = speed;
+        }
+        if (finishedSize != null && finishedSize.isFinite) {
+          final transferred = math.max(0, finishedSize.round());
+          job.finishedSize = math.max(job.finishedSize, transferred);
+          job.lastTransferredSize =
+              math.max(job.lastTransferredSize, transferred);
+          if (job.totalSize > 0) {
+            job.finishedSize = math.min(job.finishedSize, job.totalSize);
+          }
+        }
+        if (job.type == JobType.transfer &&
+            job.state != JobState.done &&
+            job.state != JobState.error) {
+          job.state = JobState.inProgress;
+        }
         job.recvJobRes = true;
         jobTable.refresh();
       }
@@ -1019,11 +1047,24 @@ class JobController {
       }
     } else {
       try {
-        fileNum = int.tryParse(evt['file_num']);
-        speed = double.tryParse(evt['speed']);
+        fileNum = int.tryParse(evt['file_num']?.toString() ?? '');
+        speed = double.tryParse(evt['speed']?.toString() ?? '');
       } catch (_) {}
-      if (fileNum != null) job.fileNum = fileNum;
-      if (speed != null) job.speed = speed;
+      if (fileNum != null) {
+        job.fileNum = fileNum;
+        if (job.fileCount <= fileNum) {
+          job.fileCount = fileNum + 1;
+        }
+      }
+      if (speed != null && speed.isFinite) job.speed = speed;
+      final transferred =
+          math.max(job.finishedSize, job.lastTransferredSize);
+      if (job.totalSize > 0) {
+        job.finishedSize = job.totalSize;
+      } else if (transferred > 0) {
+        job.totalSize = transferred;
+        job.finishedSize = transferred;
+      }
       job.state = JobState.done;
     }
     jobTable.refresh();
@@ -1036,24 +1077,33 @@ class JobController {
 
   void jobError(Map<String, dynamic> evt) {
     final err = evt['err'].toString();
-    int jobIndex = getJob(int.parse(evt['id']));
+    final id = int.tryParse(evt['id']?.toString() ?? '');
+    if (id == null) {
+      return;
+    }
+    int jobIndex = getJob(id);
     if (jobIndex != -1) {
       final job = jobTable[jobIndex];
       job.state = JobState.error;
       job.err = err;
       job.recvJobRes = true;
       if (job.type == JobType.transfer) {
-        int? fileNum = int.tryParse(evt['file_num']);
+        int? fileNum = int.tryParse(evt['file_num']?.toString() ?? '');
         if (fileNum != null) job.fileNum = fileNum;
+        if (fileNum != null && job.fileCount <= fileNum) {
+          job.fileCount = fileNum + 1;
+        }
         if (err == "skipped") {
           job.state = JobState.done;
           job.finishedSize = job.totalSize;
+        } else if (err == "cancel") {
+          job.state = JobState.done;
         }
       } else if (job.type == JobType.deleteDir) {
         if (jobResultListener.isListening) {
           jobResultListener.complete(evt);
         }
-        int? fileNum = int.tryParse(evt['file_num']);
+        int? fileNum = int.tryParse(evt['file_num']?.toString() ?? '');
         if (fileNum != null) job.fileNum = fileNum;
       } else if (job.type == JobType.deleteFile) {
         if (jobResultListener.isListening) {
@@ -1071,7 +1121,6 @@ class JobController {
         }
       }
     }
-    debugPrint("jobError $evt");
   }
 
   void updateJobStatus(int id,
@@ -1179,17 +1228,23 @@ class JobController {
   void updateFolderFiles(Map<String, dynamic> evt) {
     // ret: "{\"id\":1,\"num_entries\":12,\"total_size\":1264822.0}"
     Map<String, dynamic> info = json.decode(evt['info']);
-    int id = info['id'];
-    int num_entries = info['num_entries'];
-    double total_size = info['total_size'];
+    int id = int.tryParse(info['id']?.toString() ?? '') ?? -1;
+    int numEntries = int.tryParse(info['num_entries']?.toString() ?? '') ?? 0;
+    final totalSize = num.tryParse(info['total_size']?.toString() ?? '');
     final jobIndex = getJob(id);
     if (jobIndex != -1) {
       final job = jobTable[jobIndex];
-      job.fileCount = num_entries;
-      job.totalSize = total_size.toInt();
+      if (numEntries > 0) {
+        job.fileCount = math.max(job.fileCount, numEntries);
+      }
+      if (totalSize != null && totalSize.isFinite) {
+        final normalizedTotalSize = math.max(0, totalSize.toInt());
+        if (normalizedTotalSize > 0) {
+          job.totalSize = normalizedTotalSize;
+        }
+      }
       jobTable.refresh();
     }
-    debugPrint("update folder files: $info");
   }
 
   void clear() {
@@ -1454,10 +1509,10 @@ class Entry {
   Entry();
 
   Entry.fromJson(Map<String, dynamic> json) {
-    entryType = json['entry_type'];
-    modifiedTime = json['modified_time'];
-    name = json['name'];
-    size = json['size'];
+    entryType = int.tryParse(json['entry_type']?.toString() ?? '') ?? 0;
+    modifiedTime = int.tryParse(json['modified_time']?.toString() ?? '') ?? 0;
+    name = json['name']?.toString() ?? '';
+    size = int.tryParse(json['size']?.toString() ?? '') ?? 0;
   }
 
   bool get isFile => entryType > 3;
@@ -1514,8 +1569,31 @@ class JobProgress {
   var err = "";
   int lastTransferredSize = 0;
 
-  double get percent =>
-      totalSize > 0 ? (finishedSize.toDouble() / totalSize) : 0.0;
+  int get effectiveFinishedSize {
+    if (state == JobState.done && totalSize > 0) {
+      return totalSize;
+    }
+    return math.max(finishedSize, lastTransferredSize);
+  }
+
+  int get effectiveTotalSize {
+    if (totalSize > 0) {
+      return totalSize;
+    }
+    if (state == JobState.done) {
+      return effectiveFinishedSize;
+    }
+    return 0;
+  }
+
+  double get percent {
+    final total = effectiveTotalSize;
+    if (total <= 0) {
+      return 0.0;
+    }
+    return (effectiveFinishedSize.toDouble() / total).clamp(0.0, 1.0);
+  }
+
   String get percentText => '${(percent * 100).toStringAsFixed(0)}%';
 
   clear() {
@@ -1526,18 +1604,23 @@ class JobProgress {
     fileNum = 0;
     speed = 0;
     finishedSize = 0;
+    totalSize = 0;
     jobName = "";
     fileName = "";
     fileCount = 0;
     remote = "";
     to = "";
     err = "";
+    lastTransferredSize = 0;
   }
 
   String display() {
     if (type == JobType.transfer) {
       if (state == JobState.done && err == "skipped") {
         return translate("Skipped");
+      }
+      if (state == JobState.done && err == "cancel") {
+        return translate("Cancel");
       }
     } else if (type == JobType.deleteFile) {
       if (err == "cancel") {
@@ -1555,12 +1638,17 @@ class JobProgress {
     }
     if (state == JobState.done) {
       handledFileCount = fileCount;
-      finishedSize = totalSize;
     }
-    final filesStr = "$handledFileCount/$fileCount files";
-    final sizeStr = totalSize > 0 ? readableFileSize(totalSize.toDouble()) : "";
-    final sizePercentStr = totalSize > 0 && finishedSize > 0
-        ? "${readableFileSize(finishedSize.toDouble())} / ${readableFileSize(totalSize.toDouble())}"
+    final effectiveTotal = effectiveTotalSize;
+    final effectiveFinished = effectiveFinishedSize;
+    final filesStr = fileCount > 0 ? "$handledFileCount/$fileCount files" : "";
+    final sizeStr =
+        effectiveTotal > 0 ? readableFileSize(effectiveTotal.toDouble()) : "";
+    final transferredStr = effectiveFinished > 0
+        ? readableFileSize(effectiveFinished.toDouble())
+        : "";
+    final sizePercentStr = effectiveTotal > 0 && effectiveFinished > 0
+        ? "$transferredStr / ${readableFileSize(effectiveTotal.toDouble())}"
         : "";
     if (type == JobType.deleteFile) {
       return display();
@@ -1594,17 +1682,29 @@ class JobProgress {
         }
         res += filesStr;
       }
-      if (sizeStr.isNotEmpty && state != JobState.inProgress) {
+      final showTransferredSize =
+          sizePercentStr.isNotEmpty &&
+          (state == JobState.inProgress ||
+              (state == JobState.done && err == "cancel"));
+      if (showTransferredSize) {
+        if (res.isNotEmpty) {
+          res += ", ";
+        }
+        res += sizePercentStr;
+      } else if (sizeStr.isNotEmpty && state != JobState.inProgress) {
         if (res.isNotEmpty) {
           res += ", ";
         }
         res += sizeStr;
       }
-      if (sizePercentStr.isNotEmpty && state == JobState.inProgress) {
+      if (!showTransferredSize &&
+          transferredStr.isNotEmpty &&
+          state == JobState.inProgress &&
+          effectiveTotal <= 0) {
         if (res.isNotEmpty) {
           res += ", ";
         }
-        res += sizePercentStr;
+        res += transferredStr;
       }
       return res;
     }

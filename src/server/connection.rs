@@ -4822,19 +4822,19 @@ impl Connection {
     }
 
     async fn process_new_read_job(&mut self, mut job: fs::TransferJob, path: String) {
+        let job_id = job.id;
         let files = job.files().to_owned();
         let job_type = job.r#type;
-        self.send(fs::new_dir(job.id, path.clone(), files.clone()))
-            .await;
-        job.is_remote = true;
-        job.conn_id = self.inner.id();
-        self.read_jobs.push(job);
-        self.file_timer = crate::rustdesk_interval(time::interval(MILLI1));
         let audit_path = if job_type == fs::JobType::Printer {
             "Remote print".to_owned()
         } else {
-            path
+            path.clone()
         };
+        job.is_remote = true;
+        job.conn_id = self.inner.id();
+        self.read_jobs.push(job);
+        self.send(fs::new_dir(job_id, path, files.clone())).await;
+        self.file_timer = crate::rustdesk_interval(time::interval(MILLI1));
         self.post_file_audit(
             FileAuditType::RemoteSend,
             &audit_path,
