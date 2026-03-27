@@ -53,14 +53,11 @@ class _WebVideoSurfaceState extends State<WebVideoSurface> {
 
   @override
   Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _attachToRuntime();
-    });
     return HtmlElementView(viewType: _viewType);
   }
 
   void _attachToRuntime() {
-    if (!mounted) {
+    if (!mounted || _attached) {
       return;
     }
     PlatformFFI.setByName('attach_video_surface', _elementId);

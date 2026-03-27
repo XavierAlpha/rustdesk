@@ -2244,6 +2244,7 @@ class CanvasModel with ChangeNotifier {
   // to avoid hammering a non-functional Bump Mouse
   bool _bumpMouseIsWorking = true;
   ViewStyle _lastViewStyle = ViewStyle.defaultViewStyle();
+  int _updateViewStyleSeq = 0;
 
   Timer? _timerMobileFocusCanvasCursor;
   Timer? _timerMobileRestoreCanvasOffset;
@@ -2349,15 +2350,23 @@ class CanvasModel with ChangeNotifier {
     return max(bottom - MediaQueryData.fromView(ui.window).padding.top, 0);
   }
 
-  updateSize() => _size = getSize();
+  void updateSize([Size? size]) => _size = size ?? getSize();
 
-  updateViewStyle({refreshMousePos = true, notify = true}) async {
+  updateViewStyle({
+    refreshMousePos = true,
+    notify = true,
+    Size? viewSize,
+    double? devicePixelRatio,
+  }) async {
+    final seq = ++_updateViewStyleSeq;
     final style = await bind.sessionGetViewStyle(sessionId: sessionId);
     if (style == null) {
       return;
     }
-
-    updateSize();
+    if (seq != _updateViewStyleSeq) {
+      return;
+    }
+    updateSize(viewSize);
     final displayWidth = getDisplayWidth();
     final displayHeight = getDisplayHeight();
     final viewStyle = ViewStyle(
@@ -2367,6 +2376,9 @@ class CanvasModel with ChangeNotifier {
       displayWidth: displayWidth,
       displayHeight: displayHeight,
     );
+    if (seq != _updateViewStyleSeq) {
+      return;
+    }
     // If only the Custom scale percent changed, proceed to update even if
     // the basic ViewStyle fields are equal.
     // In Custom scale mode, the scale percent can change independently of the other
@@ -2391,9 +2403,12 @@ class CanvasModel with ChangeNotifier {
         debugPrintStack(stackTrace: stack);
         _scale = 1.0;
       }
+      if (seq != _updateViewStyleSeq) {
+        return;
+      }
     }
 
-    _devicePixelRatio = ui.window.devicePixelRatio;
+    _devicePixelRatio = devicePixelRatio ?? ui.window.devicePixelRatio;
     if (kIgnoreDpi) {
       if (style == kRemoteViewStyleOriginal) {
         _scale = 1.0 / _devicePixelRatio;

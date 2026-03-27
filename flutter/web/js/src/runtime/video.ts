@@ -97,6 +97,10 @@ type AdaptiveRenderState = {
   goodWindows: number;
   pendingDownscaleConfirmations: number;
 };
+type DisplayGeometry = {
+  width: number;
+  height: number;
+};
 type OgvFramePlane = {
   bytes: Uint8Array;
   stride: number;
@@ -263,6 +267,8 @@ export class VideoPipeline {
   private readonly adaptiveRenderState = new Map<number, AdaptiveRenderState>();
   private readonly adaptiveStartupUntil = new Map<number, number>();
   private readonly notifiedFrameSize = new Map<number, string>();
+  private readonly lastFrameRenderedAt = new Map<number, number>();
+  private readonly displayGeometries = new Map<number, DisplayGeometry>();
   private readonly sink: RgbaSink;
   private readonly onFrameDecoded?: DecodedFrameSink;
   private readonly onNeedRefresh?: NeedRefreshSink;
@@ -276,13 +282,24 @@ export class VideoPipeline {
   private directSurfaceCanvas: HTMLCanvasElement | null = null;
   private directSurfaceContext: DirectCanvasContext | null = null;
   private directSurfaceResizeObserver: ResizeObserver | null = null;
+  private directSurfaceWindowResizeListener: EventListener | null = null;
+  private directSurfaceViewportResizeListener: EventListener | null = null;
   private directSurfaceActiveDisplay = 0;
   private directSurfaceCssWidth = 0;
   private directSurfaceCssHeight = 0;
+  private directSurfaceNativeDpr = 1;
   private directSurfaceDpr = 1;
   private directSurfaceSourceWidth = 0;
   private directSurfaceSourceHeight = 0;
+  private directSurfaceBackingWidth = 0;
+  private directSurfaceBackingHeight = 0;
   private directSurfaceLastMeasureMs = 0;
+  private directSurfaceViewportChanged = false;
+  private directSurfaceViewportSyncHandle: number | undefined;
+  private directSurfaceRecoveryTimer: number | undefined;
+  private directSurfaceHardRecoveryTimer: number | undefined;
+  private directSurfaceRecoveryDisplay: number | null = null;
+  private directSurfaceRecoveryRequestedAt = 0;
   private renderQualityPreference: RenderQualityPreference = 'balanced';
   private customImageQuality = 100;
   private customFps = 60;
@@ -375,7 +392,7 @@ export class VideoPipeline {
       return;
     }
     if (this.isSoftwareBackedCodec(input.codec) && this.directSurfaceUseWorker) {
-      this.detachSurfaceFromWorker();
+      this.detachSurfaceFromWorker(true);
     }
     if (this.sendDecodeToWorker(input)) {
       return;
@@ -454,9 +471,40 @@ export class VideoPipeline {
     this.displayPerf.clear();
     this.adaptiveRenderState.clear();
     this.adaptiveStartupUntil.clear();
+    this.displayGeometries.clear();
     this.notifiedFrameSize.clear();
     this.detachSurface();
     this.shutdownWorker();
+  }
+
+  setDisplayGeometries(displays: Array<{ width: number; height: number }>): void {
+    const next = new Map<number, DisplayGeometry>();
+    displays.forEach((display, index) => {
+      const width = Math.max(1, Math.floor(Number(display.width) || 0));
+      const height = Math.max(1, Math.floor(Number(display.height) || 0));
+      if (width > 0 && height > 0) {
+        next.set(index, { width, height });
+      }
+    });
+    let changed = this.displayGeometries.size !== next.size;
+    if (!changed) {
+      for (const [index, value] of next.entries()) {
+        const previous = this.displayGeometries.get(index);
+        if (!previous || previous.width !== value.width || previous.height !== value.height) {
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (!changed) {
+      return;
+    }
+    this.displayGeometries.clear();
+    next.forEach((value, index) => {
+      this.displayGeometries.set(index, value);
+    });
+    this.measureDirectSurfaceHost(true);
+    this.refreshDirectSurfaceSizing(true);
   }
 
   setActiveDisplay(display: number | null): void {
@@ -706,6 +754,8 @@ export class VideoPipeline {
   }
 
   private notifyFrame(display: number, width: number, height: number): void {
+    this.lastFrameRenderedAt.set(display, Date.now());
+    this.maybeCompleteDirectSurfaceRecovery(display);
     if (!this.adaptiveStartupUntil.has(display)) {
       this.adaptiveStartupUntil.set(display, Date.now() + ADAPTIVE_RENDER_STARTUP_GRACE_MS);
       const adaptive = this.getAdaptiveRenderState(display);
@@ -917,6 +967,7 @@ export class VideoPipeline {
     }
     const canvas = this.directSurfaceCanvas;
     applySamplingPolicy(ctx, width, height, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
     return true;
   }
@@ -993,6 +1044,9 @@ export class VideoPipeline {
       this.directSurfaceResizeObserver.disconnect();
       this.directSurfaceResizeObserver = null;
     }
+    this.cancelDirectSurfaceViewportSync();
+    this.detachDirectSurfaceViewportListeners();
+    this.clearDirectSurfaceRecoveryTimers();
     if (this.directSurfaceCanvas && this.directSurfaceCanvas.isConnected) {
       this.directSurfaceCanvas.remove();
     }
@@ -1002,12 +1056,17 @@ export class VideoPipeline {
     this.directSurfaceContext = null;
     this.directSurfaceCssWidth = 0;
     this.directSurfaceCssHeight = 0;
+    this.directSurfaceNativeDpr = 1;
     this.directSurfaceDpr = 1;
     this.directSurfaceSourceWidth = 0;
     this.directSurfaceSourceHeight = 0;
+    this.directSurfaceBackingWidth = 0;
+    this.directSurfaceBackingHeight = 0;
     this.directSurfaceLastMeasureMs = 0;
+    this.directSurfaceViewportChanged = false;
     this.directSurfaceUseWorker = false;
     this.adaptiveStartupUntil.clear();
+    this.lastFrameRenderedAt.clear();
     this.notifiedFrameSize.clear();
   }
 
@@ -1016,14 +1075,89 @@ export class VideoPipeline {
       this.directSurfaceResizeObserver.disconnect();
       this.directSurfaceResizeObserver = null;
     }
+    this.cancelDirectSurfaceViewportSync();
+    this.detachDirectSurfaceViewportListeners();
     if (typeof ResizeObserver !== 'undefined') {
       this.directSurfaceResizeObserver = new ResizeObserver(() => {
-        this.measureDirectSurfaceHost(true);
-        this.refreshDirectSurfaceSizing(true);
+        this.scheduleDirectSurfaceViewportResize();
       });
       this.directSurfaceResizeObserver.observe(host);
     }
+    this.attachDirectSurfaceViewportListeners();
     this.measureDirectSurfaceHost(true);
+  }
+
+  private attachDirectSurfaceViewportListeners(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    this.directSurfaceWindowResizeListener = (() => {
+      this.scheduleDirectSurfaceViewportResize();
+    }) as EventListener;
+    window.addEventListener('resize', this.directSurfaceWindowResizeListener);
+    if (!window.visualViewport) {
+      return;
+    }
+    this.directSurfaceViewportResizeListener = (() => {
+      this.scheduleDirectSurfaceViewportResize();
+    }) as EventListener;
+    window.visualViewport.addEventListener(
+      'resize',
+      this.directSurfaceViewportResizeListener
+    );
+  }
+
+  private detachDirectSurfaceViewportListeners(): void {
+    if (typeof window === 'undefined') {
+      this.directSurfaceWindowResizeListener = null;
+      this.directSurfaceViewportResizeListener = null;
+      return;
+    }
+    if (this.directSurfaceWindowResizeListener) {
+      window.removeEventListener('resize', this.directSurfaceWindowResizeListener);
+      this.directSurfaceWindowResizeListener = null;
+    }
+    if (this.directSurfaceViewportResizeListener && window.visualViewport) {
+      window.visualViewport.removeEventListener(
+        'resize',
+        this.directSurfaceViewportResizeListener
+      );
+      this.directSurfaceViewportResizeListener = null;
+    }
+  }
+
+  private handleDirectSurfaceViewportResize(): void {
+    this.measureDirectSurfaceHost(true);
+    this.refreshDirectSurfaceSizing(true);
+  }
+
+  private scheduleDirectSurfaceViewportResize(): void {
+    if (this.directSurfaceViewportSyncHandle !== undefined) {
+      return;
+    }
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      this.directSurfaceViewportSyncHandle = window.requestAnimationFrame(() => {
+        this.directSurfaceViewportSyncHandle = undefined;
+        this.handleDirectSurfaceViewportResize();
+      });
+      return;
+    }
+    this.directSurfaceViewportSyncHandle = window.setTimeout(() => {
+      this.directSurfaceViewportSyncHandle = undefined;
+      this.handleDirectSurfaceViewportResize();
+    }, 16);
+  }
+
+  private cancelDirectSurfaceViewportSync(): void {
+    if (this.directSurfaceViewportSyncHandle === undefined) {
+      return;
+    }
+    if (typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+      window.cancelAnimationFrame(this.directSurfaceViewportSyncHandle);
+    } else {
+      window.clearTimeout(this.directSurfaceViewportSyncHandle);
+    }
+    this.directSurfaceViewportSyncHandle = undefined;
   }
 
   private refreshDirectSurfaceSizing(forceMeasure: boolean): void {
@@ -1031,55 +1165,150 @@ export class VideoPipeline {
       return;
     }
     this.measureDirectSurfaceHost(forceMeasure);
-    const cssWidth = Math.max(
+    const viewportChanged = this.directSurfaceViewportChanged;
+    const hostWidth = Math.max(
       1,
       this.directSurfaceCssWidth || this.directSurfaceSourceWidth || 1
     );
-    const cssHeight = Math.max(
+    const hostHeight = Math.max(
       1,
       this.directSurfaceCssHeight || this.directSurfaceSourceHeight || 1
     );
-    let targetWidth = Math.max(1, Math.floor(cssWidth * this.directSurfaceDpr));
-    let targetHeight = Math.max(1, Math.floor(cssHeight * this.directSurfaceDpr));
-    if (this.directSurfaceSourceWidth > 0 && this.directSurfaceSourceHeight > 0) {
-      targetWidth = Math.min(targetWidth, this.directSurfaceSourceWidth);
-      targetHeight = Math.min(targetHeight, this.directSurfaceSourceHeight);
-    }
+    let targetWidth = Math.max(
+      1,
+      Math.round(hostWidth * this.directSurfaceDpr)
+    );
+    let targetHeight = Math.max(
+      1,
+      Math.round(hostHeight * this.directSurfaceDpr)
+    );
     const maxPixels = this.getDirectSurfacePixelBudget();
     if (maxPixels > 0) {
       const fitted = fitSurfaceToPixelBudget(targetWidth, targetHeight, maxPixels);
       targetWidth = fitted.width;
       targetHeight = fitted.height;
     }
-    const widthDelta = Math.abs(this.directSurfaceCanvas.width - targetWidth);
-    const heightDelta = Math.abs(this.directSurfaceCanvas.height - targetHeight);
+    const currentWidth = Math.max(
+      1,
+      this.directSurfaceBackingWidth || this.directSurfaceCanvas.width || 1
+    );
+    const currentHeight = Math.max(
+      1,
+      this.directSurfaceBackingHeight || this.directSurfaceCanvas.height || 1
+    );
+    const widthDelta = Math.abs(currentWidth - targetWidth);
+    const heightDelta = Math.abs(currentHeight - targetHeight);
     if (widthDelta <= 1 && heightDelta <= 1) {
+      this.directSurfaceViewportChanged = false;
       return;
     }
-    const currentWidth = Math.max(1, this.directSurfaceCanvas.width);
-    const currentHeight = Math.max(1, this.directSurfaceCanvas.height);
     const widthDriftRatio = widthDelta / Math.max(currentWidth, targetWidth);
     const heightDriftRatio = heightDelta / Math.max(currentHeight, targetHeight);
     // Avoid frequent tiny surface reallocations which can cause visible
     // sharpness pumping under fluctuating load.
-    if (widthDriftRatio < 0.02 && heightDriftRatio < 0.02) {
+    if (!viewportChanged && widthDriftRatio < 0.02 && heightDriftRatio < 0.02) {
+      this.directSurfaceViewportChanged = false;
+      return;
+    }
+    this.directSurfaceViewportChanged = false;
+    this.applyDirectSurfaceSize(targetWidth, targetHeight);
+    if (viewportChanged) {
+      this.scheduleDirectSurfaceRecovery();
+    }
+  }
+
+  private applyDirectSurfaceSize(width: number, height: number): void {
+    if (!this.directSurfaceCanvas) {
       return;
     }
     if (
-      this.directSurfaceCanvas.width !== targetWidth ||
-      this.directSurfaceCanvas.height !== targetHeight
+      this.directSurfaceBackingWidth === width &&
+      this.directSurfaceBackingHeight === height
     ) {
-      if (this.directSurfaceUseWorker) {
-        this.worker?.postMessage({
-          type: 'resize_surface',
-          width: targetWidth,
-          height: targetHeight
+      return;
+    }
+    this.directSurfaceBackingWidth = width;
+    this.directSurfaceBackingHeight = height;
+    if (this.directSurfaceUseWorker) {
+      this.worker?.postMessage({
+        type: 'resize_surface',
+        width,
+        height
+      });
+    } else {
+      const snapshot = this.captureCanvasSnapshot(this.directSurfaceCanvas);
+      this.directSurfaceCanvas.width = width;
+      this.directSurfaceCanvas.height = height;
+      const ctx =
+        this.directSurfaceContext ??
+        this.directSurfaceCanvas.getContext('2d', {
+          alpha: false,
+          desynchronized: true
         });
-      } else {
-        this.directSurfaceCanvas.width = targetWidth;
-        this.directSurfaceCanvas.height = targetHeight;
+      if (ctx && isDirectCanvasContext(ctx)) {
+        this.directSurfaceContext = ctx;
+        this.restoreCanvasSnapshot(ctx, snapshot, width, height);
       }
     }
+  }
+
+  private captureCanvasSnapshot(
+    source: HTMLCanvasElement
+  ): OffscreenCanvas | HTMLCanvasElement | null {
+    const width = Math.max(1, source.width || 0);
+    const height = Math.max(1, source.height || 0);
+    if (width <= 0 || height <= 0) {
+      return null;
+    }
+    let snapshot: OffscreenCanvas | HTMLCanvasElement;
+    if (typeof OffscreenCanvas !== 'undefined') {
+      snapshot = new OffscreenCanvas(width, height);
+    } else {
+      const element = document.createElement('canvas');
+      element.width = width;
+      element.height = height;
+      snapshot = element;
+    }
+    const ctx = getCanvasContext(snapshot);
+    if (!ctx) {
+      return null;
+    }
+    ctx.drawImage(source, 0, 0, width, height);
+    return snapshot;
+  }
+
+  private restoreCanvasSnapshot(
+    ctx: DirectCanvasContext,
+    snapshot: OffscreenCanvas | HTMLCanvasElement | null,
+    targetWidth: number,
+    targetHeight: number
+  ): void {
+    if (!snapshot || targetWidth <= 0 || targetHeight <= 0) {
+      return;
+    }
+    const sourceWidth = Math.max(1, snapshot.width || targetWidth);
+    const sourceHeight = Math.max(1, snapshot.height || targetHeight);
+    applySamplingPolicy(ctx, sourceWidth, sourceHeight, targetWidth, targetHeight);
+    ctx.clearRect(0, 0, targetWidth, targetHeight);
+    ctx.drawImage(snapshot, 0, 0, targetWidth, targetHeight);
+  }
+
+  private restoreCanvasSnapshotInto(
+    canvas: HTMLCanvasElement,
+    snapshot: OffscreenCanvas | HTMLCanvasElement | null
+  ): void {
+    if (!snapshot) {
+      return;
+    }
+    const ctx = canvas.getContext('2d', {
+      alpha: false,
+      desynchronized: true
+    });
+    if (!ctx || !isDirectCanvasContext(ctx)) {
+      return;
+    }
+    this.directSurfaceContext = ctx;
+    this.restoreCanvasSnapshot(ctx, snapshot, canvas.width, canvas.height);
   }
 
   private measureDirectSurfaceHost(force: boolean): void {
@@ -1091,20 +1320,34 @@ export class VideoPipeline {
       return;
     }
     this.directSurfaceLastMeasureMs = now;
+    const previousCssWidth = this.directSurfaceCssWidth;
+    const previousCssHeight = this.directSurfaceCssHeight;
+    const previousNativeDpr = this.directSurfaceNativeDpr;
     const rect = this.directSurfaceHost.getBoundingClientRect();
     this.directSurfaceCssWidth = Math.max(
       1,
-      Math.floor(rect.width || this.directSurfaceSourceWidth || 1)
+      Math.round(rect.width || this.directSurfaceSourceWidth || 1)
     );
     this.directSurfaceCssHeight = Math.max(
       1,
-      Math.floor(rect.height || this.directSurfaceSourceHeight || 1)
+      Math.round(rect.height || this.directSurfaceSourceHeight || 1)
     );
     const nativeDpr =
       typeof window !== 'undefined' && Number.isFinite(window.devicePixelRatio)
         ? Math.max(window.devicePixelRatio, 1)
         : 1;
-    const sourcePixels = this.directSurfaceSourceWidth * this.directSurfaceSourceHeight;
+    this.directSurfaceNativeDpr = nativeDpr;
+    if (
+      previousCssWidth > 0 &&
+      previousCssHeight > 0 &&
+      (previousCssWidth !== this.directSurfaceCssWidth ||
+        previousCssHeight !== this.directSurfaceCssHeight ||
+        Math.abs(previousNativeDpr - nativeDpr) > 0.01)
+    ) {
+      this.directSurfaceViewportChanged = true;
+    }
+    const logicalSize = this.getDirectSurfaceLogicalSize();
+    const sourcePixels = logicalSize.width * logicalSize.height;
     const profile = this.getActiveRenderProfile();
     const adaptive = this.getAdaptiveRenderState(this.directSurfaceActiveDisplay);
     let dprCap = profile.dprCapDefault;
@@ -1122,13 +1365,13 @@ export class VideoPipeline {
     }
     dprCap *= adaptive.dprScale;
     const sourceFitDpr =
-      this.directSurfaceSourceWidth > 0 &&
-      this.directSurfaceSourceHeight > 0 &&
+      logicalSize.width > 0 &&
+      logicalSize.height > 0 &&
       this.directSurfaceCssWidth > 0 &&
       this.directSurfaceCssHeight > 0
         ? Math.min(
-            this.directSurfaceSourceWidth / this.directSurfaceCssWidth,
-            this.directSurfaceSourceHeight / this.directSurfaceCssHeight
+            logicalSize.width / this.directSurfaceCssWidth,
+            logicalSize.height / this.directSurfaceCssHeight
           )
         : 1;
     let dprFloor = 0.75;
@@ -1149,6 +1392,94 @@ export class VideoPipeline {
       }
     }
     this.directSurfaceDpr = Math.min(nativeDpr, Math.max(dprFloor, dprCap));
+  }
+
+  private scheduleDirectSurfaceRecovery(): void {
+    const activeDisplay = this.activeDisplay;
+    if (
+      activeDisplay === null ||
+      !this.onNeedRefresh ||
+      this.directSurfaceSourceWidth <= 0 ||
+      this.directSurfaceSourceHeight <= 0
+    ) {
+      return;
+    }
+    const baselineFrameAt = this.lastFrameRenderedAt.get(activeDisplay) ?? 0;
+    this.clearDirectSurfaceRecoveryTimers();
+    this.directSurfaceRecoveryTimer = window.setTimeout(() => {
+      this.directSurfaceRecoveryTimer = undefined;
+      const currentDisplay = this.activeDisplay;
+      if (currentDisplay === null) {
+        return;
+      }
+      this.directSurfaceRecoveryDisplay = currentDisplay;
+      this.directSurfaceRecoveryRequestedAt = Date.now();
+      this.onNeedRefresh?.(currentDisplay);
+      this.directSurfaceHardRecoveryTimer = window.setTimeout(() => {
+        this.directSurfaceHardRecoveryTimer = undefined;
+        const latestDisplay = this.activeDisplay;
+        if (latestDisplay === null || latestDisplay !== currentDisplay) {
+          this.directSurfaceRecoveryDisplay = null;
+          return;
+        }
+        const latestFrameAt = this.lastFrameRenderedAt.get(currentDisplay) ?? 0;
+        if (
+          latestFrameAt > baselineFrameAt &&
+          latestFrameAt >= this.directSurfaceRecoveryRequestedAt
+        ) {
+          this.directSurfaceRecoveryDisplay = null;
+          this.directSurfaceRecoveryRequestedAt = 0;
+          return;
+        }
+        this.resetDisplayState(currentDisplay);
+        this.syncWorkerActiveDisplay(true);
+        this.onNeedRefresh?.(currentDisplay);
+        this.directSurfaceRecoveryDisplay = null;
+        this.directSurfaceRecoveryRequestedAt = 0;
+      }, 180);
+    }, 60);
+  }
+
+  private clearDirectSurfaceRecoveryTimers(): void {
+    if (this.directSurfaceRecoveryTimer !== undefined) {
+      window.clearTimeout(this.directSurfaceRecoveryTimer);
+      this.directSurfaceRecoveryTimer = undefined;
+    }
+    if (this.directSurfaceHardRecoveryTimer !== undefined) {
+      window.clearTimeout(this.directSurfaceHardRecoveryTimer);
+      this.directSurfaceHardRecoveryTimer = undefined;
+    }
+    this.directSurfaceRecoveryDisplay = null;
+    this.directSurfaceRecoveryRequestedAt = 0;
+  }
+
+  private maybeCompleteDirectSurfaceRecovery(display: number): void {
+    if (
+      this.directSurfaceRecoveryDisplay !== display ||
+      this.directSurfaceHardRecoveryTimer === undefined
+    ) {
+      return;
+    }
+    if (Date.now() < this.directSurfaceRecoveryRequestedAt) {
+      return;
+    }
+    window.clearTimeout(this.directSurfaceHardRecoveryTimer);
+    this.directSurfaceHardRecoveryTimer = undefined;
+    this.directSurfaceRecoveryDisplay = null;
+    this.directSurfaceRecoveryRequestedAt = 0;
+  }
+
+  private getDirectSurfaceLogicalSize(): DisplayGeometry {
+    const display =
+      this.activeDisplay !== null ? this.activeDisplay : this.directSurfaceActiveDisplay;
+    const geometry = this.displayGeometries.get(display);
+    if (geometry && geometry.width > 0 && geometry.height > 0) {
+      return geometry;
+    }
+    return {
+      width: Math.max(1, this.directSurfaceSourceWidth || 1),
+      height: Math.max(1, this.directSurfaceSourceHeight || 1)
+    };
   }
 
   private getActiveRenderProfile(): RenderQualityProfile {
@@ -1488,7 +1819,7 @@ export class VideoPipeline {
     }
     let targetCanvas = this.directSurfaceCanvas;
     if (this.directSurfaceContext) {
-      const replaced = this.replaceDirectSurfaceCanvasForWorker();
+      const replaced = this.replaceDirectSurfaceCanvas();
       if (!replaced) {
         return;
       }
@@ -1497,14 +1828,21 @@ export class VideoPipeline {
     this.tryAttachSurfaceToWorker(targetCanvas);
   }
 
-  private replaceDirectSurfaceCanvasForWorker(): HTMLCanvasElement | null {
+  private replaceDirectSurfaceCanvas(): HTMLCanvasElement | null {
     if (!this.directSurfaceHost || !this.directSurfaceCanvas) {
       return null;
     }
     const previous = this.directSurfaceCanvas;
+    const snapshot = this.captureCanvasSnapshot(previous);
     const canvas = this.createDirectSurfaceCanvasElement();
-    canvas.width = Math.max(1, previous.width || 1);
-    canvas.height = Math.max(1, previous.height || 1);
+    canvas.width = Math.max(
+      1,
+      this.directSurfaceBackingWidth || previous.width || 1
+    );
+    canvas.height = Math.max(
+      1,
+      this.directSurfaceBackingHeight || previous.height || 1
+    );
     try {
       if (previous.parentElement === this.directSurfaceHost) {
         this.directSurfaceHost.replaceChild(canvas, previous);
@@ -1518,17 +1856,32 @@ export class VideoPipeline {
     }
     this.directSurfaceCanvas = canvas;
     this.directSurfaceContext = null;
+    this.restoreCanvasSnapshotInto(canvas, snapshot);
     this.directSurfaceLastMeasureMs = 0;
     this.refreshDirectSurfaceSizing(true);
     return canvas;
   }
 
-  private detachSurfaceFromWorker(): void {
+  private restoreDirectSurfaceCanvasFromWorker(): void {
+    const replaced = this.replaceDirectSurfaceCanvas();
+    if (!replaced) {
+      this.directSurfaceContext = null;
+      return;
+    }
+    this.directSurfaceCanvas = replaced;
+    this.directSurfaceContext = null;
+  }
+
+  private detachSurfaceFromWorker(restoreCanvas = false): void {
+    const usedWorkerSurface = this.directSurfaceUseWorker || this.workerSurfaceAttached;
     if (this.worker && this.workerSurfaceAttached) {
       this.worker.postMessage({ type: 'detach_surface' });
     }
     this.workerSurfaceAttached = false;
     this.directSurfaceUseWorker = false;
+    if (restoreCanvas && usedWorkerSurface) {
+      this.restoreDirectSurfaceCanvasFromWorker();
+    }
   }
 
   private handleWorkerMessage(message: WorkerMessage): void {
@@ -1593,6 +1946,7 @@ export class VideoPipeline {
 
   private shutdownWorker(): void {
     this.clearWorkerInitTimeout();
+    this.detachSurfaceFromWorker(true);
     if (this.worker) {
       try {
         this.worker.postMessage({ type: 'close' });
@@ -2139,6 +2493,7 @@ export class VideoPipeline {
     this.displayPerf.delete(display);
     this.adaptiveRenderState.delete(display);
     this.adaptiveStartupUntil.delete(display);
+    this.lastFrameRenderedAt.delete(display);
     this.notifiedFrameSize.delete(display);
     this.canvases.delete(display);
     this.contexts.delete(display);
@@ -2167,6 +2522,11 @@ export class VideoPipeline {
     for (const display of [...this.adaptiveStartupUntil.keys()]) {
       if (display !== activeDisplay) {
         this.adaptiveStartupUntil.delete(display);
+      }
+    }
+    for (const display of [...this.lastFrameRenderedAt.keys()]) {
+      if (display !== activeDisplay) {
+        this.lastFrameRenderedAt.delete(display);
       }
     }
     for (const display of [...this.notifiedFrameSize.keys()]) {
@@ -2327,6 +2687,10 @@ export class VideoPipeline {
     this.logger.warn('Video worker decode unstable, fallback to main-thread decoding');
     this.workerUnavailable = true;
     this.shutdownWorker();
+    if (this.activeDisplay !== null) {
+      this.resetDisplayState(this.activeDisplay);
+      this.onNeedRefresh?.(this.activeDisplay);
+    }
   }
 }
 
