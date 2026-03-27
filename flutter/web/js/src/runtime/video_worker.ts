@@ -24,7 +24,6 @@ type SetActiveDisplayMessage = {
   display: number;
   reset?: boolean;
 };
-
 type DecodeMessage = {
   type: 'decode';
   codec: CodecType;
@@ -188,15 +187,54 @@ function attachSurface(canvas: OffscreenCanvas, width: number, height: number): 
 }
 
 function resizeSurface(width: number, height: number): void {
-  if (!surfaceCanvas) {
+  if (!surfaceCanvas || !surfaceContext) {
     return;
   }
   const nextWidth = clampSize(width);
   const nextHeight = clampSize(height);
   if (surfaceCanvas.width !== nextWidth || surfaceCanvas.height !== nextHeight) {
+    const snapshot = captureSurfaceSnapshot(surfaceCanvas);
     surfaceCanvas.width = nextWidth;
     surfaceCanvas.height = nextHeight;
+    restoreSurfaceSnapshot(snapshot, nextWidth, nextHeight);
   }
+}
+
+function captureSurfaceSnapshot(source: OffscreenCanvas): OffscreenCanvas | null {
+  const width = clampSize(source.width);
+  const height = clampSize(source.height);
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+  const snapshot = new OffscreenCanvas(width, height);
+  const ctx = snapshot.getContext('2d', {
+    alpha: false,
+    desynchronized: true
+  });
+  if (!ctx) {
+    return null;
+  }
+  ctx.drawImage(source, 0, 0, width, height);
+  return snapshot;
+}
+
+function restoreSurfaceSnapshot(
+  snapshot: OffscreenCanvas | null,
+  targetWidth: number,
+  targetHeight: number
+): void {
+  if (!snapshot || !surfaceContext || targetWidth <= 0 || targetHeight <= 0) {
+    return;
+  }
+  applySamplingPolicy(
+    surfaceContext,
+    Math.max(1, snapshot.width || targetWidth),
+    Math.max(1, snapshot.height || targetHeight),
+    targetWidth,
+    targetHeight
+  );
+  surfaceContext.clearRect(0, 0, targetWidth, targetHeight);
+  surfaceContext.drawImage(snapshot, 0, 0, targetWidth, targetHeight);
 }
 
 async function decodeVideo(message: DecodeMessage): Promise<void> {
@@ -459,6 +497,7 @@ function renderFrame(display: number, frame: VideoFrame): void {
       return;
     }
     applySamplingPolicy(surfaceContext, width, height, surfaceCanvas.width, surfaceCanvas.height);
+    surfaceContext.clearRect(0, 0, surfaceCanvas.width, surfaceCanvas.height);
     surfaceContext.drawImage(frame, 0, 0, surfaceCanvas.width, surfaceCanvas.height);
     notifyFrame(display, width, height);
   } catch {
