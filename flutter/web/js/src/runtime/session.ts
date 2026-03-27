@@ -1720,6 +1720,7 @@ export class WebSession {
       displays.length > 0
         ? displays.map((_display: unknown, index: number) => index)
         : [0];
+    this.video.setDisplayGeometries(displays);
     if (pi.currentDisplay !== undefined) {
       this.peerInfoSnapshot.currentDisplay = this.toFiniteNumber(
         pi.currentDisplay,
@@ -1807,6 +1808,7 @@ export class WebSession {
         displays.length > 0
           ? displays.map((_display: unknown, index: number) => index)
           : [0];
+      this.video.setDisplayGeometries(displays);
       this.events.emit({
         name: 'sync_peer_info',
         displays: JSON.stringify(displays)
@@ -2452,6 +2454,7 @@ export class WebSession {
         requestedDisplay === undefined || requestedDisplay === display;
       if (shouldAdoptDisplay) {
         this.currentDisplay = display;
+        this.peerInfoSnapshot.currentDisplay = display;
         this.video.setActiveDisplay(display);
         if (!this.displayIds.includes(display)) {
           this.displayIds = [...this.displayIds, display];
