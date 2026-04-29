@@ -371,8 +371,18 @@ class MyTheme {
     }),
   );
 
+  static dynamic _themeDataCompat(dynamic theme) {
+    // Newer Flutter theme widgets expose `.data`; older SDKs expect the
+    // legacy theme object directly.
+    try {
+      return theme.data;
+    } on NoSuchMethodError {
+      return theme;
+    }
+  }
+
   static dynamic _dialogThemeCompat(Color borderColor) {
-    final theme = DialogTheme(
+    return _themeDataCompat(DialogTheme(
       elevation: 15,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18.0),
@@ -381,19 +391,13 @@ class MyTheme {
           color: borderColor,
         ),
       ),
-    );
-    final dynamic fallbackTheme = ThemeData.fallback().dialogTheme;
-    // Web release minifies runtime type names, so rely on a stable framework
-    // superclass check instead of comparing runtimeType.toString().
-    return fallbackTheme is InheritedTheme ? theme : (theme as dynamic).data;
+    ));
   }
 
   static dynamic _tabBarThemeCompat(Color labelColor) {
-    final theme = TabBarTheme(
+    return _themeDataCompat(TabBarTheme(
       labelColor: labelColor,
-    );
-    final dynamic fallbackTheme = ThemeData.fallback().tabBarTheme;
-    return fallbackTheme is InheritedTheme ? theme : (theme as dynamic).data;
+    ));
   }
 
   static ThemeData lightTheme = ThemeData(
