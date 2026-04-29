@@ -111,7 +111,6 @@ Future<void> main(List<String> args) async {
   } else {
     desktopType = DesktopType.main;
     await windowManager.ensureInitialized();
-    windowManager.setPreventClose(true);
     if (isMacOS) {
       disableWindowMovable(kWindowId);
     }
@@ -136,16 +135,11 @@ void runMainApp(bool startService) async {
   // register uni links
   await initEnv(kAppTypeMain);
   checkUpdate();
-  // trigger connection status updater
-  await bind.mainCheckConnectStatus();
-  if (startService) {
-    gFFI.serverModel.startService();
-    bind.pluginSyncUi(syncTo: kAppTypeMain);
-    bind.pluginListReload();
-  }
-  await Future.wait([gFFI.abModel.loadCache(), gFFI.groupModel.loadCache()]);
-  gFFI.userModel.refreshCurrentUser();
   runApp(App());
+  windowManager.setPreventClose(true);
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(_finishMainStartup(startService));
+  });
 
   bool? alwaysOnTop;
   if (isDesktop) {
@@ -175,6 +169,22 @@ void runMainApp(bool startService) async {
     // Do not use `windowManager.setResizable()` here.
     setResizable(!bind.isIncomingOnly());
   });
+}
+
+Future<void> _finishMainStartup(bool startService) async {
+  try {
+    // trigger connection status updater
+    await bind.mainCheckConnectStatus();
+    if (startService) {
+      await gFFI.serverModel.startService();
+      await bind.pluginSyncUi(syncTo: kAppTypeMain);
+      await bind.pluginListReload();
+    }
+    await Future.wait([gFFI.abModel.loadCache(), gFFI.groupModel.loadCache()]);
+    gFFI.userModel.refreshCurrentUser();
+  } catch (e, s) {
+    debugPrintStack(label: 'main startup failed: $e', stackTrace: s);
+  }
 }
 
 void runMobileApp() async {
@@ -506,9 +516,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
           theme: MyTheme.lightTheme,
           darkTheme: MyTheme.darkTheme,
           themeMode: MyTheme.currentThemeMode(),
-          home: isDesktop
-              ? const DesktopTabPage()
-              : buildMainHomePage(),
+          home: isDesktop ? const DesktopTabPage() : buildMainHomePage(),
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,

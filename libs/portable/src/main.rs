@@ -1,6 +1,7 @@
 #![windows_subsystem = "windows"]
 
 use std::{
+    io::ErrorKind,
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
@@ -17,7 +18,7 @@ const APP_METADATA: &[u8] = include_bytes!("../app_metadata.toml");
 const APP_METADATA: &[u8] = &[];
 const APP_METADATA_CONFIG: &str = "meta.toml";
 const META_LINE_PREFIX_TIMESTAMP: &str = "timestamp = ";
-const APP_PREFIX: &str = "rustdesk";
+const APP_PREFIX: &str = "camellia";
 const APPNAME_RUNTIME_ENV_KEY: &str = "RUSTDESK_APPNAME";
 #[cfg(windows)]
 const SET_FOREGROUND_WINDOW_ENV_KEY: &str = "SET_FOREGROUND_WINDOW";
@@ -50,13 +51,22 @@ fn is_timestamp_matches(dir: &Path, ts: &mut u64) -> bool {
     false
 }
 
-fn write_meta(dir: &Path, ts: u64) {
+fn write_meta(dir: &Path, ts: u64) -> std::io::Result<()> {
     let meta_file = dir.join(APP_METADATA_CONFIG);
     if ts != 0 {
         let content = format!("{}{}", META_LINE_PREFIX_TIMESTAMP, ts);
-        // Ignore is ok here
-        let _ = std::fs::write(meta_file, content);
+        std::fs::write(meta_file, content)?;
     }
+    Ok(())
+}
+
+fn fallback_dir(dir: &Path, ts: u64) -> PathBuf {
+    let suffix = if ts == 0 {
+        std::process::id().to_string()
+    } else {
+        format!("{}-{}", ts, std::process::id())
+    };
+    dir.with_file_name(format!("{}-{}", APP_PREFIX, suffix))
 }
 
 fn setup(
@@ -66,7 +76,7 @@ fn setup(
     _args: &Vec<String>,
     _ui: &mut bool,
 ) -> Option<PathBuf> {
-    let dir = if let Some(dir) = dir {
+    let mut dir = if let Some(dir) = dir {
         dir
     } else {
         // home dir
@@ -85,15 +95,32 @@ fn setup(
             *_ui = true;
             ui::setup();
         }
-        std::fs::remove_dir_all(&dir).ok();
+        if let Err(err) = std::fs::remove_dir_all(&dir) {
+            if err.kind() != ErrorKind::NotFound && dir.exists() {
+                let fallback = fallback_dir(&dir, ts);
+                eprintln!(
+                    "failed to clear {}, extracting to {}: {}",
+                    dir.display(),
+                    fallback.display(),
+                    err
+                );
+                dir = fallback;
+            }
+        }
     }
     for file in reader.files.iter() {
-        file.write_to_file(&dir);
+        if let Err(err) = file.write_to_file(&dir) {
+            eprintln!("failed to extract {}: {}", file.path, err);
+            return None;
+        }
     }
-    write_meta(&dir, ts);
+    if let Err(err) = write_meta(&dir, ts) {
+        eprintln!("failed to write metadata: {}", err);
+        return None;
+    }
     #[cfg(windows)]
     win::copy_runtime_broker(&dir);
-    #[cfg(linux)]
+    #[cfg(target_os = "linux")]
     reader.configure_permission(&dir);
     Some(dir.join(&reader.exe))
 }
