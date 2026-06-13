@@ -1406,7 +1406,7 @@ class RustdeskImpl {
 
   Future<bool> mainSetPermanentPasswordWithResult(
       {required String password, dynamic hint}) {
-    return Future.value(true);
+    return Future.value(false);
   }
 
   Future<bool> mainCheckSuperUserPermission({dynamic hint}) {

@@ -723,7 +723,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Alias", "Alias"),
         ("ScrollEdge", "Desplazamiento de pantalla"),
         ("Allow insecure TLS fallback", "Permitir conexión TLS insegura de respaldo"),
-        ("allow-insecure-tls-fallback-tip", "De forma predeterminada, Camellia verifica el certificado de servidor para protocolos que usen TLS.\nCon esta opción habilitada, Rustdesk volverá al paso de omisión de verificación y procederá en caso de fallo de verificación."),
+        ("allow-insecure-tls-fallback-tip", "De forma predeterminada, Camellia verifica el certificado de servidor para protocolos que usen TLS.\nCon esta opción habilitada, Camellia volverá al paso de omisión de verificación y procederá en caso de fallo de verificación."),
         ("Disable UDP", "Inhabilitar UDP"),
         ("disable-udp-tip", "Controla si se usa TCP solamente.\nCuando esta opción está activa, Camellia no usará más el puerto UDP 21116, en su lugar se usará el TCP 21116."),
         ("server-oss-not-support-tip", "NOTA: El servidor Camellia OSS no incluye esta característica."),
