@@ -2185,13 +2185,18 @@ pub fn read_custom_client(config: &str) {
         return;
     };
     const KEY: &str = "";
-    let Some(pk) = get_rs_pk(KEY) else {
-        log::error!("Failed to parse public key of custom client");
-        return;
-    };
-    let Ok(data) = sign::verify(&data, &pk) else {
-        log::error!("Failed to dec custom client config");
-        return;
+    let data = if KEY.is_empty() {
+        data
+    } else {
+        let Some(pk) = get_rs_pk(KEY) else {
+            log::error!("Failed to parse public key of custom client");
+            return;
+        };
+        let Ok(data) = sign::verify(&data, &pk) else {
+            log::error!("Failed to dec custom client config");
+            return;
+        };
+        data
     };
     let Ok(mut data) =
         serde_json::from_slice::<std::collections::HashMap<String, serde_json::Value>>(&data)

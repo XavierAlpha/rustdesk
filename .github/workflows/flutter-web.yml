@@ -37,30 +37,6 @@ on:
         required: false
         default: ""
         type: string
-  workflow_call:
-    inputs:
-      version:
-        type: string
-        required: true
-      upload-artifact:
-        type: boolean
-        default: true
-      upload-release:
-        type: boolean
-        default: false
-      upload-tag:
-        type: string
-        default: "nightly"
-      rs-pub-key:
-        type: string
-        default: ""
-      rendezvous-servers:
-        type: string
-        default: ""
-      api-server:
-        type: string
-        default: ""
-
 env:
   VERSION: "${{ inputs.version }}"
   UPLOAD_ARTIFACT: "${{ inputs.upload-artifact }}"

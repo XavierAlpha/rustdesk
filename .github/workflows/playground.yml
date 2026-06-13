@@ -99,8 +99,11 @@ jobs:
       - name: Sync Cargo.toml version
         shell: bash
         run: |
-          sed -i -e "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
-          sed -i -e "s/^version:.*/version: ${{ env.VERSION }}+${{ github.run_number }}/" flutter/pubspec.yaml
+          cargo_version="${VERSION#v}"
+          export CARGO_VERSION="$cargo_version"
+          sed -i -e "s/^version = \".*\"/version = \"$cargo_version\"/" Cargo.toml
+          perl -0pi -e 's/(\[\[package\]\]\nname = "rustdesk"\nversion = ")[^"]+(")/$1$ENV{CARGO_VERSION}$2/' Cargo.lock
+          sed -i -e "s/^version:.*/version: $cargo_version+${{ github.run_number }}/" flutter/pubspec.yaml
       - name: Import the codesign cert
         if: env.MACOS_P12_BASE64 != null
         uses: apple-actions/import-codesign-certs@253ddeeac23f2bdad1646faac5c8c2832e800071 # v1
@@ -273,8 +276,11 @@ jobs:
       - name: Sync Cargo.toml version
         shell: bash
         run: |
-          sed -i -e "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" Cargo.toml
-          sed -i -e "s/^version:.*/version: ${{ env.VERSION }}+${{ github.run_number }}/" flutter/pubspec.yaml
+          cargo_version="${VERSION#v}"
+          export CARGO_VERSION="$cargo_version"
+          sed -i -e "s/^version = \".*\"/version = \"$cargo_version\"/" Cargo.toml
+          perl -0pi -e 's/(\[\[package\]\]\nname = "rustdesk"\nversion = ")[^"]+(")/$1$ENV{CARGO_VERSION}$2/' Cargo.lock
+          sed -i -e "s/^version:.*/version: $cargo_version+${{ github.run_number }}/" flutter/pubspec.yaml
       - name: Install dependencies
         run: |
           sudo apt-get update

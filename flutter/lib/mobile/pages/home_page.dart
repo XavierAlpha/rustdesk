@@ -27,7 +27,9 @@ class HomePageState extends State<HomePage> {
   var _selectedIndex = 0;
   int get selectedIndex => _selectedIndex;
   bool get isServerPageCurrentTab =>
-      _pages.isNotEmpty && _pages.elementAt(_selectedIndex) is ServerPage;
+      _selectedIndex >= 0 &&
+      _selectedIndex < _pages.length &&
+      _pages[_selectedIndex] is ServerPage;
   final List<PageShape> _pages = [];
   int _chatPageTabIndex = -1;
   bool get isChatPageCurrentTab => isAndroid

@@ -1026,7 +1026,7 @@ class JobController {
     int? fileNum = 0;
     double? speed = 0;
     try {
-      id = int.parse(evt['id']);
+      id = int.tryParse(evt['id']?.toString() ?? '') ?? -1;
     } catch (_) {}
     final jobIndex = getJob(id);
     if (jobIndex == -1) return true;
@@ -1036,7 +1036,7 @@ class JobController {
       job.state = JobState.done;
     } else if (job.type == JobType.deleteDir) {
       try {
-        fileNum = int.tryParse(evt['file_num']);
+        fileNum = int.tryParse(evt['file_num']?.toString() ?? '');
       } catch (_) {}
       if (fileNum != null) {
         if (fileNum < job.fileNum) return true; // file_num can be 0 at last
