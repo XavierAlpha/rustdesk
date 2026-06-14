@@ -36,7 +36,7 @@ class SettingsPage extends StatefulWidget implements PageShape {
   State<SettingsPage> createState() => _SettingsState();
 }
 
-const url = 'https://rustdesk.com/';
+const url = 'https://camellia.aimmv.com/';
 
 enum KeepScreenOn {
   never,
@@ -110,7 +110,8 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         bind.mainGetOptionSync(key: kOptionEnableLanDiscovery));
     _onlyWhiteList = whitelistNotEmpty();
     _enableDirectIPAccess = option2bool(
-        kOptionDirectServer, bind.mainGetOptionSync(key: kOptionDirectServer));
+        kOptionEnableDirectServer,
+        bind.mainGetOptionSync(key: kOptionEnableDirectServer));
     _enableRecordSession = option2bool(kOptionEnableRecordSession,
         bind.mainGetOptionSync(key: kOptionEnableRecordSession));
     _enableHardwareCodec = option2bool(kOptionEnableHwcodec,
@@ -182,7 +183,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
       }
 
       var checkUpdateOnStartup =
-          mainGetLocalBoolOptionSync(kOptionEnableCheckUpdate);
+          mainGetLocalBoolOptionSync(kOptionAllowCheckUpdate);
       if (checkUpdateOnStartup != _checkUpdateOnStartup) {
         update = true;
         _checkUpdateOnStartup = checkUpdateOnStartup;
@@ -463,14 +464,15 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                             }))
             ]),
         initialValue: _enableDirectIPAccess,
-        onToggle: isOptionFixed(kOptionDirectServer)
+        onToggle: isOptionFixed(kOptionEnableDirectServer)
             ? null
             : (_) async {
                 _enableDirectIPAccess = !_enableDirectIPAccess;
                 String value =
-                    bool2option(kOptionDirectServer, _enableDirectIPAccess);
+                    bool2option(
+                    kOptionEnableDirectServer, _enableDirectIPAccess);
                 await bind.mainSetOption(
-                    key: kOptionDirectServer, value: value);
+                    key: kOptionEnableDirectServer, value: value);
                 setState(() {});
               },
       ),
@@ -602,7 +604,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
             Text(translate('Check for software update on startup')),
           ]),
           onToggle: (bool toValue) async {
-            await mainSetLocalBoolOption(kOptionEnableCheckUpdate, toValue);
+            await mainSetLocalBoolOption(kOptionAllowCheckUpdate, toValue);
             setState(() => _checkUpdateOnStartup = toValue);
           },
         ),
@@ -960,7 +962,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                 title: Text(translate("Version: ") + version),
                 value: Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text('rustdesk.com',
+                  child: Text('camellia.aimmv.com',
                       style: TextStyle(
                         decoration: TextDecoration.underline,
                       )),
@@ -985,7 +987,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
             SettingsTile(
               title: Text(translate("Privacy Statement")),
               onPressed: (context) =>
-                  launchUrlString('https://rustdesk.com/privacy.html'),
+                  launchUrlString('https://camellia.aimmv.com/privacy.html'),
               leading: Icon(Icons.privacy_tip),
             )
           ],
@@ -1098,12 +1100,12 @@ void showAbout(OverlayDialogManager dialogManager) {
         Text('Version: $version'),
         InkWell(
             onTap: () async {
-              const url = 'https://rustdesk.com/';
+              const url = 'https://camellia.aimmv.com/';
               await launchUrl(Uri.parse(url));
             },
             child: Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('rustdesk.com',
+              child: Text('camellia.aimmv.com',
                   style: TextStyle(
                     decoration: TextDecoration.underline,
                   )),

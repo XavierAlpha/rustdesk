@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/main.dart';
+import 'package:flutter_hbb/mobile/pages/home_page.dart';
 import 'package:flutter_hbb/mobile/pages/settings_page.dart';
 import 'package:flutter_hbb/models/chat_model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
@@ -129,6 +130,9 @@ class ServerModel with ChangeNotifier {
   final controller = ScrollController();
 
   WeakReference<FFI> parent;
+
+  bool get _shouldShowAndroidRequestDialog =>
+      HomePage.homeKey.currentState?.isServerPageCurrentTab != true;
 
   ServerModel(this.parent) {
     _emptyIdShow = translate("Generating ...");
@@ -421,28 +425,7 @@ class ServerModel with ChangeNotifier {
       if (!await AndroidPermissionManager.check(kManageExternalStorage)) {
         await AndroidPermissionManager.request(kManageExternalStorage);
       }
-      final res = await parent.target?.dialogManager
-          .show<bool>((setState, close, context) {
-        submit() => close(true);
-        return CustomAlertDialog(
-          title: Row(children: [
-            const Icon(Icons.warning_amber_sharp,
-                color: Colors.redAccent, size: 28),
-            const SizedBox(width: 10),
-            Text(translate("Warning")),
-          ]),
-          content: Text(translate("android_service_will_start_tip")),
-          actions: [
-            dialogButton("Cancel", onPressed: close, isOutline: true),
-            dialogButton("OK", onPressed: submit),
-          ],
-          onSubmit: submit,
-          onCancel: close,
-        );
-      });
-      if (res == true) {
-        startService();
-      }
+      startService();
     }
   }
 
@@ -579,7 +562,9 @@ class ServerModel with ChangeNotifier {
       }
       scrollToBottom();
       notifyListeners();
-      if (isAndroid && !client.authorized) showLoginDialog(client);
+      if (isAndroid && !client.authorized && _shouldShowAndroidRequestDialog) {
+        showLoginDialog(client);
+      }
       if (isAndroid) androidUpdatekeepScreenOn();
     } catch (e) {
       debugPrint("Failed to call loginRequest,error:$e");
@@ -767,7 +752,9 @@ class ServerModel with ChangeNotifier {
         _clients[index].incomingVoiceCall = client.incomingVoiceCall;
         if (client.incomingVoiceCall) {
           if (isAndroid) {
-            showVoiceCallDialog(client);
+            if (_shouldShowAndroidRequestDialog) {
+              showVoiceCallDialog(client);
+            }
           } else {
             // Has incoming phone call, let's set the window on top.
             Future.delayed(Duration.zero, () {
@@ -936,20 +923,5 @@ showInputWarnAlert(FFI ffi) {
 }
 
 Future<void> showClientsMayNotBeChangedAlert(FFI? ffi) async {
-  await ffi?.dialogManager.show((setState, close, context) {
-    return CustomAlertDialog(
-      title: Text(translate("Permissions")),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(translate("android_permission_may_not_change_tip")),
-        ],
-      ),
-      actions: [
-        dialogButton("OK", onPressed: close),
-      ],
-      onSubmit: close,
-      onCancel: close,
-    );
-  });
+  showToast(translate("android_permission_may_not_change_tip"));
 }
