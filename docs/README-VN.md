@@ -1,37 +1,40 @@
 
 
 <p align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
+  <img src="../res/logo-header.svg" alt="Camellia - Your remote desktop"><br>
   <a href="#free-public-servers">Server</a> •
   <a href="#raw-steps-to-build">Build</a> •
   <a href="#how-to-build-with-docker">Docker</a> •
   <a href="#file-structure">Structure</a> •
   <a href="#snapshot">Snapshot</a><br>
   [<a href="../README.md">English</a>] | [<a href="README-UA.md">Українська</a>] | [<a href="README-CS.md">česky</a>] | [<a href="README-ZH.md">中文</a>] | [<a href="README-HU.md">Magyar</a>] | [<a href="README-ES.md">Español</a>] | [<a href="README-FA.md">فارسی</a>] | [<a href="README-FR.md">Français</a>] | [<a href="README-DE.md">Deutsch</a>] | [<a href="README-PL.md">Polski</a>] | [<a href="README-ID.md">Indonesian</a>] | [<a href="README-FI.md">Suomi</a>] | [<a href="README-ML.md">മലയാളം</a>] | [<a href="README-JP.md">日本語</a>] | [<a href="README-NL.md">Nederlands</a>] | [<a href="README-IT.md">Italiano</a>] | [<a href="README-RU.md">Русский</a>] | [<a href="README-PTBR.md">Português (Brasil)</a>] | [<a href="README-EO.md">Esperanto</a>] | [<a href="README-KR.md">한국어</a>] | [<a href="README-AR.md">العربي</a>] | [<a href="README-GR.md">Ελληνικά</a>]<br>
-  <b>Chúng tôi rất hoan nghênh sự hỗ trợ của bạn trong việc dịch trang README, trang giao diện người dùng của RustDesk - <a href="https://github.com/rustdesk/rustdesk/tree/master/src/lang">RustDesk UI</a> và trang tài liệu của RustDesk - <a href="https://github.com/rustdesk/doc.rustdesk.com">RustDesk Doc</a> sang Tiếng Việt</b>
+  <b>Chúng tôi rất hoan nghênh sự hỗ trợ của bạn trong việc dịch trang README, trang giao diện người dùng của Camellia - <a href="https://github.com/CamelliaCorp/camellia/tree/master/src/lang">Camellia UI</a> và trang tài liệu của Camellia - <a href="https://github.com/CamelliaCorp/camellia">Camellia Doc</a> sang Tiếng Việt</b>
 </p>
 
-Hãy trao đổi với chúng tôi qua: [Discord](https://discord.gg/nDceKgxnkV) | [Twitter](https://twitter.com/rustdesk) | [Reddit](https://www.reddit.com/r/rustdesk) | [YouTube](https://www.youtube.com/@rustdesk)
+License: GNU Affero General Public License v3.0 (AGPL-3.0). See LICENCE.
 
-[![RustDesk Server Pro](https://img.shields.io/badge/RustDesk%20Server%20Pro-T%C3%ADnh%20N%C4%83ng%20N%C3%A2ng%20Cao-blue)](https://rustdesk.com/pricing.html)
 
-RustDesk là một phần mềm điểu khiển máy tính từ xa mã nguồn mở, được viết bằng Rust. Nó hoạt động ngay sau khi cài đặt, không yêu cầu cấu hình phức tạp. Bạn có toàn quyền kiểm soát với dữ liệu của mình mà không cần phải lo lắng về vấn đề bảo mật. Bạn có thể sử dụng máy chủ rendezvous/relay của chúng tôi hoặc [tự cài đặt máy chủ của riêng mình](https://rustdesk.com/server) hay thậm chí [tự tạo máy chủ rendezvous/relay cho riêng bạn](https://github.com/rustdesk/rustdesk-server-demo).
+Contact: contact@aimmv.com | GitHub: https://github.com/CamelliaCorp/camellia
 
-![image](https://user-images.githubusercontent.com/71636191/171661982-430285f0-2e12-4b1d-9957-4a58e375304d.png)
+[![Camellia Server Pro](./assets/camellia-server-pro-badge.svg)](https://camellia.aimmv.com/pricing.html)
 
-**RustDesk** luôn hoan nghênh mọi đóng góp từ mọi người. Hãy xem tệp [`docs/CONTRIBUTING.md`](CONTRIBUTING.md) để bắt đầu. 
+Camellia là một phần mềm điểu khiển máy tính từ xa mã nguồn mở, được viết bằng Rust. Nó hoạt động ngay sau khi cài đặt, không yêu cầu cấu hình phức tạp. Bạn có toàn quyền kiểm soát với dữ liệu của mình mà không cần phải lo lắng về vấn đề bảo mật. Bạn có thể sử dụng máy chủ rendezvous/relay của chúng tôi hoặc [tự cài đặt máy chủ của riêng mình](https://camellia.aimmv.com/server) hay thậm chí [tự tạo máy chủ rendezvous/relay cho riêng bạn](https://github.com/CamelliaCorp/camellia).
 
-[**FAQ**](https://github.com/rustdesk/rustdesk/wiki/FAQ)
-[**BINARY DOWNLOAD**](https://github.com/rustdesk/rustdesk/releases)
-[**NIGHTLY BUILD**](https://github.com/rustdesk/rustdesk/FAQreleases/tag/nightly)
+![image](./assets/171661982-430285f0-2e12-4b1d-9957-4a58e375304d.png)
 
-[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"
+**Camellia** luôn hoan nghênh mọi đóng góp từ mọi người. Hãy xem tệp [`docs/CONTRIBUTING.md`](CONTRIBUTING.md) để bắt đầu. 
+
+[**FAQ**](https://github.com/CamelliaCorp/camellia/wiki/FAQ)
+[**BINARY DOWNLOAD**](https://github.com/CamelliaCorp/camellia/releases)
+[**NIGHTLY BUILD**](https://github.com/CamelliaCorp/camellia/FAQreleases/tag/nightly)
+
+[<img src="./assets/fdroid-badge.png"
     alt="Get it on F-Droid"
     height="80">](https://f-droid.org/en/packages/com.carriez.flutter_hbb)
 
 ## Dependencies
 
-Phiên bản máy tính sử dụng __Flutter__ hoặc __Sciter__ (đã lỗi thời) cho giao diện người dùng (GUI). Hướng dẫn này chỉ áp dụng cho phiên bản Sciter, vì nó thân thiện và dễ bắt đầu hơn. Hãy kiểm tra [CI](https://github.com/rustdesk/rustdesk/blob/master/.github/workflows/flutter-build.yml) của chúng tôi để xây dựng phiên bản Flutter.
+Phiên bản máy tính sử dụng __Flutter__ hoặc __Sciter__ (đã lỗi thời) cho giao diện người dùng (GUI). Hướng dẫn này chỉ áp dụng cho phiên bản Sciter, vì nó thân thiện và dễ bắt đầu hơn. Hãy kiểm tra [CI](https://github.com/CamelliaCorp/camellia/blob/master/.github/workflows/flutter-build.yml) của chúng tôi để xây dựng phiên bản Flutter.
 
 Vui lòng tự tải thư viện `Sciter` về máy theo hướng dẫn cho từng hệ điều hành.
 
@@ -47,7 +50,7 @@ Vui lòng tự tải thư viện `Sciter` về máy theo hướng dẫn cho từ
   - Linux/MacOS: `vcpkg install libvpx libyuv opus aom`
 - Chạy lệnh `cargo run`
 
-## [Build](https://rustdesk.com/docs/en/dev/build/)
+## [Build](https://camellia.aimmv.com/docs/en/dev/build/)
 
 ## Cách build cho Linux
 
@@ -99,8 +102,8 @@ cd
 ```sh
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
-git clone https://github.com/rustdesk/rustdesk
-cd rustdesk
+git clone https://github.com/CamelliaCorp/camellia
+cd camellia
 mkdir -p target/debug
 wget https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.lnx/x64/libsciter-gtk.so
 mv libsciter-gtk.so target/debug
@@ -112,50 +115,48 @@ VCPKG_ROOT=$HOME/vcpkg cargo run
 Bắt đầu bằng cách sao chép repo này về máy tính của bạn và tạo Docker container:
 
 ```sh
-git clone https://github.com/rustdesk/rustdesk
-cd rustdesk
-docker build -t "rustdesk-builder" .
+git clone https://github.com/CamelliaCorp/camellia
+cd camellia
+docker build -t "camellia-builder" .
 ```
 
 Sau đó, mỗi khi bạn chạy ứng dụng, thì hãy chạy dòng lệnh sau:
 
 ```sh
-docker run --rm -it -v $PWD:/home/user/rustdesk -v rustdesk-git-cache:/home/user/.cargo/git -v rustdesk-registry-cache:/home/user/.cargo/registry -e PUID="$(id -u)" -e PGID="$(id -g)" rustdesk-builder
+docker run --rm -it -v $PWD:/home/user/camellia -v camellia-git-cache:/home/user/.cargo/git -v camellia-registry-cache:/home/user/.cargo/registry -e PUID="$(id -u)" -e PGID="$(id -g)" camellia-builder
 ```
 
 Lưu ý rằng **lần build đầu tiên có thể mất thời gian hơn trước khi các dependencies được lưu vào bộ nhớ cache**, nhưng các lần build sau sẽ nhanh hơn. Ngoài ra, nếu bạn cần chỉ định các đối số khác cho lệnh build, bạn có thể thêm chúng vào cuối lệnh ở phần `<OPTIONAL-ARGS>`. Ví dụ, nếu bạn muốn build phiên bản tối ưu hóa, bạn sẽ chạy lệnh trên với tùy chọn `--release`. Kết quả biên dịch sẽ được lưu trong thư mục target trên máy tính của bạn, và có thể chạy với lệnh:
 
 ```sh
-target/debug/rustdesk
+target/debug/camellia
 ```
 
 Nếu bạn đang chạy bản build được tối ưu hóa, thì bạn có thể chạy với lệnh:
 
 ```sh
-target/release/rustdesk
+target/release/camellia
 ```
 
-Hãy đảm bảo rằng bạn đang chạy các lệnh này từ gốc của thư mục **RustDesk**, nếu không, ứng dụng có thể không thể tìm thấy các tệp tài nguyên cần thiết. Hãy lưu ý rằng các câu lệnh con khác của **cargo** như **install** hoặc **run** hiện không được hỗ trợ qua phương pháp này, vì chúng sẽ cài đặt hoặc chạy chương trình bên trong **container** thay vì trên máy tính của bạn.
+Hãy đảm bảo rằng bạn đang chạy các lệnh này từ gốc của thư mục **Camellia**, nếu không, ứng dụng có thể không thể tìm thấy các tệp tài nguyên cần thiết. Hãy lưu ý rằng các câu lệnh con khác của **cargo** như **install** hoặc **run** hiện không được hỗ trợ qua phương pháp này, vì chúng sẽ cài đặt hoặc chạy chương trình bên trong **container** thay vì trên máy tính của bạn.
 
 ## Cấu trúc tệp tin
 
-- **[libs/hbb_common](https://github.com/rustdesk/rustdesk/tree/master/libs/hbb_common)**: video codec, cấu hình, tcp/udp wrapper, protobuf, fs functions để truyền file, và một số hàm tiện ích khác
-- **[libs/scrap](https://github.com/rustdesk/rustdesk/tree/master/libs/scrap)**: ghi lại màn hình
-- **[libs/enigo](https://github.com/rustdesk/rustdesk/tree/master/libs/enigo)**: điều khiển máy tính/chuột trên các nền tảng khác nhau
-- **[src/ui](https://github.com/rustdesk/rustdesk/tree/master/src/ui)**: giao diện người dùng
-- **[src/server](https://github.com/rustdesk/rustdesk/tree/master/src/server)**: các dịch vụ âm thanh, clipboard, đầu vào, video và các kết nối mạng
-- **[src/client.rs](https://github.com/rustdesk/rustdesk/tree/master/src/client.rs)**: bắt đầu kết nối với một peer
-- **[src/rendezvous_mediator.rs](https://github.com/rustdesk/rustdesk/tree/master/src/rendezvous_mediator.rs)**: giao tiếp với [rustdesk-server](https://github.com/rustdesk/rustdesk-server), đợi kết nối trực tiếp (TCP hole punching) hoặc kết nối được chuyển tiếp.
-- **[src/platform](https://github.com/rustdesk/rustdesk/tree/master/src/platform)**: mã nguồn riêng cho mỗi nền tảng
-- **[flutter](https://github.com/rustdesk/rustdesk/tree/master/flutter)**: Mã Flutter dành máy tính và điện thoại
-- **[flutter/web/js](https://github.com/rustdesk/rustdesk/tree/master/flutter/web/js)**: Mã JavaScript dành cho giao diện trên web bằng Flutter
+- **[libs/hbb_common](https://github.com/CamelliaCorp/camellia/tree/master/libs/hbb_common)**: video codec, cấu hình, tcp/udp wrapper, protobuf, fs functions để truyền file, và một số hàm tiện ích khác
+- **[libs/scrap](https://github.com/CamelliaCorp/camellia/tree/master/libs/scrap)**: ghi lại màn hình
+- **[libs/enigo](https://github.com/CamelliaCorp/camellia/tree/master/libs/enigo)**: điều khiển máy tính/chuột trên các nền tảng khác nhau
+- **[src/ui](https://github.com/CamelliaCorp/camellia/tree/master/src/ui)**: giao diện người dùng
+- **[src/server](https://github.com/CamelliaCorp/camellia/tree/master/src/server)**: các dịch vụ âm thanh, clipboard, đầu vào, video và các kết nối mạng
+- **[src/client.rs](https://github.com/CamelliaCorp/camellia/tree/master/src/client.rs)**: bắt đầu kết nối với một peer
+- **[src/rendezvous_mediator.rs](https://github.com/CamelliaCorp/camellia/tree/master/src/rendezvous_mediator.rs)**: giao tiếp với [Camellia server](https://github.com/CamelliaCorp/camellia), đợi kết nối trực tiếp (TCP hole punching) hoặc kết nối được chuyển tiếp.
+- **[src/platform](https://github.com/CamelliaCorp/camellia/tree/master/src/platform)**: mã nguồn riêng cho mỗi nền tảng
+- **[flutter](https://github.com/CamelliaCorp/camellia/tree/master/flutter)**: Mã Flutter dành máy tính và điện thoại
+- **[flutter/web/js](https://github.com/CamelliaCorp/camellia/tree/master/flutter/web/js)**: Mã JavaScript dành cho giao diện trên web bằng Flutter
 
 ## Snapshot
 
-![image](https://user-images.githubusercontent.com/71636191/113112362-ae4deb80-923b-11eb-957d-ff88daad4f06.png)
+![image](./assets/113112362-ae4deb80-923b-11eb-957d-ff88daad4f06.png)
+![image](./assets/113112619-f705a480-923b-11eb-911d-97e984ef52b6.png)
+![image](./assets/113112857-3fbd5d80-923c-11eb-9836-768325faf906.png)
+![image](./assets/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
 
-![image](https://user-images.githubusercontent.com/71636191/113112619-f705a480-923b-11eb-911d-97e984ef52b6.png)
-
-![image](https://user-images.githubusercontent.com/71636191/113112857-3fbd5d80-923c-11eb-9836-768325faf906.png)
-
-![image](https://user-images.githubusercontent.com/71636191/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
