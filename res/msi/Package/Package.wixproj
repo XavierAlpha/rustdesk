@@ -1,4 +1,4 @@
-﻿<Project Sdk="WixToolset.Sdk/4.0.5">
+<Project Sdk="WixToolset.Sdk/4.0.5">
   <PropertyGroup>
     <IncludeSearchPaths>
     </IncludeSearchPaths>

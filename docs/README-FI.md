@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../res/logo-header.svg" alt="RustDesk - Etätyöpöytäsi"><br>
+  <img src="../res/logo-header.svg" alt="Camellia - Etätyöpöytäsi"><br>
   <a href="#free-public-servers">Palvelimet</a> •
   <a href="#raw-steps-to-build">Rakenna</a> •
   <a href="#how-to-build-with-docker">Docker</a> •
@@ -9,15 +9,18 @@
   <b>Tarvitsemme apua tämän README-tiedoston kääntämiseksi äidinkielellesi</b>
 </p>
 
-Juttele meidän kanssa: [Discord](https://discord.gg/nDceKgxnkV) | [Twitter](https://twitter.com/rustdesk) | [Reddit](https://www.reddit.com/r/rustdesk) | [YouTube](https://www.youtube.com/@rustdesk)
+License: GNU Affero General Public License v3.0 (AGPL-3.0). See LICENCE.
 
-[![RustDesk Server Pro](https://img.shields.io/badge/RustDesk%20Server%20Pro-Edistyneet%20Ominaisuudet-blue)](https://rustdesk.com/pricing.html)
 
-Vielä yksi etätyöpöytäohjelmisto, ohjelmoitu Rust-kielellä. Toimii suoraan pakkauksesta, ei tarvitse asetusta. Hallitset täysin tietojasi, ei tarvitse murehtia turvallisuutta. Voit käyttää meidän rendezvous/relay-palvelinta, [aseta omasi](https://rustdesk.com/server), tai [kirjoittaa oma rendezvous/relay-palvelin](https://github.com/rustdesk/rustdesk-server-demo).
+Contact: contact@aimmv.com | GitHub: https://github.com/CamelliaCorp/camellia
 
-RustDesk toivottaa avustukset tervetulleiksi kaikilta. Katso lisätietoja [`docs/CONTRIBUTING.md`](CONTRIBUTING.md) avun saamiseksi.
+[![Camellia Server Pro](./assets/camellia-server-pro-badge.svg)](https://camellia.aimmv.com/pricing.html)
 
-[**BINAARILATAUS**](https://github.com/rustdesk/rustdesk/releases)
+Vielä yksi etätyöpöytäohjelmisto, ohjelmoitu Rust-kielellä. Toimii suoraan pakkauksesta, ei tarvitse asetusta. Hallitset täysin tietojasi, ei tarvitse murehtia turvallisuutta. Voit käyttää meidän rendezvous/relay-palvelinta, [aseta omasi](https://camellia.aimmv.com/server), tai [kirjoittaa oma rendezvous/relay-palvelin](https://github.com/CamelliaCorp/camellia).
+
+Camellia toivottaa avustukset tervetulleiksi kaikilta. Katso lisätietoja [`docs/CONTRIBUTING.md`](CONTRIBUTING.md) avun saamiseksi.
+
+[**BINAARILATAUS**](https://github.com/CamelliaCorp/camellia/releases)
 
 ## Riippuvuudet
 
@@ -88,8 +91,8 @@ cd
 ```sh
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
-git clone https://github.com/rustdesk/rustdesk
-cd rustdesk
+git clone https://github.com/CamelliaCorp/camellia
+cd camellia
 mkdir -p target/debug
 wget https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.lnx/x64/libsciter-gtk.so
 mv libsciter-gtk.so target/debug
@@ -101,48 +104,46 @@ VCPKG_ROOT=$HOME/vcpkg cargo run
 Aloita kloonaamalla tietovarasto ja rakentamalla docker-säiliö:
 
 ```sh
-git clone https://github.com/rustdesk/rustdesk
-cd rustdesk
-docker build -t "rustdesk-builder" .
+git clone https://github.com/CamelliaCorp/camellia
+cd camellia
+docker build -t "camellia-builder" .
 ```
 
 Sitten, joka kerta kun sinun on rakennettava sovellus, suorita seuraava komento:
 
 ```sh
-docker run --rm -it -v $PWD:/home/user/rustdesk -v rustdesk-git-cache:/home/user/.cargo/git -v rustdesk-registry-cache:/home/user/.cargo/registry -e PUID="$(id -u)" -e PGID="$(id -g)" rustdesk-builder
+docker run --rm -it -v $PWD:/home/user/camellia -v camellia-git-cache:/home/user/.cargo/git -v camellia-registry-cache:/home/user/.cargo/registry -e PUID="$(id -u)" -e PGID="$(id -g)" camellia-builder
 ```
 
 Huomaa, että ensimmäinen rakentaminen saattaa kestää pitempään ennen kuin riippuvuudet on siirretty välimuistiin, seuraavat rakentamiset ovat nopeampia. Lisäksi, jos sinun on määritettävä eri väittämiä rakentamiskomennolle, saatat tehdä sen niin, että komennon lopussa <OPTIONAL-ARGS>`-kohdassa. Esimerkiksi, jos haluat rakentaa optimoidun julkaisuversion, sinun on ajettava komento yllä siten, että sitä seuraa väittämä`--release`. Suoritettava tiedosto on saatavilla järjestelmäsi kohdehakemistossa, ja se voidaan suorittaa seuraavan kera:
 
 ```sh
-target/debug/rustdesk
+target/debug/camellia
 ```
 
 Tai, jos olet suorittamassa jakeluversion suoritettavaa tiedostoa:
 
 ```sh
-target/release/rustdesk
+target/release/camellia
 ```
 
-Varmista, että suoritat näitä komentoja RustDesktop-tietovaraston juurihakemistossa, muutoin sovellus ei ehkä löydä vaadittuja resursseja. Huomaa myös, että muita cargo-alikomentoja kuten `install` tai `run` ei nykyisin tueta tässä menetelmässä, koska ne asentavat tai suorittavat ohjelman säiliön sisällä eikä isäntäohjelman sisällä.
+Varmista, että suoritat näitä komentoja Camelliatop-tietovaraston juurihakemistossa, muutoin sovellus ei ehkä löydä vaadittuja resursseja. Huomaa myös, että muita cargo-alikomentoja kuten `install` tai `run` ei nykyisin tueta tässä menetelmässä, koska ne asentavat tai suorittavat ohjelman säiliön sisällä eikä isäntäohjelman sisällä.
 
 ## Tiedostorakenne
 
-- **[libs/hbb_common](https://github.com/rustdesk/rustdesk/tree/master/libs/hbb_common)**: video codec, config, tcp/udp wrapper, protobuf, fs-funktiot tiedostosiirtoon, ja jotkut muut apuohjelmafunktiot
-- **[libs/scrap](https://github.com/rustdesk/rustdesk/tree/master/libs/scrap)**: näyttökaappaukset
-- **[libs/enigo](https://github.com/rustdesk/rustdesk/tree/master/libs/enigo)**: platform specific keyboard/mouse control
-- **[src/ui](https://github.com/rustdesk/rustdesk/tree/master/src/ui)**: Graafinen käyttöliittymä
-- **[src/server](https://github.com/rustdesk/rustdesk/tree/master/src/server)**: audio/clipboard/input/video services, and network connections
-- **[src/client.rs](https://github.com/rustdesk/rustdesk/tree/master/src/client.rs)**: start a peer connection
-- **[src/rendezvous_mediator.rs](https://github.com/rustdesk/rustdesk/tree/master/src/rendezvous_mediator.rs)**: Communicate with [rustdesk-server](https://github.com/rustdesk/rustdesk-server), wait for remote direct (TCP hole punching) or relayed connection
-- **[src/platform](https://github.com/rustdesk/rustdesk/tree/master/src/platform)**: platform specific code
+- **[libs/hbb_common](https://github.com/CamelliaCorp/camellia/tree/master/libs/hbb_common)**: video codec, config, tcp/udp wrapper, protobuf, fs-funktiot tiedostosiirtoon, ja jotkut muut apuohjelmafunktiot
+- **[libs/scrap](https://github.com/CamelliaCorp/camellia/tree/master/libs/scrap)**: näyttökaappaukset
+- **[libs/enigo](https://github.com/CamelliaCorp/camellia/tree/master/libs/enigo)**: platform specific keyboard/mouse control
+- **[src/ui](https://github.com/CamelliaCorp/camellia/tree/master/src/ui)**: Graafinen käyttöliittymä
+- **[src/server](https://github.com/CamelliaCorp/camellia/tree/master/src/server)**: audio/clipboard/input/video services, and network connections
+- **[src/client.rs](https://github.com/CamelliaCorp/camellia/tree/master/src/client.rs)**: start a peer connection
+- **[src/rendezvous_mediator.rs](https://github.com/CamelliaCorp/camellia/tree/master/src/rendezvous_mediator.rs)**: Communicate with [Camellia server](https://github.com/CamelliaCorp/camellia), wait for remote direct (TCP hole punching) or relayed connection
+- **[src/platform](https://github.com/CamelliaCorp/camellia/tree/master/src/platform)**: platform specific code
 
 ## Tilannekuvat
 
-![image](https://user-images.githubusercontent.com/71636191/113112362-ae4deb80-923b-11eb-957d-ff88daad4f06.png)
+![image](./assets/113112362-ae4deb80-923b-11eb-957d-ff88daad4f06.png)
+![image](./assets/113112619-f705a480-923b-11eb-911d-97e984ef52b6.png)
+![image](./assets/113112857-3fbd5d80-923c-11eb-9836-768325faf906.png)
+![image](./assets/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
 
-![image](https://user-images.githubusercontent.com/71636191/113112619-f705a480-923b-11eb-911d-97e984ef52b6.png)
-
-![image](https://user-images.githubusercontent.com/71636191/113112857-3fbd5d80-923c-11eb-9836-768325faf906.png)
-
-![image](https://user-images.githubusercontent.com/71636191/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
