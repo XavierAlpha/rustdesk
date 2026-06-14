@@ -943,14 +943,14 @@ pub fn check_software_update() {
     if is_custom_client() {
         return;
     }
-    let opt = LocalConfig::get_option(keys::OPTION_ENABLE_CHECK_UPDATE);
-    if config::option2bool(keys::OPTION_ENABLE_CHECK_UPDATE, &opt) {
+    let opt = LocalConfig::get_option(keys::OPTION_ALLOW_CHECK_UPDATE);
+    if config::option2bool(keys::OPTION_ALLOW_CHECK_UPDATE, &opt) {
         std::thread::spawn(move || allow_err!(do_check_software_update()));
     }
 }
 
 // No need to check `danger_accept_invalid_cert` for now.
-// Because the url is always `https://api.rustdesk.com/version/latest`.
+// Because the url is always `https://api.camellia.aimmv.com/version/latest`.
 #[tokio::main(flavor = "current_thread")]
 pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
     let (request, url) =
@@ -1072,6 +1072,10 @@ fn get_api_server_(api: String, custom: String) -> String {
     if !api.is_empty() {
         return api.to_owned();
     }
+    let api = config::API_SERVER.read().unwrap().clone();
+    if !api.is_empty() {
+        return api;
+    }
     let s0 = get_custom_rendezvous_server(custom);
     if !s0.is_empty() {
         let s = crate::increase_port(&s0, -2);
@@ -1081,20 +1085,22 @@ fn get_api_server_(api: String, custom: String) -> String {
             return format!("http://{}", s);
         }
     }
-    "https://admin.rustdesk.com".to_owned()
+    "".to_owned()
 }
 
 #[inline]
 pub fn is_public(url: &str) -> bool {
     let url = url.to_ascii_lowercase();
-    url.contains("rustdesk.com/") || url.ends_with("rustdesk.com")
+    url.contains("camellia.aimmv.com/") || url.ends_with("camellia.aimmv.com")
 }
 
 pub fn get_udp_punch_enabled() -> bool {
-    config::option2bool(
-        keys::OPTION_ENABLE_UDP_PUNCH,
-        &get_local_option(keys::OPTION_ENABLE_UDP_PUNCH),
-    )
+    // Honor the global "Disable UDP" switch by short-circuiting all UDP punch logic.
+    !is_udp_disabled()
+        && config::option2bool(
+            keys::OPTION_ENABLE_UDP_PUNCH,
+            &get_local_option(keys::OPTION_ENABLE_UDP_PUNCH),
+        )
 }
 
 pub fn get_ipv6_punch_enabled() -> bool {
@@ -1105,15 +1111,7 @@ pub fn get_ipv6_punch_enabled() -> bool {
 }
 
 pub fn get_local_option(key: &str) -> String {
-    let v = LocalConfig::get_option(key);
-    if key == keys::OPTION_ENABLE_UDP_PUNCH || key == keys::OPTION_ENABLE_IPV6_PUNCH {
-        if v.is_empty() {
-            if !is_public(&Config::get_rendezvous_server()) {
-                return "N".to_owned();
-            }
-        }
-    }
-    v
+    LocalConfig::get_option(key)
 }
 
 pub fn get_audit_server(api: String, custom: String, typ: String) -> String {
@@ -1819,7 +1817,7 @@ pub async fn get_key(sync: bool) -> String {
         options.remove("key").unwrap_or_default()
     };
     if key.is_empty() {
-        key = config::RS_PUB_KEY.to_owned();
+        key = config::RS_PUB_KEY.read().unwrap().clone();
     }
     key
 }
@@ -1937,12 +1935,14 @@ pub fn check_process(arg: &str, mut same_uid: bool) -> bool {
 }
 
 async fn secure_tcp_impl(conn: &mut Stream, key: &str, log_on_success: bool) -> ResultType<()> {
-    // Skip additional encryption when using WebSocket connections (wss://)
-    // as WebSocket Secure (wss://) already provides transport layer encryption.
+    // Skip additional encryption only when using WebSocket Secure (wss://),
+    // which already provides transport layer encryption.
     // This doesn't affect the end-to-end encryption between clients,
     // it only avoids redundant encryption between client and server.
-    if use_ws() {
-        return Ok(());
+    if let Stream::WebSocket(ws) = conn {
+        if ws.is_tls() {
+            return Ok(());
+        }
     }
     let rs_pk = get_rs_pk(key);
     let Some(rs_pk) = rs_pk else {
@@ -2032,7 +2032,7 @@ pub fn create_symmetric_key_msg(their_pk_b: [u8; 32]) -> (Bytes, Bytes, secretbo
 
 #[inline]
 pub fn using_public_server() -> bool {
-    crate::get_custom_rendezvous_server(get_option("custom-rendezvous-server")).is_empty()
+    false
 }
 
 pub struct ThrottledInterval {
@@ -2184,14 +2184,19 @@ pub fn read_custom_client(config: &str) {
         log::error!("Failed to decode custom client config");
         return;
     };
-    const KEY: &str = "5Qbwsde3unUcJBtrx9ZkvUmwFNoExHzpryHuPUdqlWM=";
-    let Some(pk) = get_rs_pk(KEY) else {
-        log::error!("Failed to parse public key of custom client");
-        return;
-    };
-    let Ok(data) = sign::verify(&data, &pk) else {
-        log::error!("Failed to dec custom client config");
-        return;
+    const KEY: &str = "";
+    let data = if KEY.is_empty() {
+        data
+    } else {
+        let Some(pk) = get_rs_pk(KEY) else {
+            log::error!("Failed to parse public key of custom client");
+            return;
+        };
+        let Ok(data) = sign::verify(&data, &pk) else {
+            log::error!("Failed to dec custom client config");
+            return;
+        };
+        data
     };
     let Ok(mut data) =
         serde_json::from_slice::<std::collections::HashMap<String, serde_json::Value>>(&data)
@@ -2272,6 +2277,9 @@ pub fn get_hwid() -> Bytes {
 
 #[inline]
 pub fn get_builtin_option(key: &str) -> String {
+    if key == keys::OPTION_HIDE_POWERED_BY_ME {
+        return "Y".to_owned();
+    }
     config::BUILTIN_SETTINGS
         .read()
         .unwrap()
@@ -2763,27 +2771,27 @@ mod tests {
 
     #[test]
     fn test_is_public() {
-        // Test URLs containing "rustdesk.com/"
-        assert!(is_public("https://rustdesk.com/"));
-        assert!(is_public("https://www.rustdesk.com/"));
-        assert!(is_public("https://api.rustdesk.com/v1"));
-        assert!(is_public("https://API.RUSTDESK.COM/v1"));
-        assert!(is_public("https://rustdesk.com/path"));
+        // Test URLs containing "camellia.aimmv.com/"
+        assert!(is_public("https://camellia.aimmv.com/"));
+        assert!(is_public("https://www.camellia.aimmv.com/"));
+        assert!(is_public("https://api.camellia.aimmv.com/v1"));
+        assert!(is_public("https://API.CAMELLIA.AIMMV.COM/v1"));
+        assert!(is_public("https://camellia.aimmv.com/path"));
 
-        // Test URLs ending with "rustdesk.com"
-        assert!(is_public("rustdesk.com"));
-        assert!(is_public("https://rustdesk.com"));
-        assert!(is_public("https://RustDesk.com"));
-        assert!(is_public("http://www.rustdesk.com"));
-        assert!(is_public("https://api.rustdesk.com"));
+        // Test URLs ending with "camellia.aimmv.com"
+        assert!(is_public("camellia.aimmv.com"));
+        assert!(is_public("https://camellia.aimmv.com"));
+        assert!(is_public("https://Camellia.AIMMV.com"));
+        assert!(is_public("http://www.camellia.aimmv.com"));
+        assert!(is_public("https://api.camellia.aimmv.com"));
 
         // Test non-public URLs
         assert!(!is_public("https://example.com"));
         assert!(!is_public("https://custom-server.com"));
         assert!(!is_public("http://192.168.1.1"));
         assert!(!is_public("localhost"));
-        assert!(!is_public("https://rustdesk.computer.com"));
-        assert!(!is_public("rustdesk.comhello.com"));
+        assert!(!is_public("https://camellia.aimmv.computer.com"));
+        assert!(!is_public("camellia.aimmv.comhello.com"));
     }
 
     #[test]

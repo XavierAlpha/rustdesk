@@ -456,10 +456,18 @@ impl RendezvousMediator {
                     if last_recv_msg.elapsed().as_millis() as u64 > rz.keep_alive as u64 * 3 / 2 {
                         bail!("Rendezvous connection is timeout");
                     }
-                    if (!Config::get_key_confirmed() ||
-                        !Config::get_host_key_confirmed(&rz.host_prefix)) &&
-                        last_register_sent.map(|x| x.elapsed().as_millis() as i64).unwrap_or(REG_INTERVAL) >= REG_INTERVAL {
-                        rz.register_pk(Sink::Stream(&mut conn)).await?;
+                    let elapsed = last_register_sent
+                        .map(|x| x.elapsed().as_millis() as i64)
+                        .unwrap_or(REG_INTERVAL);
+                    if elapsed >= REG_INTERVAL {
+                        if !Config::get_key_confirmed()
+                            || !Config::get_host_key_confirmed(&rz.host_prefix)
+                        {
+                            rz.register_pk(Sink::Stream(&mut conn)).await?;
+                        } else {
+                            // keep the peer online in tcp-only mode
+                            rz.register_peer(Sink::Stream(&mut conn)).await?;
+                        }
                         last_register_sent = Some(Instant::now());
                     }
                 }
@@ -533,10 +541,10 @@ impl RendezvousMediator {
             socket_addr_v6,
             ..Default::default()
         };
+        rr.set_id(Config::get_id());
         if initiate {
             rr.uuid = uuid.clone();
             rr.relay_server = relay_server.clone();
-            rr.set_id(Config::get_id());
         }
         msg_out.set_relay_response(rr);
         socket.send(&msg_out).await?;
@@ -852,8 +860,8 @@ async fn direct_server(server: ServerPtr) {
     let mut port = 0;
     loop {
         let disabled = !option2bool(
-            OPTION_DIRECT_SERVER,
-            &Config::get_option(OPTION_DIRECT_SERVER),
+            OPTION_ENABLE_DIRECT_SERVER,
+            &Config::get_option(OPTION_ENABLE_DIRECT_SERVER),
         ) || option2bool("stop-service", &Config::get_option("stop-service"));
         if !disabled && listener.is_none() {
             port = get_direct_port();

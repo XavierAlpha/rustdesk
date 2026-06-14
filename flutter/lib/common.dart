@@ -371,6 +371,35 @@ class MyTheme {
     }),
   );
 
+  static dynamic _themeDataCompat(dynamic theme) {
+    // Newer Flutter theme widgets expose `.data`; older SDKs expect the
+    // legacy theme object directly.
+    try {
+      return theme.data;
+    } on NoSuchMethodError {
+      return theme;
+    }
+  }
+
+  static dynamic _dialogThemeCompat(Color borderColor) {
+    return _themeDataCompat(DialogTheme(
+      elevation: 15,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18.0),
+        side: BorderSide(
+          width: 1,
+          color: borderColor,
+        ),
+      ),
+    ));
+  }
+
+  static dynamic _tabBarThemeCompat(Color labelColor) {
+    return _themeDataCompat(TabBarTheme(
+      labelColor: labelColor,
+    ));
+  }
+
   static ThemeData lightTheme = ThemeData(
     // https://stackoverflow.com/questions/77537315/after-upgrading-to-flutter-3-16-the-app-bar-background-color-button-size-and
     useMaterial3: false,
@@ -381,16 +410,7 @@ class MyTheme {
     appBarTheme: AppBarTheme(
       shadowColor: Colors.transparent,
     ),
-    dialogTheme: DialogTheme(
-      elevation: 15,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18.0),
-        side: BorderSide(
-          width: 1,
-          color: grayBg,
-        ),
-      ),
-    ),
+    dialogTheme: _dialogThemeCompat(grayBg),
     scrollbarTheme: scrollbarTheme,
     inputDecorationTheme: isDesktop
         ? InputDecorationTheme(
@@ -412,9 +432,7 @@ class MyTheme {
     cardColor: grayBg,
     hintColor: Color(0xFFAAAAAA),
     visualDensity: VisualDensity.adaptivePlatformDensity,
-    tabBarTheme: const TabBarTheme(
-      labelColor: Colors.black87,
-    ),
+    tabBarTheme: _tabBarThemeCompat(Colors.black87),
     tooltipTheme: tooltipTheme(),
     splashColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
     highlightColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
@@ -479,16 +497,7 @@ class MyTheme {
     appBarTheme: AppBarTheme(
       shadowColor: Colors.transparent,
     ),
-    dialogTheme: DialogTheme(
-      elevation: 15,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18.0),
-        side: BorderSide(
-          width: 1,
-          color: Color(0xFF24252B),
-        ),
-      ),
-    ),
+    dialogTheme: _dialogThemeCompat(Color(0xFF24252B)),
     scrollbarTheme: scrollbarThemeDark,
     inputDecorationTheme: (isDesktop || isWebDesktop)
         ? InputDecorationTheme(
@@ -513,9 +522,7 @@ class MyTheme {
     ),
     cardColor: Color(0xFF24252B),
     visualDensity: VisualDensity.adaptivePlatformDensity,
-    tabBarTheme: const TabBarTheme(
-      labelColor: Colors.white70,
-    ),
+    tabBarTheme: _tabBarThemeCompat(Colors.white70),
     tooltipTheme: tooltipTheme(),
     splashColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
     highlightColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
@@ -1586,7 +1593,7 @@ bool option2bool(String option, String value) {
     res = value != "N";
   } else if (option.startsWith("allow-") ||
       option == kOptionStopService ||
-      option == kOptionDirectServer ||
+      option == kOptionEnableDirectServer ||
       option == kOptionForceAlwaysRelay) {
     res = value == "Y";
   } else {
@@ -1604,7 +1611,7 @@ String bool2option(String option, bool b) {
     res = b ? defaultOptionYes : 'N';
   } else if (option.startsWith('allow-') ||
       option == kOptionStopService ||
-      option == kOptionDirectServer ||
+      option == kOptionEnableDirectServer ||
       option == kOptionForceAlwaysRelay) {
     res = b ? 'Y' : defaultOptionNo;
   } else {
@@ -2016,9 +2023,10 @@ Future<bool> restoreWindowPosition(WindowType type,
     }
     isRemotePeerPos = pos != null;
   }
-  pos ??= bind.getLocalFlutterOption(k: windowFramePrefix + type.name);
+  final savedPos =
+      pos ?? bind.getLocalFlutterOption(k: windowFramePrefix + type.name);
 
-  var lpos = LastWindowPosition.loadFromString(pos);
+  var lpos = LastWindowPosition.loadFromString(savedPos);
   if (lpos == null) {
     debugPrint("No window position saved, trying to center the window.");
     switch (type) {
@@ -2816,7 +2824,7 @@ Future<void> onActiveWindowChanged() async {
     } catch (err) {
       debugPrintStack(label: "$err");
     } finally {
-      debugPrint("Start closing RustDesk...");
+      debugPrint("Start closing Camellia...");
       await windowManager.setPreventClose(false);
       await windowManager.close();
       if (isMacOS) {
@@ -3033,7 +3041,7 @@ Future<void> updateSystemWindowTheme() async {
 ///
 /// Note: not found a general solution for rust based AVFoundation bingding.
 /// [AVFoundation] crate has compile error.
-const kMacOSPermChannel = MethodChannel("org.rustdesk.rustdesk/host");
+const kMacOSPermChannel = MethodChannel("com.camellia/host");
 
 enum PermissionAuthorizeType {
   undetermined,
@@ -3542,6 +3550,22 @@ Future<bool> setServerConfig(
   List<RxString>? errMsgs,
   ServerConfig config,
 ) async {
+  String? validateApiServer(String input) {
+    final uri = Uri.tryParse(input);
+    if (uri == null ||
+        !uri.hasScheme ||
+        !(uri.scheme == 'http' || uri.scheme == 'https')) {
+      return 'invalid_http';
+    }
+    if (uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasFragment ||
+        uri.query.isNotEmpty) {
+      return 'invalid server';
+    }
+    return null;
+  }
+
   String removeEndSlash(String input) {
     if (input.endsWith('/')) {
       return input.substring(0, input.length - 1);
@@ -3559,28 +3583,40 @@ Future<bool> setServerConfig(
     controllers[2].text = config.apiServer;
     controllers[3].text = config.key;
   }
+  if (errMsgs != null) {
+    for (final msg in errMsgs) {
+      msg.value = '';
+    }
+  }
   // id
-  if (config.idServer.isNotEmpty && errMsgs != null) {
-    errMsgs[0].value = translate(await bind.mainTestIfValidServer(
+  if (config.idServer.isNotEmpty) {
+    final idError = translate(await bind.mainTestIfValidServer(
         server: config.idServer, testWithProxy: true));
-    if (errMsgs[0].isNotEmpty) {
+    if (errMsgs != null) {
+      errMsgs[0].value = idError;
+    }
+    if (idError.isNotEmpty) {
       return false;
     }
   }
   // relay
-  if (config.relayServer.isNotEmpty && errMsgs != null) {
-    errMsgs[1].value = translate(await bind.mainTestIfValidServer(
+  if (config.relayServer.isNotEmpty) {
+    final relayError = translate(await bind.mainTestIfValidServer(
         server: config.relayServer, testWithProxy: true));
-    if (errMsgs[1].isNotEmpty) {
+    if (errMsgs != null) {
+      errMsgs[1].value = relayError;
+    }
+    if (relayError.isNotEmpty) {
       return false;
     }
   }
   // api
-  if (config.apiServer.isNotEmpty && errMsgs != null) {
-    if (!config.apiServer.startsWith('http://') &&
-        !config.apiServer.startsWith('https://')) {
-      errMsgs[2].value =
-          '${translate("API Server")}: ${translate("invalid_http")}';
+  if (config.apiServer.isNotEmpty) {
+    final apiError = validateApiServer(config.apiServer);
+    if (apiError != null) {
+      if (errMsgs != null) {
+        errMsgs[2].value = '${translate("API Server")}: ${translate(apiError)}';
+      }
       return false;
     }
   }
@@ -3697,7 +3733,7 @@ Widget loadPowered(BuildContext context) {
     cursor: SystemMouseCursors.click,
     child: GestureDetector(
       onTap: () {
-        launchUrl(Uri.parse('https://rustdesk.com'));
+        launchUrl(Uri.parse('https://camellia.aimmv.com'));
       },
       child: Opacity(
           opacity: 0.5,
@@ -3907,7 +3943,7 @@ get defaultOptionAccessMode => isCustomClient ? 'custom' : '';
 get defaultOptionApproveMode => isCustomClient ? 'password-click' : '';
 
 bool whitelistNotEmpty() {
-  // https://rustdesk.com/docs/en/self-host/client-configuration/advanced-settings/#whitelist
+  // https://camellia.aimmv.com/docs/en/self-host/client-configuration/advanced-settings/#whitelist
   final v = bind.mainGetOptionSync(key: kOptionWhitelist);
   return v != '' && v != ',';
 }

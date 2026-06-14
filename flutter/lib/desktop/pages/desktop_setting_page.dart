@@ -543,7 +543,7 @@ class _GeneralState extends State<_General> {
           _OptionCheckBox(
             context,
             'Check for software update on startup',
-            kOptionEnableCheckUpdate,
+            kOptionAllowCheckUpdate,
             isServer: false,
           ),
         if (showAutoUpdate)
@@ -1296,13 +1296,14 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
     update(bool v) => setState(() {});
     RxBool applyEnabled = false.obs;
     return [
-      _OptionCheckBox(context, 'Enable direct IP access', kOptionDirectServer,
+      _OptionCheckBox(
+          context, 'Enable direct IP access', kOptionEnableDirectServer,
           update: update, enabled: !locked),
       () {
         // Simple temp wrapper for PR check
         tmpWrapper() {
-          bool enabled = option2bool(kOptionDirectServer,
-              bind.mainGetOptionSync(key: kOptionDirectServer));
+          bool enabled = option2bool(kOptionEnableDirectServer,
+              bind.mainGetOptionSync(key: kOptionEnableDirectServer));
           if (!enabled) applyEnabled.value = false;
           controller.text =
               bind.mainGetOptionSync(key: kOptionDirectAccessPort);
@@ -1689,7 +1690,7 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
                 switchWidget(
                     Icons.web_asset_outlined,
                     'Use WebSocket',
-                    '${translate('websocket_tip')}\n\n${translate('server-oss-not-support-tip')}',
+                    translate('websocket_tip'),
                     kOptionAllowWebSocket),
               if (!isWeb)
                 futureBuilder(
@@ -1714,7 +1715,7 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
                               title: 'Disable UDP',
                               showTooltip: true,
                               tooltipMessage:
-                                  '${translate('disable-udp-tip')}\n\n${translate('server-oss-not-support-tip')}',
+                                  translate('disable-udp-tip'),
                               trailing: Switch(
                                 value: bind.mainGetOptionSync(
                                         key: kOptionDisableUdp) ==
@@ -2403,7 +2404,7 @@ class _AboutState extends State<_About> {
                         .marginSymmetric(vertical: 4.0)),
               InkWell(
                   onTap: () {
-                    launchUrlString('https://rustdesk.com/privacy.html');
+                    launchUrlString('https://camellia.aimmv.com/privacy.html');
                   },
                   child: Text(
                     translate('Privacy Statement'),
@@ -2411,7 +2412,7 @@ class _AboutState extends State<_About> {
                   ).marginSymmetric(vertical: 4.0)),
               InkWell(
                   onTap: () {
-                    launchUrlString('https://rustdesk.com');
+                    launchUrlString('https://camellia.aimmv.com');
                   },
                   child: Text(
                     translate('Website'),
