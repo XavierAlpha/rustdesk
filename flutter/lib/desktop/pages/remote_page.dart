@@ -14,6 +14,7 @@ import '../../common/widgets/remote_input.dart';
 import '../../common.dart';
 import '../../common/widgets/dialog.dart';
 import '../../common/widgets/toolbar.dart';
+import '../../common/widgets/web_video_surface.dart';
 import '../../models/model.dart';
 import '../../models/input_model.dart';
 import '../../models/platform_model.dart';
@@ -703,6 +704,7 @@ class _ViewStyleUpdater extends StatefulWidget {
 
 class _ViewStyleUpdaterState extends State<_ViewStyleUpdater> {
   Size? _lastSize;
+  double? _lastDevicePixelRatio;
   bool _callbackScheduled = false;
 
   @override
@@ -716,8 +718,10 @@ class _ViewStyleUpdaterState extends State<_ViewStyleUpdater> {
           return widget.child;
         }
         final newSize = Size(maxWidth, maxHeight);
-        if (_lastSize != newSize) {
+        final devicePixelRatio = View.of(context).devicePixelRatio;
+        if (_lastSize != newSize || _lastDevicePixelRatio != devicePixelRatio) {
           _lastSize = newSize;
+          _lastDevicePixelRatio = devicePixelRatio;
           // Schedule the update for after the current frame to avoid setState during build.
           // Use _callbackScheduled flag to prevent accumulating multiple callbacks
           // when size changes rapidly before any callback executes.
@@ -726,8 +730,12 @@ class _ViewStyleUpdaterState extends State<_ViewStyleUpdater> {
             SchedulerBinding.instance.addPostFrameCallback((_) {
               _callbackScheduled = false;
               final currentSize = _lastSize;
+              final currentDpr = _lastDevicePixelRatio;
               if (mounted && currentSize != null) {
-                widget.canvasModel.updateViewStyle();
+                widget.canvasModel.updateViewStyle(
+                  viewSize: currentSize,
+                  devicePixelRatio: currentDpr,
+                );
                 widget.inputModel.updateImageWidgetSize(currentSize);
               }
             });
@@ -872,6 +880,13 @@ class _ImagePaintState extends State<ImagePaint> {
 
   Widget _buildScrollbarNonTextureRender(
       ImageModel m, Size imageSize, double s) {
+    if (isWebDesktop) {
+      return SizedBox(
+        width: imageSize.width,
+        height: imageSize.height,
+        child: WebVideoSurface(peerId: id),
+      );
+    }
     return CustomPaint(
       size: imageSize,
       painter: ImagePainter(image: m.image, x: 0, y: 0, scale: s),
@@ -880,12 +895,68 @@ class _ImagePaintState extends State<ImagePaint> {
 
   Widget _buildScrollAutoNonTextureRender(
       ImageModel m, CanvasModel c, double s) {
+    final webDpr = isWebDesktop
+        ? View.of(context).devicePixelRatio
+        : (c.devicePixelRatio > 0 ? c.devicePixelRatio : 1.0);
+
+    double snapWebLogical(double value) {
+      if (!isWebDesktop || !value.isFinite) {
+        return value;
+      }
+      return (value * webDpr).roundToDouble() / webDpr;
+    }
+
+    Rect snapWebRect(double left, double top, double width, double height) {
+      if (!isWebDesktop) {
+        return Rect.fromLTWH(left, top, width, height);
+      }
+      final snappedLeft = snapWebLogical(left);
+      final snappedTop = snapWebLogical(top);
+      final snappedRight = snapWebLogical(left + width);
+      final snappedBottom = snapWebLogical(top + height);
+      return Rect.fromLTRB(
+        snappedLeft,
+        snappedTop,
+        snappedRight >= snappedLeft ? snappedRight : snappedLeft,
+        snappedBottom >= snappedTop ? snappedBottom : snappedTop,
+      );
+    }
+
     double sizeScale = s;
     if (widget.ffi.ffiModel.isPeerLinux) {
       final displays = widget.ffi.ffiModel.pi.getCurDisplays();
       if (displays.isNotEmpty) {
         sizeScale = s / displays[0].scale;
       }
+    }
+    if (isWebDesktop) {
+      final paintSize = Size(
+        snapWebLogical(c.size.width),
+        snapWebLogical(c.size.height),
+      );
+      final surfaceRect = snapWebRect(
+        c.x,
+        c.y,
+        c.getDisplayWidth() * sizeScale,
+        c.getDisplayHeight() * sizeScale,
+      );
+      return ClipRect(
+        child: SizedBox(
+          width: paintSize.width,
+          height: paintSize.height,
+          child: Stack(
+            children: [
+              Positioned(
+                left: surfaceRect.left,
+                top: surfaceRect.top,
+                width: surfaceRect.width,
+                height: surfaceRect.height,
+                child: WebVideoSurface(peerId: id),
+              ),
+            ],
+          ),
+        ),
+      );
     }
     return CustomPaint(
       size: Size(c.size.width, c.size.height),

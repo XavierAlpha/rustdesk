@@ -1,4 +1,4 @@
-import 'native_model.dart' if (dart.library.html) 'web_model.dart';
+import 'native_model.dart' if (dart.library.html) '../web/platform_ffi_web.dart';
 import 'package:flutter_hbb/generated_bridge.dart'
     if (dart.library.html) 'package:flutter_hbb/web/bridge.dart';
 

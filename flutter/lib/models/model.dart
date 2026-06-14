@@ -459,7 +459,7 @@ class FfiModel with ChangeNotifier {
         if (isWeb) {
           parent.target?.fileModel.onSelectedFiles(evt);
         }
-      } else if (name == "send_emptry_dirs") {
+      } else if (name == "send_empty_dirs" || name == "send_emptry_dirs") {
         if (isWeb) {
           parent.target?.fileModel.sendEmptyDirs(evt);
         }
@@ -1396,7 +1396,13 @@ class FfiModel with ChangeNotifier {
       final platformAdditions = evt['platform_additions'];
       if (platformAdditions != null && platformAdditions != '') {
         try {
-          _pi.platformAdditions = json.decode(platformAdditions);
+          dynamic decoded = json.decode(platformAdditions);
+          if (decoded is String && decoded.isNotEmpty) {
+            decoded = json.decode(decoded);
+          }
+          if (decoded is Map<String, dynamic>) {
+            _pi.platformAdditions = decoded;
+          }
         } catch (e) {
           debugPrint('Failed to decode platformAdditions $e');
         }
@@ -1648,7 +1654,14 @@ class FfiModel with ChangeNotifier {
       _pi.platformAdditions.remove(kPlatformAdditionsAmyuniVirtualDisplays);
     } else {
       try {
-        final updateJson = json.decode(updateData) as Map<String, dynamic>;
+        dynamic decoded = json.decode(updateData);
+        if (decoded is String && decoded.isNotEmpty) {
+          decoded = json.decode(decoded);
+        }
+        if (decoded is! Map<String, dynamic>) {
+          return;
+        }
+        final updateJson = decoded;
         for (final key in updateJson.keys) {
           _pi.platformAdditions[key] = updateJson[key];
         }
@@ -1829,6 +1842,20 @@ class VirtualMouseMode with ChangeNotifier {
   }
 }
 
+class _WebRgbaFrame {
+  final int display;
+  final Uint8List rgba;
+  final int width;
+  final int height;
+
+  const _WebRgbaFrame({
+    required this.display,
+    required this.rgba,
+    required this.width,
+    required this.height,
+  });
+}
+
 class ImageModel with ChangeNotifier {
   ui.Image? _image;
 
@@ -1855,19 +1882,42 @@ class ImageModel with ChangeNotifier {
   clearImage() => _image = null;
 
   bool _webDecodingRgba = false;
-  final List<Uint8List> _webRgbaList = List.empty(growable: true);
-  webOnRgba(int display, Uint8List rgba) async {
-    // deep copy needed, otherwise "instantiateCodec failed: TypeError: Cannot perform Construct on a detached ArrayBuffer"
-    _webRgbaList.add(Uint8List.fromList(rgba));
+  int _webRgbaMismatchLogCount = 0;
+  final List<_WebRgbaFrame> _webRgbaList = List.empty(growable: true);
+
+  bool _shouldRenderWebDisplay(int display) {
+    final currentDisplay = parent.target?.ffiModel.pi.currentDisplay;
+    if (currentDisplay == null || currentDisplay == kAllDisplayValue) {
+      return true;
+    }
+    return currentDisplay == display;
+  }
+
+  webOnRgba(int display, Uint8List rgba, int width, int height) async {
+    if (!_shouldRenderWebDisplay(display)) {
+      return;
+    }
+    // deep copy needed, otherwise "Cannot perform Construct on a detached ArrayBuffer"
+    _webRgbaList.add(_WebRgbaFrame(
+      display: display,
+      rgba: Uint8List.fromList(rgba),
+      width: width,
+      height: height,
+    ));
     if (_webDecodingRgba) {
       return;
     }
     _webDecodingRgba = true;
     try {
       while (_webRgbaList.isNotEmpty) {
-        final rgba2 = _webRgbaList.last;
+        final frame = _webRgbaList.last;
         _webRgbaList.clear();
-        await decodeAndUpdate(display, rgba2);
+        await decodeAndUpdate(
+          frame.display,
+          frame.rgba,
+          frameWidth: frame.width,
+          frameHeight: frame.height,
+        );
       }
     } catch (e) {
       debugPrint('onRgba error: $e');
@@ -1884,18 +1934,50 @@ class ImageModel with ChangeNotifier {
     platformFFI.nextRgba(sessionId, display);
   }
 
-  decodeAndUpdate(int display, Uint8List rgba) async {
+  decodeAndUpdate(
+    int display,
+    Uint8List rgba, {
+    int? frameWidth,
+    int? frameHeight,
+  }) async {
+    if (!_shouldRenderWebDisplay(display)) {
+      return;
+    }
     final pid = parent.target?.id;
+    var width = frameWidth ?? 0;
+    var height = frameHeight ?? 0;
     final rect = parent.target?.ffiModel.pi.getDisplayRect(display);
+    if (width <= 0 || height <= 0) {
+      width = rect?.width.toInt() ?? 0;
+      height = rect?.height.toInt() ?? 0;
+    }
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    final expectedBytes = width * height * 4;
+    if (expectedBytes != rgba.lengthInBytes) {
+      if (_webRgbaMismatchLogCount < 5) {
+        _webRgbaMismatchLogCount += 1;
+        debugPrint(
+            '[web-rgba] drop frame due to size mismatch display=$display expected=$expectedBytes actual=${rgba.lengthInBytes} width=$width height=$height');
+      }
+      return;
+    }
     final image = await img.decodeImageFromPixels(
       rgba,
-      rect?.width.toInt() ?? 0,
-      rect?.height.toInt() ?? 0,
+      width,
+      height,
       isWeb | isWindows | isLinux
           ? ui.PixelFormat.rgba8888
           : ui.PixelFormat.bgra8888,
     );
-    if (parent.target?.id != pid) return;
+    if (image == null) {
+      return;
+    }
+    if (parent.target?.id != pid || !_shouldRenderWebDisplay(display)) {
+      image.dispose();
+      return;
+    }
     await update(image);
   }
 
@@ -2162,6 +2244,7 @@ class CanvasModel with ChangeNotifier {
   // to avoid hammering a non-functional Bump Mouse
   bool _bumpMouseIsWorking = true;
   ViewStyle _lastViewStyle = ViewStyle.defaultViewStyle();
+  int _updateViewStyleSeq = 0;
 
   Timer? _timerMobileFocusCanvasCursor;
   Timer? _timerMobileRestoreCanvasOffset;
@@ -2267,15 +2350,23 @@ class CanvasModel with ChangeNotifier {
     return max(bottom - MediaQueryData.fromView(ui.window).padding.top, 0);
   }
 
-  updateSize() => _size = getSize();
+  void updateSize([Size? size]) => _size = size ?? getSize();
 
-  updateViewStyle({refreshMousePos = true, notify = true}) async {
+  updateViewStyle({
+    refreshMousePos = true,
+    notify = true,
+    Size? viewSize,
+    double? devicePixelRatio,
+  }) async {
+    final seq = ++_updateViewStyleSeq;
     final style = await bind.sessionGetViewStyle(sessionId: sessionId);
     if (style == null) {
       return;
     }
-
-    updateSize();
+    if (seq != _updateViewStyleSeq) {
+      return;
+    }
+    updateSize(viewSize);
     final displayWidth = getDisplayWidth();
     final displayHeight = getDisplayHeight();
     final viewStyle = ViewStyle(
@@ -2285,6 +2376,9 @@ class CanvasModel with ChangeNotifier {
       displayWidth: displayWidth,
       displayHeight: displayHeight,
     );
+    if (seq != _updateViewStyleSeq) {
+      return;
+    }
     // If only the Custom scale percent changed, proceed to update even if
     // the basic ViewStyle fields are equal.
     // In Custom scale mode, the scale percent can change independently of the other
@@ -2309,9 +2403,12 @@ class CanvasModel with ChangeNotifier {
         debugPrintStack(stackTrace: stack);
         _scale = 1.0;
       }
+      if (seq != _updateViewStyleSeq) {
+        return;
+      }
     }
 
-    _devicePixelRatio = ui.window.devicePixelRatio;
+    _devicePixelRatio = devicePixelRatio ?? ui.window.devicePixelRatio;
     if (kIgnoreDpi) {
       if (style == kRemoteViewStyleOriginal) {
         _scale = 1.0 / _devicePixelRatio;
@@ -2917,6 +3014,10 @@ class CursorModel with ChangeNotifier {
   DateTime _lastPeerMouse = DateTime.now()
       .subtract(Duration(milliseconds: 3000 * kMouseControlTimeoutMSec));
   String peerId = '';
+  int _cursorDecodeDropLogCount = 0;
+  int _cursorNotifyErrorLogCount = 0;
+  int _cursorMissingCacheLogCount = 0;
+  String? _pendingCursorId;
   WeakReference<FFI> parent;
 
   // Only for mobile, touch mode
@@ -3311,13 +3412,28 @@ class CursorModel with ChangeNotifier {
   }
 
   updateCursorData(Map<String, dynamic> evt) async {
-    final id = evt['id'];
+    final id = evt['id']?.toString() ?? '';
+    if (id.isEmpty) {
+      return;
+    }
     final hotx = double.parse(evt['hotx']);
     final hoty = double.parse(evt['hoty']);
     final width = int.parse(evt['width']);
     final height = int.parse(evt['height']);
+    if (width <= 0 || height <= 0) {
+      return;
+    }
     List<dynamic> colors = json.decode(evt['colors']);
     final rgba = Uint8List.fromList(colors.map((s) => s as int).toList());
+    final expectedBytes = width * height * 4;
+    if (rgba.lengthInBytes != expectedBytes) {
+      if (_cursorDecodeDropLogCount < 5) {
+        _cursorDecodeDropLogCount += 1;
+        debugPrint(
+            '[cursor-rgba] drop cursor frame due to size mismatch id=$id expected=$expectedBytes actual=${rgba.lengthInBytes} width=$width height=$height');
+      }
+      return;
+    }
     final image = await img.decodeImageFromPixels(
         rgba, width, height, ui.PixelFormat.rgba8888);
     if (image == null) {
@@ -3328,9 +3444,10 @@ class CursorModel with ChangeNotifier {
       _images[id] = Tuple3(image, hotx, hoty);
     }
 
-    // Update last cursor data.
-    // Do not use the previous `image` and `id`, because `_id` may be changed.
-    _updateCurData();
+    _applyPendingCursorIdIfReady();
+    if (_id == id && _pendingCursorId == null) {
+      _updateCurData();
+    }
   }
 
   Future<bool> _updateCache(
@@ -3381,8 +3498,11 @@ class CursorModel with ChangeNotifier {
         // may throw exception, because the listener maybe already dispose
         notifyListeners();
       } catch (e) {
-        debugPrint(
-            'WARNING: updateCursorId $_id, without notifyListeners(). $e');
+        if (_cursorNotifyErrorLogCount < 3) {
+          _cursorNotifyErrorLogCount += 1;
+          debugPrint(
+              'WARNING: updateCursorId $_id, without notifyListeners(). $e');
+        }
       }
       return true;
     } else {
@@ -3390,10 +3510,29 @@ class CursorModel with ChangeNotifier {
     }
   }
 
+  void _applyPendingCursorIdIfReady() {
+    final pendingId = _pendingCursorId;
+    if (pendingId == null || !_images.containsKey(pendingId)) {
+      return;
+    }
+    _id = pendingId;
+    if (_updateCurData()) {
+      _pendingCursorId = null;
+    }
+  }
+
   updateCursorId(Map<String, dynamic> evt) {
+    final nextId = evt['id']?.toString();
+    if (nextId != null && nextId.isNotEmpty) {
+      _id = nextId;
+    }
     if (!_updateCurData()) {
-      debugPrint(
-          'WARNING: updateCursorId $_id, cache is ${_cache == null ? "null" : "not null"}. without notifyListeners()');
+      _pendingCursorId = _id;
+      if (_cursorMissingCacheLogCount < 3) {
+        _cursorMissingCacheLogCount += 1;
+        debugPrint(
+            'WARNING: updateCursorId $_id, cache is ${_cache == null ? "null" : "not null"}. without notifyListeners()');
+      }
     }
   }
 
@@ -3439,6 +3578,8 @@ class CursorModel with ChangeNotifier {
     _x = -10000;
     _x = -10000;
     _image = null;
+    _id = "-1";
+    _pendingCursorId = null;
     _firstUpdateMouseTime = null;
     gotMouseControl = true;
     disposeImages();
@@ -3780,9 +3921,18 @@ class FFI {
     }
 
     if (isWeb) {
-      platformFFI.setRgbaCallback((int display, Uint8List data) {
+      var webFirstFrameSeen = false;
+      platformFFI.setVideoFrameCallback((int _display, int _width, int _height) {
+        if (!webFirstFrameSeen) {
+          webFirstFrameSeen = true;
+          onEvent2UIRgba();
+          platformFFI.clearVideoFrameCallback();
+        }
+      });
+      platformFFI.setRgbaCallback(
+          (int display, Uint8List data, int width, int height) {
         onEvent2UIRgba();
-        imageModel.onRgba(display, data);
+        imageModel.webOnRgba(display, data, width, height);
       });
       this.id = id;
       return;
@@ -4068,7 +4218,7 @@ class PeerInfo with ChangeNotifier {
   bool get cursorEmbedded => tryGetDisplay()?.cursorEmbedded ?? false;
 
   bool get isRustDeskIdd =>
-      platformAdditions[kPlatformAdditionsIddImpl] == 'rustdesk_idd';
+      platformAdditions[kPlatformAdditionsIddImpl] == 'camellia_idd';
   bool get isAmyuniIdd =>
       platformAdditions[kPlatformAdditionsIddImpl] == 'amyuni_idd';
 
