@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:js' as js;
+import 'package:flutter_hbb/web/js_interop_bridge.dart' as js;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -111,8 +111,6 @@ MouseCursor buildCursorOfCache(
       if (data == null) {
         return MouseCursor.defer;
       }
-      debugPrint(
-          "Register custom cursor with key $key (${cache.hotx},${cache.hoty})");
       CursorManager.instance.registerCursor(CursorData(
           key: key,
           url: 'data:image/rgba;base64,${base64Encode(data)}',
