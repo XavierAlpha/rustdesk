@@ -1,4 +1,4 @@
-package com.carriez.flutter_hbb
+package com.camellia
 
 /**
  * Handle events from flutter
