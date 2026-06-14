@@ -2,6 +2,27 @@ name: Flutter Tag Build
 
 on:
   workflow_dispatch:
+    inputs:
+      manual_tag:
+        description: "Release tag to upload, for example v1.2.3 or 1.2.3"
+        required: true
+        type: string
+      version:
+        description: "App version written into the build, for example 1.2.3"
+        required: true
+        type: string
+      rs-pub-key:
+        description: "Optional RS_PUB_KEY override. Leave blank to use secrets.RS_PUB_KEY"
+        type: string
+        default: ""
+      rendezvous-servers:
+        description: "Optional RENDEZVOUS_SERVERS override, for example host:21116 or host1:21116,host2:21116"
+        type: string
+        default: ""
+      api-server:
+        description: "Optional API_SERVER override, for example https://api.example.com"
+        type: string
+        default: ""
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
@@ -15,4 +36,8 @@ jobs:
     secrets: inherit
     with:
       upload-artifact: true
-      upload-tag: ${{ github.ref_name }}
+      upload-tag: ${{ github.event_name == 'push' && github.ref_name || inputs.manual_tag }}
+      version: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+      rs-pub-key: ${{ github.event_name == 'workflow_dispatch' && inputs.rs-pub-key || '' }}
+      rendezvous-servers: ${{ github.event_name == 'workflow_dispatch' && inputs.rendezvous-servers || '' }}
+      api-server: ${{ github.event_name == 'workflow_dispatch' && inputs.api-server || '' }}
