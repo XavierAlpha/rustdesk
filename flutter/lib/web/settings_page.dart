@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
+
+import 'web_client_settings_page.dart';
 
 class WebSettingsPage extends StatelessWidget {
-  const WebSettingsPage({Key? key}) : super(key: key);
+  const WebSettingsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -13,11 +14,11 @@ class WebSettingsPage extends StatelessWidget {
     return IconButton(
       icon: const Icon(Icons.more_vert),
       onPressed: () {
+        FocusManager.instance.primaryFocus?.unfocus();
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (BuildContext context) =>
-                DesktopSettingPage(initialTabkey: SettingsTabKey.general),
+            builder: (BuildContext context) => const WebClientSettingsPage(),
           ),
         );
       },

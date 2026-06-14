@@ -924,21 +924,52 @@ _connectDialog(
     }
 
     descWidget(String text) {
+      if (!isWebDesktop) {
+        return Column(
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                text,
+                maxLines: 3,
+                softWrap: true,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 16),
+              ),
+            ),
+            Container(
+              height: 8,
+            ),
+          ],
+        );
+      }
+      final colorScheme = Theme.of(context).colorScheme;
       return Column(
         children: [
-          Align(
-            alignment: Alignment.centerLeft,
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: colorScheme.primary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: colorScheme.primary.withOpacity(0.18),
+              ),
+            ),
             child: Text(
               text,
               maxLines: 3,
               softWrap: true,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 16),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.2,
+              ),
             ),
           ),
-          Container(
-            height: 8,
-          ),
+          const SizedBox(height: 10),
         ],
       );
     }
@@ -948,13 +979,38 @@ _connectDialog(
       bool remember,
       ValueChanged<bool?>? onChanged,
     ) {
-      return CheckboxListTile(
-        contentPadding: const EdgeInsets.all(0),
-        dense: true,
-        controlAffinity: ListTileControlAffinity.leading,
-        title: Text(desc),
-        value: remember,
-        onChanged: onChanged,
+      if (!isWebDesktop) {
+        return CheckboxListTile(
+          contentPadding: const EdgeInsets.all(0),
+          dense: true,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: Text(desc),
+          value: remember,
+          onChanged: onChanged,
+        );
+      }
+      final enabled = onChanged != null;
+      return InkWell(
+        onTap: enabled ? () => onChanged(!remember) : null,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Checkbox(
+                value: remember,
+                onChanged: onChanged,
+              ),
+              Flexible(
+                child: Text(
+                  desc,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -1025,21 +1081,59 @@ _connectDialog(
       );
     }
 
+    final titleWidget = !isWebDesktop
+        ? Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.password_rounded, color: MyTheme.accent),
+              Text(translate('Password Required')).paddingOnly(left: 10),
+            ],
+          )
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: MyTheme.accent.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Icon(Icons.password_rounded, color: MyTheme.accent),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                translate('Password Required'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ],
+          );
+    final contentWidget = !isWebDesktop
+        ? Column(mainAxisSize: MainAxisSize.min, children: [
+            osAccountWidget(),
+            osUsernameController == null || passwordController == null
+                ? Offstage()
+                : Container(height: 12),
+            passwdWidget(),
+          ])
+        : ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              osAccountWidget(),
+              osUsernameController == null || passwordController == null
+                  ? Offstage()
+                  : Container(height: 12),
+              passwdWidget(),
+            ]),
+          );
+
     return CustomAlertDialog(
-      title: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.password_rounded, color: MyTheme.accent),
-          Text(translate('Password Required')).paddingOnly(left: 10),
-        ],
-      ),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        osAccountWidget(),
-        osUsernameController == null || passwordController == null
-            ? Offstage()
-            : Container(height: 12),
-        passwdWidget(),
-      ]),
+      title: titleWidget,
+      content: contentWidget,
       actions: [
         dialogButton(
           'Cancel',
@@ -1366,7 +1460,7 @@ showSetOSPassword(
   var autoLogin =
       await bind.sessionGetOption(sessionId: sessionId, arg: 'auto-login') !=
           '';
-  controller.text = osPassword;
+  controller.text = osPassword ?? '';
   dialogManager.show((setState, close, context) {
     closeWithCallback([dynamic]) {
       close();
@@ -1849,7 +1943,6 @@ customImageQualityDialog(SessionID sessionId, String id, FFI ffi) async {
           versionCmp(ffi.ffiModel.pi.version, '1.2.2') < 0;
 
   setCustomValues({double? quality, double? fps}) async {
-    debugPrint("setCustomValues quality:$quality, fps:$fps");
     if (quality != null) {
       qualitySet = true;
       await bind.sessionSetCustomImageQuality(

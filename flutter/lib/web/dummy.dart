@@ -12,3 +12,8 @@ Future<void> webSendLocalFiles(
     required bool isRemote}) {
   throw UnimplementedError("webSendLocalFiles");
 }
+
+Future<void> webRegisterDroppedFiles(
+    {required List<Map<String, dynamic>> files}) async {
+  throw UnimplementedError("webRegisterDroppedFiles");
+}

@@ -230,7 +230,7 @@ List<(String, String)> otherDefaultSettings() {
     ('Disable clipboard', kOptionDisableClipboard),
     ('Lock after session end', kOptionLockAfterSessionEnd),
     ('Privacy mode', kOptionPrivacyMode),
-    ('True color (4:4:4)', kOptionI444),
+    if (!isWeb) ('True color (4:4:4)', kOptionI444),
     ('Reverse mouse wheel', kKeyReverseMouseWheel),
     ('swap-left-right-mouse', kOptionSwapLeftRightMouse),
     if (isDesktop)
