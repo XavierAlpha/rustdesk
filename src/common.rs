@@ -696,6 +696,8 @@ pub async fn get_rendezvous_server(ms_timeout: u64) -> (String, Vec<String>, boo
     }
     let mut b: Vec<String> = b
         .drain(..)
+        .map(|x| x.trim().to_owned())
+        .filter(|x| !x.is_empty())
         .map(|x| socket_client::check_port(x, config::RENDEZVOUS_PORT))
         .collect();
     let c = if b.contains(&a) {
@@ -1089,8 +1091,24 @@ fn get_api_server_(api: String, custom: String) -> String {
 
 #[inline]
 pub fn is_public(url: &str) -> bool {
-    let url = url.to_ascii_lowercase();
-    url.contains("camellia.aimmv.com/") || url.ends_with("camellia.aimmv.com")
+    let url = url.trim();
+    if url.is_empty() {
+        return false;
+    }
+    let normalized = if url.contains("://") {
+        url.to_owned()
+    } else {
+        format!("https://{url}")
+    };
+    let host = url::Url::parse(&normalized)
+        .ok()
+        .and_then(|parsed| parsed.host_str().map(|host| host.to_ascii_lowercase()))
+        .map(|host| host.trim_end_matches('.').to_owned());
+    match host.as_deref() {
+        Some("camellia.aimmv.com") => true,
+        Some(host) => host.ends_with(".camellia.aimmv.com"),
+        None => false,
+    }
 }
 
 pub fn get_udp_punch_enabled() -> bool {
@@ -2795,6 +2813,8 @@ mod tests {
         assert!(!is_public("localhost"));
         assert!(!is_public("https://camellia.aimmv.computer.com"));
         assert!(!is_public("camellia.aimmv.comhello.com"));
+        assert!(!is_public("https://example.com/camellia.aimmv.com/"));
+        assert!(!is_public("https://evilcamellia.aimmv.com"));
     }
 
     #[test]
