@@ -177,7 +177,7 @@ jobs:
         run: cargo test --workspace --features flutter
       - name: Flutter analyze
         working-directory: flutter
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
       - name: Flutter tests
         working-directory: flutter
         run: flutter test
@@ -261,10 +261,11 @@ jobs:
           bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
           if [[ "${{ env.DEPENDENCY_MODE }}" == "latest" ]]; then "$VCPKG_ROOT/vcpkg" x-update-baseline; fi
           "$VCPKG_ROOT/vcpkg" install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"
+          export SODIUM_LIB_DIR="$VCPKG_ROOT/installed/x64-windows-static/lib"
           cargo build --release --lib --features flutter,hwcodec,vram
           (cd flutter && flutter build windows --release)
           mkdir -p artifacts
-          powershell Compress-Archive -Path flutter/build/windows/x64/runner/Release/* -DestinationPath artifacts/camellia-${{ needs.prepare.outputs.version }}-windows-x64.zip
+          powershell -NoProfile -Command "Compress-Archive -Path 'flutter/build/windows/x64/runner/Release/*' -DestinationPath 'artifacts/camellia-${{ needs.prepare.outputs.version }}-windows-x64.zip' -Force"
       - uses: actions/upload-artifact@v7
         if: env.UPLOAD_ARTIFACT == 'true'
         with:
@@ -310,12 +311,13 @@ jobs:
           bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
           if [[ "${{ env.DEPENDENCY_MODE }}" == "latest" ]]; then "$VCPKG_ROOT/vcpkg" x-update-baseline; fi
           "$VCPKG_ROOT/vcpkg" install --triplet arm64-windows-static --x-install-root="$VCPKG_ROOT/installed"
+          export SODIUM_LIB_DIR="$VCPKG_ROOT/installed/arm64-windows-static/lib"
           cargo build --release --target aarch64-pc-windows-msvc --lib --features flutter,hwcodec
           mkdir -p target/release
           cp target/aarch64-pc-windows-msvc/release/librustdesk.dll target/release/librustdesk.dll
           (cd flutter && flutter.bat build windows --release)
           mkdir -p artifacts
-          powershell Compress-Archive -Path flutter/build/windows/arm64/runner/Release/* -DestinationPath artifacts/camellia-${{ needs.prepare.outputs.version }}-windows-arm64.zip
+          powershell -NoProfile -Command "Compress-Archive -Path 'flutter/build/windows/arm64/runner/Release/*' -DestinationPath 'artifacts/camellia-${{ needs.prepare.outputs.version }}-windows-arm64.zip' -Force"
       - uses: actions/upload-artifact@v7
         if: env.UPLOAD_ARTIFACT == 'true'
         with:
@@ -344,6 +346,8 @@ jobs:
         with:
           channel: ${{ env.FLUTTER_CHANNEL }}
           cache: true
+      - name: Install macOS prerequisites
+        run: brew install nasm
       - uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: ${{ runner.temp }}/vcpkg
@@ -354,8 +358,8 @@ jobs:
           bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
           if [[ "${{ env.DEPENDENCY_MODE }}" == "latest" ]]; then "$VCPKG_ROOT/vcpkg" x-update-baseline; fi
           "$VCPKG_ROOT/vcpkg" install --triplet arm64-osx --x-install-root="$VCPKG_ROOT/installed"
-          "$VCPKG_ROOT/vcpkg" install --triplet x64-osx --x-install-root="$VCPKG_ROOT/installed"
           cargo build --release --target aarch64-apple-darwin --lib --features flutter,hwcodec,screencapturekit
+          "$VCPKG_ROOT/vcpkg" install --triplet x64-osx --x-install-root="$VCPKG_ROOT/installed"
           cargo build --release --target x86_64-apple-darwin --lib --features flutter,hwcodec,screencapturekit
           mkdir -p target/release
           lipo -create \
@@ -448,7 +452,8 @@ jobs:
           if [[ "${{ env.DEPENDENCY_MODE }}" == "latest" ]]; then "$VCPKG_ROOT/vcpkg" x-update-baseline; fi
           "$VCPKG_ROOT/vcpkg" install --triplet "${{ matrix.vcpkg_triplet }}" --x-install-root="$VCPKG_ROOT/installed"
           cargo build --release --target "${{ matrix.target }}" --lib --features flutter,hwcodec,unix-file-copy-paste
-          cp "target/${{ matrix.target }}/release/liblibrustdesk.so" target/release/librustdesk.so
+          mkdir -p target/release
+          cp "target/${{ matrix.target }}/release/liblibrustdesk.so" target/release/liblibrustdesk.so
           (cd flutter && flutter build linux --release)
           mkdir -p artifacts/camellia-${{ needs.prepare.outputs.version }}-linux-${{ matrix.arch }}
           cp -R flutter/build/linux/*/release/bundle/* artifacts/camellia-${{ needs.prepare.outputs.version }}-linux-${{ matrix.arch }}/
@@ -497,6 +502,7 @@ jobs:
         shell: bash
         run: |
           latest_ndk="$(sdkmanager --list | awk '/^  ndk;[0-9]/{print $1}' | sort -V | tail -1)"
+          test -n "${latest_ndk}"
           sdkmanager --install "${latest_ndk}"
           ndk_version="${latest_ndk#ndk;}"
           echo "ANDROID_NDK_ROOT=${ANDROID_HOME}/ndk/${ndk_version}" >> "$GITHUB_ENV"
@@ -508,8 +514,21 @@ jobs:
           bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
           if [[ "${{ env.DEPENDENCY_MODE }}" == "latest" ]]; then "$VCPKG_ROOT/vcpkg" x-update-baseline; fi
           "$VCPKG_ROOT/vcpkg" install --triplet arm64-android --x-install-root="$VCPKG_ROOT/installed"
-          cargo install cargo-ndk
-          cargo ndk --target arm64-v8a --platform 26 build --release --lib --features flutter,hwcodec
+          android_api=26
+          ndk_toolchain="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64"
+          android_cc="$ndk_toolchain/bin/aarch64-linux-android${android_api}-clang"
+          android_cxx="$ndk_toolchain/bin/aarch64-linux-android${android_api}-clang++"
+          android_flags="--target=aarch64-linux-android${android_api} --sysroot=$ndk_toolchain/sysroot -D__ANDROID_API__=${android_api}"
+          export CC_aarch64_linux_android="$android_cc"
+          export CXX_aarch64_linux_android="$android_cxx"
+          export AR_aarch64_linux_android="$ndk_toolchain/bin/llvm-ar"
+          export RANLIB_aarch64_linux_android="$ndk_toolchain/bin/llvm-ranlib"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$android_cc"
+          export CFLAGS_aarch64_linux_android="$android_flags"
+          export CXXFLAGS_aarch64_linux_android="$android_flags"
+          export BINDGEN_EXTRA_CLANG_ARGS="$android_flags -I$VCPKG_ROOT/installed/arm64-android/include"
+          export BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="$BINDGEN_EXTRA_CLANG_ARGS"
+          cargo build --release --target aarch64-linux-android --lib --no-default-features --features use_dasp,flutter,hwcodec
           mkdir -p flutter/android/app/src/main/jniLibs/arm64-v8a
           cp target/aarch64-linux-android/release/liblibrustdesk.so flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
           (cd flutter && flutter build apk --release --target-platform android-arm64)

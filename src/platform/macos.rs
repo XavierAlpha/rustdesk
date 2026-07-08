@@ -6,7 +6,7 @@ use super::{CursorData, ResultType};
 use cocoa::{
     appkit::{NSApp, NSApplication, NSApplicationActivationPolicy::*},
     base::{id, nil, BOOL, NO, YES},
-    foundation::{NSDictionary, NSPoint, NSSize, NSString},
+    foundation::{NSArray, NSDictionary, NSPoint, NSSize, NSString},
 };
 use core_foundation::{
     array::{CFArrayGetCount, CFArrayGetValueAtIndex},
@@ -25,10 +25,15 @@ use hbb_common::{
 };
 use include_dir::{include_dir, Dir};
 use objc::rc::autoreleasepool;
-use objc::{class, msg_send, sel, sel_impl};
+use objc::{
+    class, msg_send,
+    runtime::{Object, Sel},
+    sel, sel_impl,
+};
 use scrap::{libc::c_void, quartz::ffi::*};
 use std::{
     collections::HashMap,
+    ffi::CStr,
     os::unix::process::CommandExt,
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -1944,6 +1949,53 @@ pub fn handle_application_should_open_untitled_file() {
     let x = std::env::args().nth(1).unwrap_or_default();
     if x == "--server" || x == "--cm" || x == "--tray" {
         std::thread::spawn(move || crate::handle_url_scheme("".to_lowercase()));
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn handle_open_urls(_obj: *mut Object, _sel: Sel, _sender: id, urls: id) {
+    for url in ns_url_array_to_strings(urls) {
+        std::thread::spawn(move || crate::handle_url_scheme(url));
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn service_should_handle_reopen(
+    _obj: *mut Object,
+    _sel: Sel,
+    _sender: id,
+    _has_visible_windows: BOOL,
+) -> BOOL {
+    handle_application_should_open_untitled_file();
+    YES
+}
+
+fn ns_url_array_to_strings(urls: id) -> Vec<String> {
+    if urls.is_null() {
+        return Vec::new();
+    }
+
+    unsafe {
+        (0..NSArray::count(urls))
+            .filter_map(|i| {
+                let url = urls.objectAtIndex(i);
+                if url.is_null() {
+                    return None;
+                }
+
+                let absolute_string: id = msg_send![url, absoluteString];
+                if absolute_string.is_null() {
+                    return None;
+                }
+
+                let value: *const std::os::raw::c_char = msg_send![absolute_string, UTF8String];
+                if value.is_null() {
+                    return None;
+                }
+
+                Some(CStr::from_ptr(value).to_string_lossy().into_owned())
+            })
+            .collect()
     }
 }
 

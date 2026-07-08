@@ -61,6 +61,20 @@ def parameter_name(parameter: str) -> str:
     return match.group(1)
 
 
+def public_parameter_name(name: str) -> str:
+    return name[:-1] if name.endswith("_") else name
+
+
+def public_parameter(parameter: str, private_name: str, public_name: str) -> str:
+    if private_name == public_name:
+        return parameter
+    return re.sub(
+        rf"\b{re.escape(private_name)}\b(\s*(?:=.*)?$)",
+        rf"{public_name}\1",
+        parameter,
+    )
+
+
 def parse_methods(source: str) -> list[str]:
     methods = []
     for match in FUNCTION_RE.finditer(source):
@@ -70,8 +84,16 @@ def parse_methods(source: str) -> list[str]:
 
         if params.startswith("{") and params.endswith("}"):
             inner = params[1:-1].strip()
-            names = [parameter_name(part) for part in split_top_level(inner)]
-            call_args = ", ".join(f"{name}: {name}" for name in names)
+            private_parts = split_top_level(inner)
+            mapped_params = []
+            call_args = []
+            for part in private_parts:
+                private_name = parameter_name(part)
+                public_name = public_parameter_name(private_name)
+                mapped_params.append(public_parameter(part, private_name, public_name))
+                call_args.append(f"{private_name}: {public_name}")
+            params = "{" + ", ".join(mapped_params) + "}"
+            call_args = ", ".join(call_args)
         elif params:
             raise ValueError(f"Unsupported positional parameters for {name}: {params}")
         else:
@@ -100,7 +122,7 @@ import 'generated_bridge/flutter_ffi.dart' as ffi;
 import 'generated_bridge/flutter_ffi.dart' show EventToUI;
 
 export 'generated_bridge/frb_generated.dart';
-export 'generated_bridge/flutter_ffi.dart';
+export 'generated_bridge/flutter_ffi.dart' hide translate;
 export 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
     show ExternalLibrary;
 

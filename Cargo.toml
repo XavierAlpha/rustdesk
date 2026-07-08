@@ -24,7 +24,7 @@ use_samplerate = ["samplerate"]
 use_rubato = ["rubato"]
 use_dasp = ["dasp"]
 flutter = ["flutter_rust_bridge"]
-default = ["use_dasp", "flutter"]
+default = ["use_dasp", "flutter", "linux-pkg-config"]
 hwcodec = ["scrap/hwcodec"]
 vram = ["scrap/vram"]
 mediacodec = ["scrap/mediacodec"]
@@ -156,7 +156,7 @@ piet-coregraphics = "0.6"
 foreign-types = "0.3"
 
 [target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
-tray-icon = { git = "https://github.com/tauri-apps/tray-icon", version = "0.21.3" }
+tray-icon = { git = "https://github.com/tauri-apps/tray-icon", version = "0.24.1" }
 tao = { git = "https://github.com/rustdesk-org/tao", branch = "dev" }
 image = "0.24"
 
@@ -173,8 +173,10 @@ ttf-parser = "0.25"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libxdo-sys = "0.11"
-psimple = { package = "libpulse-simple-binding", version = "2.27" }
-pulse = { package = "libpulse-binding", version = "2.27" }
+psimple = { package = "libpulse-simple-binding", version = ">=2.27, <2.29" }
+pulse = { package = "libpulse-binding", version = ">=2.27, <2.29" }
+libpulse-simple-sys = ">=1.21, <1.22"
+libpulse-sys = ">=1.21, <1.22"
 rust-pulsectl = { git = "https://github.com/rustdesk-org/pulsectl" }
 async-process = "1.7"
 evdev = { git="https://github.com/rustdesk-org/evdev" }

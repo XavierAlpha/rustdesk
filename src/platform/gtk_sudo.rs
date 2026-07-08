@@ -759,11 +759,35 @@ fn error_dialog_and_exit(err_msg: &str, exit_code: i32) {
 
 fn quote_shell_arg(arg: &str, add_splash_if_match: bool) -> String {
     let mut rv = arg.to_string();
-    let re = hbb_common::regex::Regex::new("(\\s|[][!\"#$&'()*,;<=>?\\^`{}|~])");
-    let Ok(re) = re else {
-        return rv;
-    };
-    if re.is_match(arg) {
+    let needs_quotes = arg.chars().any(|c| {
+        c.is_whitespace()
+            || matches!(
+                c,
+                '[' | ']'
+                    | '!'
+                    | '"'
+                    | '#'
+                    | '$'
+                    | '&'
+                    | '\''
+                    | '('
+                    | ')'
+                    | '*'
+                    | ','
+                    | ';'
+                    | '<'
+                    | '='
+                    | '>'
+                    | '?'
+                    | '^'
+                    | '`'
+                    | '{'
+                    | '}'
+                    | '|'
+                    | '~'
+            )
+    });
+    if needs_quotes {
         rv = rv.replace("'", "'\\''");
         if add_splash_if_match {
             rv = format!("'{}'", rv);

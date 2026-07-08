@@ -229,6 +229,11 @@ mod tests {
     }
     #[test]
     fn test_get_cursor_pos() {
+        #[cfg(target_os = "linux")]
+        if std::env::var_os("DISPLAY").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_none() {
+            return;
+        }
+
         for _ in 0..30 {
             assert!(!get_cursor_pos().is_none());
         }

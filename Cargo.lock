@@ -4525,9 +4525,9 @@ checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
 
 [[package]]
 name = "libpulse-binding"
-version = "2.28.1"
+version = "2.28.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed3557a2dfc380c8f061189a01c6ae7348354e0c9886038dc6c171219c08eaff"
+checksum = "1e1518f1ef426604ae0f772ba06833b78dd0d8bc665736f624c2051fc7c49b5f"
 dependencies = [
  "bitflags 1.3.2",
  "libc",
@@ -4892,9 +4892,9 @@ dependencies = [
 
 [[package]]
 name = "muda"
-version = "0.17.1"
+version = "0.19.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01c1738382f66ed56b3b9c8119e794a2e23148ac8ea214eda86622d4cb9d415a"
+checksum = "1dd04e60bc0b07438a6771710ee1698f98f6ebbc7f89b61264af1563b8aeb878"
 dependencies = [
  "crossbeam-channel",
  "dpi",
@@ -4906,9 +4906,9 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation 0.3.2",
  "once_cell",
- "png 0.17.13",
+ "png 0.18.1",
  "thiserror 2.0.17",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7339,6 +7339,8 @@ dependencies = [
  "lazy_static",
  "libpulse-binding",
  "libpulse-simple-binding",
+ "libpulse-simple-sys",
+ "libpulse-sys",
  "libxdo-sys",
  "mac_address",
  "magnum-opus",
@@ -9095,8 +9097,8 @@ dependencies = [
 
 [[package]]
 name = "tray-icon"
-version = "0.21.3"
-source = "git+https://github.com/tauri-apps/tray-icon#0a5835b0e6828e37a1f781de9c2d671ae7a939e6"
+version = "0.24.1"
+source = "git+https://github.com/tauri-apps/tray-icon#9826ff42e52be0ac92e0803eed16d517299ec7c0"
 dependencies = [
  "crossbeam-channel",
  "dirs 6.0.0",
@@ -9110,7 +9112,7 @@ dependencies = [
  "once_cell",
  "png 0.18.1",
  "thiserror 2.0.17",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

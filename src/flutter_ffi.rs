@@ -1,3 +1,4 @@
+use crate::bridge_generated::StreamSink;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::keyboard::input_source::{change_input_source, get_cur_session_input_source};
 #[cfg(target_os = "linux")]
@@ -11,15 +12,15 @@ use crate::{
     input::*,
     ui_interface::{self, *},
 };
-use flutter_rust_bridge::{frb, StreamSink};
+use flutter_rust_bridge::frb;
 #[cfg(feature = "plugin_framework")]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use hbb_common::allow_err;
+pub use hbb_common::ResultType;
 use hbb_common::{
     config::{self, LocalConfig, PeerConfig, PeerInfoSerde},
     fs, lazy_static, log,
     rendezvous_proto::ConnType,
-    ResultType,
 };
 use std::{
     collections::HashMap,

@@ -6,7 +6,7 @@ mode="${1:-latest}"
 case "${mode}" in
   latest)
     cargo update
-    (cd flutter && flutter pub upgrade --major-versions)
+    (cd flutter && flutter pub upgrade)
     if [[ -f flutter/web/js/package.json ]]; then
       (cd flutter/web/js && npm install)
     fi

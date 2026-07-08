@@ -58,6 +58,7 @@ fn install_android_deps() {
 
 fn main() {
     hbb_common::gen_version();
+    println!("cargo:rustc-check-cfg=cfg(frb_expand)");
     install_android_deps();
     #[cfg(windows)]
     build_windows();

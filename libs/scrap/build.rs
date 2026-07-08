@@ -18,8 +18,9 @@ fn link_pkg_config(name: &str) -> Vec<PathBuf> {
             return vec![PathBuf::from("/usr/include")];
         }
         Err(err) => panic!(
-            "unable to find '{pc_name}' development headers with pkg-config (feature linux-pkg-config is enabled).
-            try installing '{pc_name}-dev' from your system package manager: {err}"
+            "unable to find '{}' development headers with pkg-config (feature linux-pkg-config is enabled).
+            try installing '{}-dev' from your system package manager: {}",
+            pc_name, pc_name, err
         ),
     };
 

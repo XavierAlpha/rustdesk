@@ -5,9 +5,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use flutter_rust_bridge::StreamSink;
-
-use crate::{define_method_prefix, flutter_ffi::EventToUI};
+use crate::{bridge_generated::StreamSink, define_method_prefix, flutter_ffi::EventToUI};
 
 const MSG_TO_UI_TYPE_SESSION_CREATED: &str = "session_created";
 

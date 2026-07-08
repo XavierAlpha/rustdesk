@@ -23,7 +23,7 @@
     {
       "name": "libsodium",
       "host": false,
-      "platform": "windows & arm64"
+      "platform": "windows"
     },
     {
       "name": "oboe",
@@ -65,7 +65,7 @@
     },
     {
       "name": "ffmpeg",
-      "host": true,
+      "host": false,
       "features": [
         {
           "name": "amf",

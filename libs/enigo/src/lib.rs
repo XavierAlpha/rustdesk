@@ -531,6 +531,11 @@ mod tests {
     use super::*;
     #[test]
     fn test_get_key_state() {
+        #[cfg(target_os = "linux")]
+        if std::env::var_os("DISPLAY").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_none() {
+            return;
+        }
+
         let mut enigo = Enigo::new();
         let keys = [Key::CapsLock, Key::NumLock];
         for k in keys.iter() {

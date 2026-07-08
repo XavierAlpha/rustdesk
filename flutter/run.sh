@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 flutter pub get
-FRB_CODEGEN_VERSION="${FRB_CODEGEN_VERSION:-1}" bash ../.github/scripts/generate-bridge.sh
+bash ../.github/scripts/generate-bridge.sh
 # call `flutter clean` if cargo build fails
 # export LLVM_HOME=/Library/Developer/CommandLineTools/usr/
 cargo build --features flutter
