@@ -1,10 +1,14 @@
 mod keyboard;
+#[cfg(not(feature = "flutter"))]
+compile_error!(
+    "Camellia builds the Flutter UI only. Build with default features or --features flutter."
+);
 /// cbindgen:ignore
 pub mod platform;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub use platform::{
-    clip_cursor, get_cursor, get_cursor_data, get_cursor_pos, get_focused_display,
-    set_cursor_pos, start_os_service,
+    clip_cursor, get_cursor, get_cursor_data, get_cursor_pos, get_focused_display, set_cursor_pos,
+    start_os_service,
 };
 #[cfg(not(any(target_os = "ios")))]
 /// cbindgen:ignore
@@ -21,12 +25,6 @@ pub use self::rendezvous_mediator::*;
 pub mod common;
 #[cfg(not(any(target_os = "ios")))]
 pub mod ipc;
-#[cfg(not(any(
-    target_os = "android",
-    target_os = "ios",
-    feature = "flutter"
-)))]
-pub mod ui;
 mod version;
 pub use version::*;
 #[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]

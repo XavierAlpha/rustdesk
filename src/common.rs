@@ -73,11 +73,7 @@ pub mod input {
     pub const MOUSE_TYPE_TRACKPAD: i32 = 4;
     /// Relative mouse movement type for gaming/3D applications.
     /// This type sends delta (dx, dy) values instead of absolute coordinates.
-    /// NOTE: This is only supported by the Flutter client. The Sciter client (deprecated)
-    /// does not support relative mouse mode due to:
-    /// 1. Fixed send_mouse() function signature that doesn't allow type differentiation
-    /// 2. Lack of pointer lock API in Sciter/TIS
-    /// 3. No OS cursor control (hide/show/clip) FFI bindings in Sciter UI
+    /// NOTE: This requires Flutter-side pointer lock and cursor-control plumbing.
     pub const MOUSE_TYPE_MOVE_RELATIVE: i32 = 5;
 
     /// Mask to extract the mouse event type from the mask field.
@@ -696,6 +692,8 @@ pub async fn get_rendezvous_server(ms_timeout: u64) -> (String, Vec<String>, boo
     }
     let mut b: Vec<String> = b
         .drain(..)
+        .map(|x| x.trim().to_owned())
+        .filter(|x| !x.is_empty())
         .map(|x| socket_client::check_port(x, config::RENDEZVOUS_PORT))
         .collect();
     let c = if b.contains(&a) {
@@ -957,7 +955,6 @@ pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
     let proxy_conf = Config::get_socks();
     let tls_url = get_url_for_tls(&url, &proxy_conf);
     let tls_type = get_cached_tls_type(tls_url);
-    let is_tls_not_cached = tls_type.is_none();
     let tls_type = tls_type.unwrap_or(TlsType::Rustls);
     let client = create_http_client_async(tls_type, false);
     let latest_release_response = match client.post(&url).json(&request).send().await {
@@ -965,17 +962,7 @@ pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
             upsert_tls_cache(tls_url, tls_type, false);
             resp
         }
-        Err(err) => {
-            if is_tls_not_cached && err.is_request() {
-                let tls_type = TlsType::NativeTls;
-                let client = create_http_client_async(tls_type, false);
-                let resp = client.post(&url).json(&request).send().await?;
-                upsert_tls_cache(tls_url, tls_type, false);
-                resp
-            } else {
-                return Err(err.into());
-            }
-        }
+        Err(err) => return Err(err.into()),
     };
     let bytes = latest_release_response.bytes().await?;
     let resp: hbb_common::VersionCheckResponse = serde_json::from_slice(&bytes)?;
@@ -1089,8 +1076,24 @@ fn get_api_server_(api: String, custom: String) -> String {
 
 #[inline]
 pub fn is_public(url: &str) -> bool {
-    let url = url.to_ascii_lowercase();
-    url.contains("camellia.aimmv.com/") || url.ends_with("camellia.aimmv.com")
+    let url = url.trim();
+    if url.is_empty() {
+        return false;
+    }
+    let normalized = if url.contains("://") {
+        url.to_owned()
+    } else {
+        format!("https://{url}")
+    };
+    let host = url::Url::parse(&normalized)
+        .ok()
+        .and_then(|parsed| parsed.host_str().map(|host| host.to_ascii_lowercase()))
+        .map(|host| host.trim_end_matches('.').to_owned());
+    match host.as_deref() {
+        Some("camellia.aimmv.com") => true,
+        Some(host) => host.ends_with(".camellia.aimmv.com"),
+        None => false,
+    }
 }
 
 pub fn get_udp_punch_enabled() -> bool {
@@ -1468,17 +1471,7 @@ async fn post_request_(
                         )
                         .await
                     } else {
-                        log::warn!("HTTP request failed: {:?}, try again with native-tls", e);
-                        post_request_(
-                            url,
-                            tls_url,
-                            body,
-                            header,
-                            Some(TlsType::NativeTls),
-                            original_danger_accept_invalid_cert,
-                            original_danger_accept_invalid_cert,
-                        )
-                        .await
+                        Err(anyhow!("{:?}", e))
                     }
                 } else {
                     Err(anyhow!("{:?}", e))
@@ -1576,18 +1569,7 @@ async fn get_http_response_async(
                         )
                         .await
                     } else {
-                        log::warn!("HTTP request failed: {:?}, try again with native-tls", e);
-                        get_http_response_async(
-                            url,
-                            tls_url,
-                            method,
-                            body,
-                            header,
-                            Some(TlsType::NativeTls),
-                            original_danger_accept_invalid_cert,
-                            original_danger_accept_invalid_cert,
-                        )
-                        .await
+                        Err(anyhow!("{:?}", e))
                     }
                 } else {
                     Err(anyhow!("{:?}", e))
@@ -2832,6 +2814,8 @@ mod tests {
         assert!(!is_public("localhost"));
         assert!(!is_public("https://camellia.aimmv.computer.com"));
         assert!(!is_public("camellia.aimmv.comhello.com"));
+        assert!(!is_public("https://example.com/camellia.aimmv.com/"));
+        assert!(!is_public("https://evilcamellia.aimmv.com"));
     }
 
     #[test]

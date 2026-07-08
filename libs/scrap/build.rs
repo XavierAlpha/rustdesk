@@ -11,10 +11,17 @@ fn link_pkg_config(name: &str) -> Vec<PathBuf> {
         "libvpx" => "vpx",
         _ => name,
     };
-    let lib = pkg_config::probe_library(pc_name)
-        .expect(format!(
+    let lib = match pkg_config::probe_library(pc_name) {
+        Ok(lib) => lib,
+        Err(err) if name == "libyuv" && Path::new("/usr/include/libyuv.h").exists() => {
+            println!("cargo:rustc-link-lib=yuv");
+            return vec![PathBuf::from("/usr/include")];
+        }
+        Err(err) => panic!(
             "unable to find '{pc_name}' development headers with pkg-config (feature linux-pkg-config is enabled).
-            try installing '{pc_name}-dev' from your system package manager.").as_str());
+            try installing '{pc_name}-dev' from your system package manager: {err}"
+        ),
+    };
 
     lib.include_paths
 }
@@ -245,8 +252,8 @@ fn main() {
     env::set_var("CARGO_CFG_TARGET_FEATURE", "crt-static");
 
     find_package("libyuv");
-    gen_vcpkg_package("libvpx", "vpx_ffi.h", "vpx_ffi.rs", "^[vV].*");
-    gen_vcpkg_package("aom", "aom_ffi.h", "aom_ffi.rs", "^(aom|AOM|OBU|AV1).*");
+    gen_vcpkg_package("libvpx", "vpx_ffi.h", "vpx_ffi.rs", ".*");
+    gen_vcpkg_package("aom", "aom_ffi.h", "aom_ffi.rs", ".*");
     gen_vcpkg_package("libyuv", "yuv_ffi.h", "yuv_ffi.rs", ".*");
     // ffmpeg();
 

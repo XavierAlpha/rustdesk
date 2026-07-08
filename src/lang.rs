@@ -16,8 +16,10 @@ mod es;
 mod et;
 mod eu;
 mod fa;
-mod gu;
+mod fi;
 mod fr;
+mod ge;
+mod gu;
 mod he;
 mod hi;
 mod hr;
@@ -29,6 +31,7 @@ mod ko;
 mod kz;
 mod lt;
 mod lv;
+mod ml;
 mod nb;
 mod nl;
 mod pl;
@@ -41,15 +44,12 @@ mod sl;
 mod sq;
 mod sr;
 mod sv;
+mod ta;
 mod th;
 mod tr;
 mod tw;
 mod uk;
 mod vi;
-mod ta;
-mod ge;
-mod fi;
-mod ml;
 
 pub const LANGS: &[(&str, &str)] = &[
     ("en", "English"),

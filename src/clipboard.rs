@@ -946,7 +946,10 @@ pub mod clipboard_listener {
         if let Some((shutdown, h)) = listener.handle.take() {
             log::warn!("Cleaning up stale clipboard listener handle");
             if let Err(e) = h.join() {
-                log::error!("Clipboard listener thread panicked during stale cleanup: {:?}", e);
+                log::error!(
+                    "Clipboard listener thread panicked during stale cleanup: {:?}",
+                    e
+                );
             }
             drop(shutdown);
         }

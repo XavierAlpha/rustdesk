@@ -3487,7 +3487,7 @@ impl Connection {
                         if self.should_handle_render_broadcast_message() {
                             if r {
                                 // Refresh all videos.
-                                // Compatibility with old versions and sciter(remote).
+                                // Compatibility with legacy render-broadcast messages.
                                 self.refresh_video_display(None);
                             }
                             self.update_auto_disconnect_timer();
@@ -4171,10 +4171,7 @@ impl Connection {
                 }
             }
 
-            // Send display changed message.
-            // 1. For compatibility with old versions ( < 1.2.4 ).
-            // 2. Sciter version.
-            // 3. Update `SupportedResolutions`.
+            // Send display changed message and update `SupportedResolutions`.
             if let Some(msg_out) =
                 video_service::make_display_changed_msg(self.display_idx, None, self.video_source())
             {

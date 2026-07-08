@@ -691,10 +691,7 @@ impl<T: InvokeUiSession> Session<T> {
 
     #[cfg(not(feature = "flutter"))]
     pub fn get_chatbox(&self) -> String {
-        #[cfg(feature = "inline")]
-        return crate::ui::inline::get_chatbox();
-        #[cfg(not(feature = "inline"))]
-        return "".to_owned();
+        "".to_owned()
     }
 
     pub fn swap_modifier_key(&self, msg: &mut KeyEvent) {

@@ -196,7 +196,7 @@ fn check_update(manually: bool) -> ResultType<()> {
         let download_url = update_url.replace("tag", "download");
         let version = download_url.split('/').last().unwrap_or_default();
         #[cfg(target_os = "windows")]
-        let download_url = if cfg!(feature = "flutter") {
+        let download_url = {
             let Some(arch) = crate::platform::windows::release_arch_suffix() else {
                 bail!(
                     "Unsupported Windows release architecture: {}",
@@ -210,8 +210,6 @@ fn check_update(manually: bool) -> ResultType<()> {
                 arch,
                 if update_msi { "msi" } else { "exe" }
             )
-        } else {
-            format!("{}/rustdesk-{}-x86-sciter.exe", download_url, version)
         };
         log::debug!("New version available: {}", &version);
         let client = create_http_client_with_url_strict(&download_url)?;

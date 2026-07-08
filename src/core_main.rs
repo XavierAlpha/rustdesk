@@ -22,7 +22,7 @@ macro_rules! my_println{
     };
 }
 
-/// shared by flutter and sciter main function
+/// shared by Flutter startup paths
 ///
 /// [Note]
 /// If it returns [`None`], then the process will terminate, and flutter gui will not be started.

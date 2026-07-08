@@ -1031,7 +1031,6 @@ pub fn codec_thread_num(limit: usize) -> usize {
 }
 
 fn disable_av1() -> bool {
-    // aom is very slow for x86 sciter version on windows x64
     // disable it for all 32 bit platforms
     std::mem::size_of::<usize>() == 4
 }

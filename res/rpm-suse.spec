@@ -26,7 +26,6 @@ mkdir -p %{buildroot}/usr/share/camellia/files/
 mkdir -p %{buildroot}/usr/share/icons/hicolor/256x256/apps/
 mkdir -p %{buildroot}/usr/share/icons/hicolor/scalable/apps/
 install -m 755 $HBB/target/release/camellia %{buildroot}/usr/bin/camellia
-install $HBB/libsciter-gtk.so %{buildroot}/usr/share/camellia/libsciter-gtk.so
 install $HBB/res/camellia.service %{buildroot}/usr/share/camellia/files/
 install $HBB/res/128x128@2x.png %{buildroot}/usr/share/icons/hicolor/256x256/apps/camellia.png
 install $HBB/res/scalable.svg %{buildroot}/usr/share/icons/hicolor/scalable/apps/camellia.svg
@@ -35,7 +34,6 @@ install $HBB/res/camellia-link.desktop %{buildroot}/usr/share/camellia/files/
 
 %files
 /usr/bin/camellia
-/usr/share/camellia/libsciter-gtk.so
 /usr/share/camellia/files/camellia.service
 /usr/share/icons/hicolor/256x256/apps/camellia.png
 /usr/share/icons/hicolor/scalable/apps/camellia.svg
