@@ -228,7 +228,7 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
                   ),
                   child: child,
                 )));
-    return isMacOS || kUseCompatibleUiMode
+    return isMacOS
         ? tabWidget
         : Obx(() => SubWindowDragToResizeArea(
               key: contentKey,

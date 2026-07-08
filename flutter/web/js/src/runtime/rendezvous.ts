@@ -234,13 +234,15 @@ export class RendezvousClient {
           .encode({ punchHoleRequest })
           .finish();
         transport.send(request);
-        let data: Uint8Array;
+        let msg: Record<string, unknown>;
         try {
-          data = await inbox.next(DIRECT_PROBE_TIMEOUT_MS);
+          msg = await this.nextRendezvousMessage(
+            inbox,
+            DIRECT_PROBE_TIMEOUT_MS
+          );
         } catch {
           continue;
         }
-        const msg = this.decodeRendezvousMessage(data);
         const relay = this.parseRelayResponse(msg, options);
         if (relay) {
           return { relay };
@@ -313,6 +315,25 @@ export class RendezvousClient {
         defaults: false
       }
     );
+  }
+
+  private async nextRendezvousMessage(
+    inbox: MessageInbox,
+    timeoutMs: number
+  ): Promise<Record<string, unknown>> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        throw new Error('timeout waiting for message');
+      }
+      const msg = this.decodeRendezvousMessage(await inbox.next(remaining));
+      if (msg.keyExchange) {
+        this.logger.debug('Ignoring rendezvous key exchange control frame');
+        continue;
+      }
+      return msg;
+    }
   }
 
   private parseRelayResponse(

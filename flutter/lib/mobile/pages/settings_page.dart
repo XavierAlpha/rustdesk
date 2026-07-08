@@ -27,7 +27,12 @@ class SettingsPage extends StatefulWidget implements PageShape {
   final title = translate("Settings");
 
   @override
-  final icon = Icon(Icons.settings);
+  final icon = const AppIconBadge(
+    icon: Icons.settings_rounded,
+    colors: AppVisual.settingsGradient,
+    size: 30,
+    iconSize: 16,
+  );
 
   @override
   final appBarActions = bind.isDisableSettings() ? [] : [ScanButton()];

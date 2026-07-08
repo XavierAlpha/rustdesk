@@ -1,5 +1,3 @@
-// original cm window in Sciter version.
-
 import 'dart:async';
 import 'dart:math';
 

@@ -23,7 +23,12 @@ class ConnectionPage extends StatefulWidget implements PageShape {
   ConnectionPage({Key? key, required this.appBarActions}) : super(key: key);
 
   @override
-  final icon = const Icon(Icons.connected_tv);
+  final icon = const AppIconBadge(
+    icon: Icons.connected_tv_rounded,
+    colors: AppVisual.connectGradient,
+    size: 30,
+    iconSize: 16,
+  );
 
   @override
   final title = translate("Connection");
@@ -152,11 +157,9 @@ class _ConnectionPageState extends State<ConnectionPage> {
       height: 84,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: Theme.of(context).cardColor,
-            borderRadius: BorderRadius.all(Radius.circular(13)),
-          ),
+        child: AppSurface(
+          padding: EdgeInsets.zero,
+          elevated: true,
           child: Row(
             children: <Widget>[
               Expanded(
@@ -335,11 +338,15 @@ class _ConnectionPageState extends State<ConnectionPage> {
                         icon: Icon(Icons.clear, color: MyTheme.darkGray)),
                   )),
               SizedBox(
-                width: 60,
-                height: 60,
+                width: 54,
+                height: 54,
                 child: IconButton(
-                  icon: const Icon(Icons.arrow_forward,
-                      color: MyTheme.darkGray, size: 45),
+                  icon: const AppIconBadge(
+                    icon: Icons.arrow_forward_rounded,
+                    colors: AppVisual.connectGradient,
+                    size: 42,
+                    iconSize: 24,
+                  ),
                   onPressed: onConnect,
                 ),
               ),

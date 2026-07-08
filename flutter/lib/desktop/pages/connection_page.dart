@@ -341,13 +341,11 @@ class _ConnectionPageState extends State<ConnectionPage>
   /// UI for the remote ID TextField.
   /// Search for a peer.
   Widget _buildRemoteIDTextField(BuildContext context) {
-    var w = Container(
+    var w = SizedBox(
       width: 320 + 20 * 2,
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
-      decoration: BoxDecoration(
-          borderRadius: const BorderRadius.all(Radius.circular(13)),
-          border: Border.all(color: Theme.of(context).colorScheme.background)),
-      child: Ink(
+      child: AppSurface(
+        padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
+        elevated: true,
         child: Column(
           children: [
             getConnectionPageTitle(context, false).marginOnly(bottom: 15),
@@ -518,11 +516,12 @@ class _ConnectionPageState extends State<ConnectionPage>
               child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                 SizedBox(
                   height: 28.0,
-                  child: ElevatedButton(
+                  child: ElevatedButton.icon(
                     onPressed: () {
                       onConnect();
                     },
-                    child: Text(translate("Connect")),
+                    icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                    label: Text(translate("Connect")),
                   ),
                 ),
                 const SizedBox(width: 8),

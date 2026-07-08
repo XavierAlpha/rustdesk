@@ -1,7 +1,7 @@
-import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/models/chat_model.dart';
+import 'package:flutter_hbb/models/chat_types.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 
@@ -93,86 +93,122 @@ class ChatPage extends StatelessWidget implements PageShape {
                                 (e) => e.id == chatModel.currentKey.connId)
                             ?.disconnected ==
                         true;
-            return Stack(
-              children: [
-                LayoutBuilder(builder: (context, constraints) {
-                  final chat = DashChat(
-                    onSend: chatModel.send,
-                    currentUser: chatModel.me,
-                    messages: chatModel
-                            .messages[chatModel.currentKey]?.chatMessages ??
-                        [],
-                    readOnly: readOnly,
-                    inputOptions: InputOptions(
-                      focusNode: chatModel.inputNode,
-                      textController: chatModel.textController,
-                      inputTextStyle: TextStyle(
-                          fontSize: 14,
-                          color: Theme.of(context).textTheme.titleLarge?.color),
-                      inputDecoration: InputDecoration(
-                        isDense: true,
-                        hintText: translate('Write a message'),
-                        filled: true,
-                        fillColor: Theme.of(context).colorScheme.background,
-                        contentPadding: EdgeInsets.all(10),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10.0),
-                          borderSide: const BorderSide(
-                            width: 1,
-                            style: BorderStyle.solid,
+            return LayoutBuilder(builder: (context, constraints) {
+              final messages =
+                  chatModel.messages[chatModel.currentKey]?.chatMessages ?? [];
+              final chat = Column(
+                children: [
+                  Expanded(
+                    child: messages.isEmpty
+                        ? const SizedBox.shrink()
+                        : ListView.builder(
+                            reverse: true,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            itemCount: messages.length,
+                            itemBuilder: (context, index) {
+                              return _ChatMessageBubble(
+                                message: messages[index],
+                                isOwnMessage:
+                                    messages[index].user.id == chatModel.me.id,
+                                maxWidth: constraints.maxWidth * 0.7,
+                              );
+                            },
                           ),
-                        ),
-                      ),
-                      sendButtonBuilder: defaultSendButton(
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 6, vertical: 0),
-                        color: MyTheme.accent,
-                        icon: Icons.send_rounded,
-                      ),
-                    ),
-                    messageOptions: MessageOptions(
-                      showOtherUsersAvatar: false,
-                      showOtherUsersName: false,
-                      textColor: Colors.white,
-                      maxWidth: constraints.maxWidth * 0.7,
-                      messageTextBuilder: (message, _, __) {
-                        final isOwnMessage = message.user.id.isBlank!;
-                        return Column(
-                          crossAxisAlignment: isOwnMessage
-                              ? CrossAxisAlignment.end
-                              : CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(message.text,
-                                style: TextStyle(color: Colors.white)),
-                            Text(
-                              "${message.createdAt.hour}:${message.createdAt.minute.toString().padLeft(2, '0')}",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 8,
-                              ),
-                            ).marginOnly(top: 3),
-                          ],
-                        );
-                      },
-                      messageDecorationBuilder:
-                          (message, previousMessage, nextMessage) {
-                        final isOwnMessage = message.user.id.isBlank!;
-                        return defaultMessageDecoration(
-                          color:
-                              isOwnMessage ? MyTheme.accent : Colors.blueGrey,
-                          borderTopLeft: 8,
-                          borderTopRight: 8,
-                          borderBottomRight: isOwnMessage ? 2 : 8,
-                          borderBottomLeft: isOwnMessage ? 8 : 2,
-                        );
-                      },
-                    ),
-                  ).workaroundFreezeLinuxMint();
-                  return SelectionArea(child: chat);
-                }),
-              ],
-            ).paddingOnly(bottom: 8);
+                  ),
+                  if (!readOnly) _ChatInput(chatModel: chatModel),
+                ],
+              ).workaroundFreezeLinuxMint();
+              return SelectionArea(child: chat);
+            }).paddingOnly(bottom: 8);
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatInput extends StatelessWidget {
+  final ChatModel chatModel;
+
+  const _ChatInput({required this.chatModel});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
+      child: TextField(
+        controller: chatModel.textController,
+        focusNode: chatModel.inputNode,
+        minLines: 1,
+        maxLines: 4,
+        style: TextStyle(
+          fontSize: 14,
+          color: Theme.of(context).textTheme.titleLarge?.color,
+        ),
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: translate('Write a message'),
+          filled: true,
+          fillColor: Theme.of(context).colorScheme.background,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10.0),
+            borderSide: const BorderSide(width: 1, style: BorderStyle.solid),
+          ),
+          suffixIcon: IconButton(
+            icon: Icon(Icons.send_rounded, color: MyTheme.accent),
+            tooltip: translate('Send'),
+            onPressed: () => chatModel.sendText(chatModel.textController.text),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatMessageBubble extends StatelessWidget {
+  final ChatMessage message;
+  final bool isOwnMessage;
+  final double maxWidth;
+
+  const _ChatMessageBubble({
+    required this.message,
+    required this.isOwnMessage,
+    required this.maxWidth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isOwnMessage ? MyTheme.accent : Colors.blueGrey;
+    return Align(
+      alignment: isOwnMessage ? Alignment.centerRight : Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(8),
+              topRight: const Radius.circular(8),
+              bottomRight: Radius.circular(isOwnMessage ? 2 : 8),
+              bottomLeft: Radius.circular(isOwnMessage ? 8 : 2),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment:
+                isOwnMessage ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            children: [
+              Text(message.text, style: const TextStyle(color: Colors.white)),
+              Text(
+                "${message.createdAt.hour}:${message.createdAt.minute.toString().padLeft(2, '0')}",
+                style: const TextStyle(color: Colors.white, fontSize: 8),
+              ).marginOnly(top: 3),
+            ],
+          ),
         ),
       ),
     );

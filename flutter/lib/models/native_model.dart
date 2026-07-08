@@ -117,19 +117,20 @@ class PlatformFFI {
   /// Init the FFI class, loads the native Rust core library.
   Future<void> init(String appType) async {
     _appType = appType;
-    final dylib = isAndroid
-        ? DynamicLibrary.open('librustdesk.so')
+    final externalLibrary = isAndroid
+        ? ExternalLibrary.open('librustdesk.so')
         : isLinux
-            ? DynamicLibrary.open('librustdesk.so')
+            ? ExternalLibrary.open('librustdesk.so')
             : isWindows
-                ? DynamicLibrary.open('librustdesk.dll')
+                ? ExternalLibrary.open('librustdesk.dll')
                 :
                 // Use executable itself as the dynamic library for MacOS.
                 // Multiple dylib instances will cause some global instances to be invalid.
                 // eg. `lazy_static` objects in rust side, will be created more than once, which is not expected.
                 //
-                // isMacOS? DynamicLibrary.open("liblibrustdesk.dylib") :
-                DynamicLibrary.process();
+                // isMacOS? ExternalLibrary.open("liblibrustdesk.dylib") :
+                ExternalLibrary.process(iKnowHowToUseIt: true);
+    final dylib = externalLibrary.ffiDynamicLibrary;
     debugPrint('initializing FFI $_appType');
     try {
       _session_get_rgba = dylib.lookupFunction<F3Dart, F3>("session_get_rgba");
@@ -139,7 +140,8 @@ class PlatformFFI {
       } catch (e) {
         debugPrint('Failed to get documents directory: $e');
       }
-      _ffiBind = RustdeskImpl(dylib);
+      await RustLib.init(externalLibrary: externalLibrary);
+      _ffiBind = const RustdeskImpl();
 
       if (isLinux) {
         if (isMain) {
@@ -184,8 +186,6 @@ class PlatformFFI {
         id = linuxInfo.machineId ?? linuxInfo.id;
       } else if (isWindows) {
         try {
-          // request windows build number to fix overflow on win7
-          windowsBuildNumber = getWindowsTargetBuildNumber();
           WindowsDeviceInfo winInfo = await deviceInfo.windowsInfo;
           name = winInfo.computerName;
           id = winInfo.computerName;

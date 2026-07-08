@@ -512,8 +512,7 @@ class _DesktopTabState extends State<DesktopTab>
   Widget build(BuildContext context) {
     return Column(children: [
       Obx(() {
-        if (stateGlobal.showTabBar.isTrue &&
-            !(kUseCompatibleUiMode && isHideSingleItem())) {
+        if (stateGlobal.showTabBar.isTrue) {
           final showBottomDivider = _showTabBarBottomDivider(tabType);
           return SizedBox(
             height: _kTabBarHeight,
@@ -632,7 +631,7 @@ class _DesktopTabState extends State<DesktopTab>
                           width: 78,
                         )),
                     Offstage(
-                      offstage: kUseCompatibleUiMode || isMacOS,
+                      offstage: isMacOS,
                       child: Row(children: [
                         Offstage(
                           offstage: !showLogo,
@@ -681,7 +680,6 @@ class _DesktopTabState extends State<DesktopTab>
                             ))),
                   ],
                 ))),
-        // hide simulated action buttons when we in compatible ui mode, because of reusing system title bar.
         WindowActionPanel(
           isMainWindow: isMainWindow,
           state: state,
@@ -766,58 +764,55 @@ class WindowActionPanelState extends State<WindowActionPanel> {
           }
         }),
         if (widget.tail != null) widget.tail!,
-        if (!kUseCompatibleUiMode)
-          Row(
-            children: [
-              if (widget.showMinimize && !isMacOS)
-                ActionIcon(
-                  message: 'Minimize',
-                  icon: IconFont.min,
-                  onTap: () {
-                    if (widget.isMainWindow) {
-                      windowManager.minimize();
-                    } else {
-                      WindowController.fromWindowId(kWindowId!).minimize();
-                    }
-                  },
-                  isClose: false,
-                ),
-              if (widget.showMaximize && !isMacOS)
-                Obx(() => ActionIcon(
-                      message: stateGlobal.isMaximized.isTrue
-                          ? 'Restore'
-                          : 'Maximize',
-                      icon: stateGlobal.isMaximized.isTrue
-                          ? IconFont.restore
-                          : IconFont.max,
-                      onTap: bind.isIncomingOnly() && isInHomePage()
-                          ? null
-                          : _toggleMaximize,
-                      isClose: false,
-                    )),
-              if (widget.showClose && !isMacOS)
-                ActionIcon(
-                  message: 'Close',
-                  icon: IconFont.close,
-                  onTap: () async {
-                    final res = await widget.onClose?.call() ?? true;
-                    if (res) {
-                      // hide for all window
-                      // note: the main window can be restored by tray icon
-                      Future.delayed(Duration.zero, () async {
-                        if (widget.isMainWindow) {
-                          await windowManager.close();
-                        } else {
-                          await WindowController.fromWindowId(kWindowId!)
-                              .close();
-                        }
-                      });
-                    }
-                  },
-                  isClose: true,
-                )
-            ],
-          ),
+        Row(
+          children: [
+            if (widget.showMinimize && !isMacOS)
+              ActionIcon(
+                message: 'Minimize',
+                icon: IconFont.min,
+                onTap: () {
+                  if (widget.isMainWindow) {
+                    windowManager.minimize();
+                  } else {
+                    WindowController.fromWindowId(kWindowId!).minimize();
+                  }
+                },
+                isClose: false,
+              ),
+            if (widget.showMaximize && !isMacOS)
+              Obx(() => ActionIcon(
+                    message:
+                        stateGlobal.isMaximized.isTrue ? 'Restore' : 'Maximize',
+                    icon: stateGlobal.isMaximized.isTrue
+                        ? IconFont.restore
+                        : IconFont.max,
+                    onTap: bind.isIncomingOnly() && isInHomePage()
+                        ? null
+                        : _toggleMaximize,
+                    isClose: false,
+                  )),
+            if (widget.showClose && !isMacOS)
+              ActionIcon(
+                message: 'Close',
+                icon: IconFont.close,
+                onTap: () async {
+                  final res = await widget.onClose?.call() ?? true;
+                  if (res) {
+                    // hide for all window
+                    // note: the main window can be restored by tray icon
+                    Future.delayed(Duration.zero, () async {
+                      if (widget.isMainWindow) {
+                        await windowManager.close();
+                      } else {
+                        await WindowController.fromWindowId(kWindowId!).close();
+                      }
+                    });
+                  }
+                },
+                isClose: true,
+              )
+          ],
+        ),
       ],
     );
   }

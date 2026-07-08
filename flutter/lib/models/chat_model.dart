@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:draggable_float_widget/draggable_float_widget.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +18,7 @@ import '../consts.dart';
 import '../common.dart';
 import '../common/widgets/overlay.dart';
 import '../main.dart';
+import 'chat_types.dart';
 import 'model.dart';
 
 class MessageKey {
@@ -131,13 +131,7 @@ class ChatModel with ChangeNotifier {
         }
 
         if (isEnterPressed && !isShiftPressed) {
-          final ChatMessage message = ChatMessage(
-            text: textController.text,
-            user: me,
-            createdAt: DateTime.now(),
-          );
-          send(message);
-          textController.clear();
+          sendText(textController.text);
           return KeyEventResult.handled;
         }
 
@@ -456,6 +450,16 @@ class ChatModel with ChangeNotifier {
 
     notifyListeners();
     inputNode.requestFocus();
+  }
+
+  void sendText(String text) {
+    final message = ChatMessage(
+      text: text,
+      user: me,
+      createdAt: DateTime.now(),
+    );
+    send(message);
+    textController.clear();
   }
 
   insertMessage(MessageKey key, ChatMessage message) {

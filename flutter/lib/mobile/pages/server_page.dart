@@ -20,7 +20,12 @@ class ServerPage extends StatefulWidget implements PageShape {
   final title = translate("Share screen");
 
   @override
-  final icon = const Icon(Icons.mobile_screen_share);
+  final icon = const AppIconBadge(
+    icon: Icons.mobile_screen_share_rounded,
+    colors: AppVisual.identityGradient,
+    size: 30,
+    iconSize: 16,
+  );
 
   @override
   final appBarActions = (!bind.isDisableSettings() &&
