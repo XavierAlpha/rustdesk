@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 
-cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
 flutter pub get
-~/.cargo/bin/flutter_rust_bridge_codegen --rust-input ../src/flutter_ffi.rs --dart-output ./lib/generated_bridge.dart --c-output ./macos/Runner/bridge_generated.h
+FRB_CODEGEN_VERSION="${FRB_CODEGEN_VERSION:-1}" bash ../.github/scripts/generate-bridge.sh
 # call `flutter clean` if cargo build fails
 # export LLVM_HOME=/Library/Developer/CommandLineTools/usr/
-cargo build --locked --features flutter
+cargo build --features flutter
 flutter run $@

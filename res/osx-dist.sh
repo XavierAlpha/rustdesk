@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 
 echo $MACOS_CODESIGN_IDENTITY
-cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
 cd flutter; flutter pub get; cd -
-~/.cargo/bin/flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart --c-output ./flutter/macos/Runner/bridge_generated.h
+bash .github/scripts/generate-bridge.sh
 ./build.py --flutter
 rm camellia-$VERSION.dmg
 # security find-identity -v

@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-cargo ndk --platform 21 --target aarch64-linux-android build --locked --release --features flutter,hwcodec
+cargo ndk --platform 26 --target arm64-v8a build --release --features flutter,hwcodec
