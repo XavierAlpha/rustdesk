@@ -1026,19 +1026,11 @@ pub fn main_set_option(key: String, value: String) {
         );
     }
 
-    // If `is_allow_tls_fallback` and https proxy is used, we need to restart rendezvous mediator.
-    // No need to check if https proxy is used, because this option does not change frequently
-    // and restarting mediator is safe even https proxy is not used.
-    let is_allow_tls_fallback = key.eq(config::keys::OPTION_ALLOW_INSECURE_TLS_FALLBACK);
-    if is_allow_tls_fallback
-        || key.eq("custom-rendezvous-server")
+    if key.eq("custom-rendezvous-server")
         || key.eq(config::keys::OPTION_ALLOW_WEBSOCKET)
         || key.eq(config::keys::OPTION_DISABLE_UDP)
         || key.eq("api-server")
     {
-        if is_allow_tls_fallback {
-            hbb_common::tls::reset_tls_cache();
-        }
         set_option(key, value.clone());
         #[cfg(target_os = "android")]
         crate::rendezvous_mediator::RendezvousMediator::restart();
@@ -2549,7 +2541,7 @@ pub fn is_disable_account() -> bool {
 
 #[frb(sync)]
 pub fn is_disable_group_panel() -> bool {
-    LocalConfig::get_option("disable-group-panel") == "Y"
+    false
 }
 
 // windows only

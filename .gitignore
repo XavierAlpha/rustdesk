@@ -18,6 +18,9 @@ cert.pfx
 *svg
 *jpg
 !res/camellia-banner.svg
+!res/camellia-mark.svg
+!res/android-foreground.png
+!res/android-monochrome.png
 !docs/assets/*.png
 !docs/assets/*.svg
 sciter.dll
@@ -76,3 +79,6 @@ flutter/web/ogvjs-*/
 !flutter/web/**/*.jpeg
 !flutter/web/**/*.webp
 !flutter/web/**/*.ico
+!flutter/assets/brand-mark.png
+!flutter/android/app/src/main/res/drawable-*/ic_launcher_foreground.png
+!flutter/android/app/src/main/res/drawable-*/ic_launcher_monochrome.png

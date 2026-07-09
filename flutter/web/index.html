@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta content="IE=Edge" http-equiv="X-UA-Compatible">
     <meta name="description" content="Camellia Web Client">
-    <meta name="theme-color" content="#D6455D">
-    <meta name="color-scheme" content="only light">
+    <meta name="theme-color" content="#247BFF">
+    <meta name="color-scheme" content="light dark">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -18,16 +18,16 @@
     <title>Camellia Web Client</title>
     <style>
       :root {
-        --camellia-rose: #d6455d;
-        --camellia-rose-dark: #b83b4f;
-        --camellia-cream: #fff7f2;
-        --camellia-ink: #1f1b1e;
+        --camellia-primary: #247bff;
+        --camellia-page: #f7f9fc;
+        --camellia-surface: #ffffff;
+        --camellia-ink: #172033;
       }
       html,
       body {
         height: 100%;
         margin: 0;
-        background: radial-gradient(circle at 20% 10%, #ffe9ed 0%, #fff7f2 40%, #f6f1ed 100%);
+        background: var(--camellia-page);
         font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
       }
       #loading {
@@ -43,21 +43,20 @@
       #loading .mark {
         width: 56px;
         height: 56px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, var(--camellia-rose), var(--camellia-rose-dark));
+        border-radius: 8px;
+        background: var(--camellia-primary);
         display: grid;
         place-items: center;
         color: #fff;
         font-weight: 700;
         font-size: 24px;
-        box-shadow: 0 12px 24px rgba(214, 69, 93, 0.35);
       }
       #loading .pulse {
         width: 90px;
         height: 4px;
-        border-radius: 999px;
+        border-radius: 2px;
         overflow: hidden;
-        background: rgba(214, 69, 93, 0.18);
+        background: color-mix(in srgb, var(--camellia-primary) 16%, transparent);
         position: relative;
       }
       #loading .pulse::after {
@@ -65,8 +64,21 @@
         position: absolute;
         inset: 0;
         transform: translateX(-70%);
-        background: linear-gradient(90deg, transparent, rgba(214, 69, 93, 0.75), transparent);
+        background: var(--camellia-primary);
         animation: slide 1.5s infinite;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --camellia-page: #171a20;
+          --camellia-surface: #20252d;
+          --camellia-ink: #eef3fb;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #loading .pulse::after {
+          animation: none;
+          transform: translateX(0);
+        }
       }
       @keyframes slide {
         0% {

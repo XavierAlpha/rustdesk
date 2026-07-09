@@ -60,7 +60,11 @@ class PlatformFFI {
   }
 
   bool registerEventHandler(
-      String eventName, String handlerName, HandleEvent handler, {bool replace = false}) {
+    String eventName,
+    String handlerName,
+    HandleEvent handler, {
+    bool replace = false,
+  }) {
     debugPrint('registerEventHandler $eventName $handlerName');
     var handlers = _eventHandlers[eventName];
     if (handlers == null) {
@@ -109,10 +113,16 @@ class PlatformFFI {
       _ffiBind.sessionNextRgba(sessionId: sessionId, display: display);
   void registerPixelbufferTexture(SessionID sessionId, int display, int ptr) =>
       _ffiBind.sessionRegisterPixelbufferTexture(
-          sessionId: sessionId, display: display, ptr: ptr);
+        sessionId: sessionId,
+        display: display,
+        ptr: ptr,
+      );
   void registerGpuTexture(SessionID sessionId, int display, int ptr) =>
       _ffiBind.sessionRegisterGpuTexture(
-          sessionId: sessionId, display: display, ptr: ptr);
+        sessionId: sessionId,
+        display: display,
+        ptr: ptr,
+      );
 
   /// Init the FFI class, loads the native Rust core library.
   Future<void> init(String appType) async {
@@ -120,16 +130,16 @@ class PlatformFFI {
     final externalLibrary = isAndroid
         ? ExternalLibrary.open('librustdesk.so')
         : isLinux
-            ? ExternalLibrary.open('librustdesk.so')
-            : isWindows
-                ? ExternalLibrary.open('librustdesk.dll')
-                :
-                // Use executable itself as the dynamic library for MacOS.
-                // Multiple dylib instances will cause some global instances to be invalid.
-                // eg. `lazy_static` objects in rust side, will be created more than once, which is not expected.
-                //
-                // isMacOS? ExternalLibrary.open("liblibrustdesk.dylib") :
-                ExternalLibrary.process(iKnowHowToUseIt: true);
+        ? ExternalLibrary.open('librustdesk.so')
+        : isWindows
+        ? ExternalLibrary.open('librustdesk.dll')
+        :
+          // Use executable itself as the dynamic library for MacOS.
+          // Multiple dylib instances will cause some global instances to be invalid.
+          // eg. `lazy_static` objects in rust side, will be created more than once, which is not expected.
+          //
+          // isMacOS? ExternalLibrary.open("liblibrustdesk.dylib") :
+          ExternalLibrary.process(iKnowHowToUseIt: true);
     final dylib = externalLibrary.ffiDynamicLibrary;
     debugPrint('initializing FFI $_appType');
     try {
@@ -156,7 +166,11 @@ class PlatformFFI {
       try {
         if (isAndroid) {
           // only support for android
-          _homeDir = (await ExternalPath.getExternalStorageDirectories())[0];
+          final directories =
+              await ExternalPath.getExternalStorageDirectories();
+          if (directories != null && directories.isNotEmpty) {
+            _homeDir = directories[0];
+          }
         } else if (isIOS) {
           // The previous code was `_homeDir = (await getDownloadsDirectory())?.path ?? '';`,
           // which provided the `downloads` path in the sandbox.
@@ -201,10 +215,12 @@ class PlatformFFI {
       }
       if (isAndroid || isIOS) {
         debugPrint(
-            '_appType:$_appType,info1-id:$id,info2-name:$name,dir:$_dir,homeDir:$_homeDir');
+          '_appType:$_appType,info1-id:$id,info2-name:$name,dir:$_dir,homeDir:$_homeDir',
+        );
       } else {
         debugPrint(
-            '_appType:$_appType,info1-id:$id,info2-name:$name,dir:$_dir');
+          '_appType:$_appType,info1-id:$id,info2-name:$name,dir:$_dir',
+        );
       }
       if (desktopType == DesktopType.cm) {
         await _ffiBind.cmInit();
@@ -212,10 +228,7 @@ class PlatformFFI {
       await _ffiBind.mainDeviceId(id: id);
       await _ffiBind.mainDeviceName(name: name);
       await _ffiBind.mainSetHomeDir(home: _homeDir);
-      await _ffiBind.mainInit(
-        appDir: _dir,
-        customClientConfig: '',
-      );
+      await _ffiBind.mainInit(appDir: _dir, customClientConfig: '');
     } catch (e) {
       debugPrintStack(label: 'initialize failed: $e');
     }
@@ -240,8 +253,9 @@ class PlatformFFI {
 
   /// Start listening to the Rust core's events and frames.
   void _startListenEvent(RustdeskImpl rustdeskImpl) {
-    final appType =
-        _appType == kAppTypeDesktopRemote ? '$_appType,$kWindowId' : _appType;
+    final appType = _appType == kAppTypeDesktopRemote
+        ? '$_appType,$kWindowId'
+        : _appType;
     var sink = rustdeskImpl.startGlobalEventStream(appType: appType);
     sink.listen((message) {
       () async {

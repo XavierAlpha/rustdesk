@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
+import 'dart:ui' show lerpDouble;
 
 import 'package:back_button_interceptor/back_button_interceptor.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
@@ -15,6 +15,7 @@ import 'package:flutter_hbb/main.dart';
 import 'package:flutter_hbb/models/peer_model.dart';
 import 'package:flutter_hbb/models/peer_tab_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
+import 'package:flutter_hbb/ui/camellia_design.dart';
 import 'package:flutter_hbb/utils/multi_window_manager.dart';
 import 'package:flutter_hbb/utils/platform_channel.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -30,6 +31,7 @@ import 'package:window_size/window_size.dart' as window_size;
 
 import '../consts.dart';
 import 'common/widgets/overlay.dart';
+import 'common/widgets/adaptive_layout.dart';
 import 'mobile/pages/file_manager_page.dart';
 import 'mobile/pages/remote_page.dart';
 import 'mobile/pages/view_camera_page.dart';
@@ -46,7 +48,6 @@ import 'package:flutter_hbb/native/common.dart'
 import 'package:flutter_hbb/utils/http_service.dart' as http;
 
 final globalKey = GlobalKey<NavigatorState>();
-final navigationBarKey = GlobalKey();
 
 final isAndroid = isAndroid_;
 final isIOS = isIOS_;
@@ -182,7 +183,7 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
     shadow: Colors.black,
     errorBannerBg: Color(0xFFFDEEEB),
     me: Colors.green,
-    toastBg: Colors.black.withOpacity(0.6),
+    toastBg: Colors.black.withValues(alpha: 0.6),
     toastText: Colors.white,
     divider: Colors.black38,
   );
@@ -196,7 +197,7 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
     shadow: Colors.grey,
     errorBannerBg: Color(0xFF470F2D),
     me: Colors.greenAccent,
-    toastBg: Colors.white.withOpacity(0.6),
+    toastBg: Colors.white.withValues(alpha: 0.6),
     toastText: Colors.black,
     divider: Colors.white38,
   );
@@ -254,21 +255,184 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
   }
 }
 
+class AppDesignTokens extends ThemeExtension<AppDesignTokens> {
+  const AppDesignTokens({
+    required this.page,
+    required this.surface,
+    required this.surfaceContainer,
+    required this.surfaceElevated,
+    required this.border,
+    required this.muted,
+    required this.accentContainer,
+    required this.secondary,
+    required this.success,
+    required this.warning,
+    required this.danger,
+    required this.info,
+    required this.focusRing,
+    required this.radiusSmall,
+    required this.radiusMedium,
+    required this.controlHeight,
+    required this.touchTarget,
+    required this.shadow,
+    required this.shadowStrong,
+  });
+
+  final Color page;
+  final Color surface;
+  final Color surfaceContainer;
+  final Color surfaceElevated;
+  final Color border;
+  final Color muted;
+  final Color accentContainer;
+  final Color secondary;
+  final Color success;
+  final Color warning;
+  final Color danger;
+  final Color info;
+  final Color focusRing;
+  final double radiusSmall;
+  final double radiusMedium;
+  final double controlHeight;
+  final double touchTarget;
+  final Color shadow;
+  final Color shadowStrong;
+
+  static const light = AppDesignTokens(
+    page: CamelliaColors.lightCanvas,
+    surface: CamelliaColors.lightSurface,
+    surfaceContainer: CamelliaColors.lightInset,
+    surfaceElevated: CamelliaColors.lightRaised,
+    border: CamelliaColors.lightBorder,
+    muted: CamelliaColors.lightMuted,
+    accentContainer: CamelliaColors.lightPetalWash,
+    secondary: CamelliaColors.indigoStrong,
+    success: Color(0xFF087A55),
+    warning: Color(0xFF9A6200),
+    danger: Color(0xFFB3261E),
+    info: CamelliaColors.indigoStrong,
+    focusRing: CamelliaColors.indigo,
+    radiusSmall: 6,
+    radiusMedium: 8,
+    controlHeight: 40,
+    touchTarget: 48,
+    shadow: Color(0x12182033),
+    shadowStrong: Color(0x24182033),
+  );
+
+  static const dark = AppDesignTokens(
+    page: CamelliaColors.darkCanvas,
+    surface: CamelliaColors.darkSurface,
+    surfaceContainer: CamelliaColors.darkInset,
+    surfaceElevated: CamelliaColors.darkRaised,
+    border: CamelliaColors.darkBorder,
+    muted: CamelliaColors.darkMuted,
+    accentContainer: CamelliaColors.darkPetalWash,
+    secondary: Color(0xFFA9A5FF),
+    success: Color(0xFF68D6A7),
+    warning: Color(0xFFFFC66D),
+    danger: Color(0xFFFFB4AB),
+    info: Color(0xFFA9A5FF),
+    focusRing: Color(0xFFA9A5FF),
+    radiusSmall: 6,
+    radiusMedium: 8,
+    controlHeight: 40,
+    touchTarget: 48,
+    shadow: Color(0x52000000),
+    shadowStrong: Color(0x66000000),
+  );
+
+  @override
+  AppDesignTokens copyWith({
+    Color? page,
+    Color? surface,
+    Color? surfaceContainer,
+    Color? surfaceElevated,
+    Color? border,
+    Color? muted,
+    Color? accentContainer,
+    Color? secondary,
+    Color? success,
+    Color? warning,
+    Color? danger,
+    Color? info,
+    Color? focusRing,
+    double? radiusSmall,
+    double? radiusMedium,
+    double? controlHeight,
+    double? touchTarget,
+    Color? shadow,
+    Color? shadowStrong,
+  }) {
+    return AppDesignTokens(
+      page: page ?? this.page,
+      surface: surface ?? this.surface,
+      surfaceContainer: surfaceContainer ?? this.surfaceContainer,
+      surfaceElevated: surfaceElevated ?? this.surfaceElevated,
+      border: border ?? this.border,
+      muted: muted ?? this.muted,
+      accentContainer: accentContainer ?? this.accentContainer,
+      secondary: secondary ?? this.secondary,
+      success: success ?? this.success,
+      warning: warning ?? this.warning,
+      danger: danger ?? this.danger,
+      info: info ?? this.info,
+      focusRing: focusRing ?? this.focusRing,
+      radiusSmall: radiusSmall ?? this.radiusSmall,
+      radiusMedium: radiusMedium ?? this.radiusMedium,
+      controlHeight: controlHeight ?? this.controlHeight,
+      touchTarget: touchTarget ?? this.touchTarget,
+      shadow: shadow ?? this.shadow,
+      shadowStrong: shadowStrong ?? this.shadowStrong,
+    );
+  }
+
+  @override
+  AppDesignTokens lerp(ThemeExtension<AppDesignTokens>? other, double t) {
+    if (other is! AppDesignTokens) return this;
+    return AppDesignTokens(
+      page: Color.lerp(page, other.page, t)!,
+      surface: Color.lerp(surface, other.surface, t)!,
+      surfaceContainer: Color.lerp(
+        surfaceContainer,
+        other.surfaceContainer,
+        t,
+      )!,
+      surfaceElevated: Color.lerp(surfaceElevated, other.surfaceElevated, t)!,
+      border: Color.lerp(border, other.border, t)!,
+      muted: Color.lerp(muted, other.muted, t)!,
+      accentContainer: Color.lerp(accentContainer, other.accentContainer, t)!,
+      secondary: Color.lerp(secondary, other.secondary, t)!,
+      success: Color.lerp(success, other.success, t)!,
+      warning: Color.lerp(warning, other.warning, t)!,
+      danger: Color.lerp(danger, other.danger, t)!,
+      info: Color.lerp(info, other.info, t)!,
+      focusRing: Color.lerp(focusRing, other.focusRing, t)!,
+      radiusSmall: lerpDouble(radiusSmall, other.radiusSmall, t)!,
+      radiusMedium: lerpDouble(radiusMedium, other.radiusMedium, t)!,
+      controlHeight: lerpDouble(controlHeight, other.controlHeight, t)!,
+      touchTarget: lerpDouble(touchTarget, other.touchTarget, t)!,
+      shadow: Color.lerp(shadow, other.shadow, t)!,
+      shadowStrong: Color.lerp(shadowStrong, other.shadowStrong, t)!,
+    );
+  }
+}
+
 class MyTheme {
   MyTheme._();
 
-  static const Color grayBg = Color(0xFFF5F7FB);
-  static const Color accent = Color(0xFF247BFF);
-  static const Color accent50 = Color(0x77247BFF);
-  static const Color accent80 = Color(0xAA247BFF);
-  static const Color canvasColor = Color(0xFF212121);
-  static const Color border = Color(0xFFD9E1EF);
-  static const Color idColor = Color(0xFF09AEEA);
+  static const Color grayBg = CamelliaColors.lightCanvas;
+  static const Color accent = CamelliaColors.coralStrong;
+  static const Color accent50 = Color(0x77FF4F70);
+  static const Color accent80 = Color(0xAAFF4F70);
+  static const Color canvasColor = CamelliaColors.darkCanvas;
+  static const Color border = CamelliaColors.lightBorder;
+  static const Color idColor = CamelliaColors.azureStrong;
   static const Color darkGray = Color.fromARGB(255, 148, 148, 148);
-  static const Color cmIdColor = Color(0xFF18A058);
+  static const Color cmIdColor = CamelliaColors.aquaStrong;
   static const Color dark = Colors.black87;
-  static const Color button = Color(0xFF247BFF);
-  static const Color hoverBorder = Color(0xFF98A8C2);
+  static const Color button = CamelliaColors.azureStrong;
+  static const Color hoverBorder = CamelliaColors.azure;
 
   // ListTile
   static const ListTileThemeData listTileTheme = ListTileThemeData(
@@ -313,7 +477,11 @@ class MyTheme {
   //tooltip
   static TooltipThemeData tooltipTheme() {
     return TooltipThemeData(
-      waitDuration: Duration(seconds: 1, milliseconds: 500),
+      waitDuration: (isDesktop || isWebDesktop)
+          ? const Duration(milliseconds: 450)
+          : Duration.zero,
+      showDuration: const Duration(seconds: 2),
+      exitDuration: const Duration(milliseconds: 120),
     );
   }
 
@@ -349,11 +517,11 @@ class MyTheme {
       : EdgeInsets.only(left: dialogPadding / 3);
 
   static ScrollbarThemeData scrollbarTheme = ScrollbarThemeData(
-    thickness: MaterialStateProperty.all(6),
-    thumbColor: MaterialStateProperty.resolveWith<Color?>((states) {
-      if (states.contains(MaterialState.dragged)) {
+    thickness: WidgetStateProperty.all(6),
+    thumbColor: WidgetStateProperty.resolveWith<Color?>((states) {
+      if (states.contains(WidgetState.dragged)) {
         return Colors.grey[900];
-      } else if (states.contains(MaterialState.hovered)) {
+      } else if (states.contains(WidgetState.hovered)) {
         return Colors.grey[700];
       } else {
         return Colors.grey[500];
@@ -363,10 +531,10 @@ class MyTheme {
   );
 
   static ScrollbarThemeData scrollbarThemeDark = scrollbarTheme.copyWith(
-    thumbColor: MaterialStateProperty.resolveWith<Color?>((states) {
-      if (states.contains(MaterialState.dragged)) {
+    thumbColor: WidgetStateProperty.resolveWith<Color?>((states) {
+      if (states.contains(WidgetState.dragged)) {
         return Colors.grey[100];
-      } else if (states.contains(MaterialState.hovered)) {
+      } else if (states.contains(WidgetState.hovered)) {
         return Colors.grey[300];
       } else {
         return Colors.grey[500];
@@ -374,47 +542,105 @@ class MyTheme {
     }),
   );
 
-  static dynamic _themeDataCompat(dynamic theme) {
-    // Newer Flutter theme widgets expose `.data`; older SDKs expect the
-    // legacy theme object directly.
-    try {
-      return theme.data;
-    } on NoSuchMethodError {
-      return theme;
-    }
-  }
+  static final ColorScheme _lightColorScheme =
+      ColorScheme.fromSeed(
+        seedColor: accent,
+        brightness: Brightness.light,
+      ).copyWith(
+        primary: accent,
+        primaryContainer: const Color(0xFFFFE3E4),
+        secondary: const Color(0xFF0E8F82),
+        tertiary: const Color(0xFFF3A712),
+        surface: const Color(0xFFFFFFFF),
+      );
 
-  static dynamic _dialogThemeCompat(Color borderColor) {
-    return _themeDataCompat(
-      DialogTheme(
-        elevation: 15,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18.0),
-          side: BorderSide(width: 1, color: borderColor),
-        ),
+  static final ColorScheme _darkColorScheme =
+      ColorScheme.fromSeed(
+        seedColor: accent,
+        brightness: Brightness.dark,
+      ).copyWith(
+        primary: const Color(0xFFFF9A9D),
+        primaryContainer: const Color(0xFF4B2428),
+        secondary: const Color(0xFF58CFC0),
+        tertiary: const Color(0xFFFFC66A),
+        surface: AppDesignTokens.dark.surface,
+      );
+
+  static DialogThemeData _dialogTheme(
+    Color borderColor,
+    Color backgroundColor,
+  ) {
+    return DialogThemeData(
+      backgroundColor: backgroundColor,
+      elevation: 15,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppVisual.radius),
+        side: BorderSide(width: 1, color: borderColor),
       ),
     );
   }
 
-  static dynamic _tabBarThemeCompat(Color labelColor) {
-    return _themeDataCompat(TabBarTheme(labelColor: labelColor));
+  static TabBarThemeData _tabBarTheme(Color labelColor) {
+    return TabBarThemeData(labelColor: labelColor);
   }
 
-  static ThemeData lightTheme =
+  static NavigationBarThemeData _navigationBarTheme({
+    required Color indicatorColor,
+    required Color selectedColor,
+    required Color unselectedColor,
+    required Color labelColor,
+  }) {
+    return NavigationBarThemeData(
+      height: 66,
+      elevation: 0,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      indicatorColor: indicatorColor,
+      labelTextStyle: WidgetStateProperty.resolveWith((states) {
+        return TextStyle(
+          fontSize: 12,
+          fontWeight: states.contains(WidgetState.selected)
+              ? FontWeight.w700
+              : FontWeight.w500,
+          color: states.contains(WidgetState.selected)
+              ? labelColor
+              : unselectedColor,
+        );
+      }),
+      iconTheme: WidgetStateProperty.resolveWith((states) {
+        return IconThemeData(
+          color: states.contains(WidgetState.selected)
+              ? selectedColor
+              : unselectedColor,
+          size: states.contains(WidgetState.selected) ? 24 : 22,
+        );
+      }),
+    );
+  }
+
+  // Kept temporarily while feature pages migrate off legacy color helpers.
+  // ignore: unused_field
+  static final ThemeData _legacyLightTheme =
       ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
-        hoverColor: Color(0xFFEAF1FF),
-        scaffoldBackgroundColor: Color(0xFFFBFCFF),
-        dialogBackgroundColor: Colors.white,
+        colorScheme: _lightColorScheme,
+        hoverColor: AppDesignTokens.light.accentContainer,
+        focusColor: AppDesignTokens.light.focusRing.withValues(alpha: 0.18),
+        scaffoldBackgroundColor: AppDesignTokens.light.page,
         appBarTheme: AppBarTheme(
           elevation: 0,
-          centerTitle: true,
-          backgroundColor: Color(0xFFFBFCFF),
+          centerTitle: !(isDesktop || isWebDesktop),
+          backgroundColor: Color(0x00FFFFFF),
           foregroundColor: Color(0xFF172033),
           shadowColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
         ),
-        dialogTheme: _dialogThemeCompat(grayBg),
+        dialogTheme: _dialogTheme(
+          AppDesignTokens.light.border,
+          AppDesignTokens.light.surfaceElevated,
+        ),
         scrollbarTheme: scrollbarTheme,
         inputDecorationTheme: isDesktop
             ? InputDecorationTheme(
@@ -436,24 +662,65 @@ class MyTheme {
               )
             : null,
         textTheme: const TextTheme(
-          titleLarge: TextStyle(fontSize: 19, color: Colors.black87),
-          titleSmall: TextStyle(fontSize: 14, color: Colors.black87),
+          headlineSmall: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF172033),
+          ),
+          titleLarge: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF172033),
+          ),
+          titleMedium: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF223047),
+          ),
+          titleSmall: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF223047),
+          ),
           bodySmall: TextStyle(
             fontSize: 12,
-            color: Colors.black87,
-            height: 1.25,
+            color: Color(0xFF627188),
+            height: 1.35,
           ),
           bodyMedium: TextStyle(
             fontSize: 14,
-            color: Colors.black87,
-            height: 1.25,
+            color: Color(0xFF334158),
+            height: 1.4,
           ),
-          labelLarge: TextStyle(fontSize: 16.0, color: MyTheme.accent80),
+          bodyLarge: TextStyle(
+            fontSize: 16,
+            color: Color(0xFF223047),
+            height: 1.4,
+          ),
+          labelMedium: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF627188),
+          ),
+          labelLarge: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: MyTheme.accent,
+          ),
         ),
-        cardColor: grayBg,
+        cardColor: AppDesignTokens.light.surface,
+        cardTheme: CardThemeData(
+          elevation: 0,
+          color: AppDesignTokens.light.surface,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: BorderSide(color: AppDesignTokens.light.border),
+          ),
+        ),
         hintColor: Color(0xFF8A96AA),
         visualDensity: VisualDensity.adaptivePlatformDensity,
-        tabBarTheme: _tabBarThemeCompat(Colors.black87),
+        tabBarTheme: _tabBarTheme(Colors.black87),
         tooltipTheme: tooltipTheme(),
         splashColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
         highlightColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
@@ -465,7 +732,7 @@ class MyTheme {
                 style: TextButton.styleFrom(
                   splashFactory: NoSplash.splashFactory,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18.0),
+                    borderRadius: BorderRadius.circular(AppVisual.radius),
                   ),
                 ),
               )
@@ -491,13 +758,36 @@ class MyTheme {
             ),
           ),
         ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: accent,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            minimumSize: Size(0, AppDesignTokens.light.controlHeight),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+        iconButtonTheme: IconButtonThemeData(
+          style: IconButton.styleFrom(
+            foregroundColor: const Color(0xFF45536A),
+            hoverColor: const Color(0xFFEAF1FF),
+            highlightColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
         switchTheme: switchTheme(),
         radioTheme: radioTheme(),
         checkboxTheme: checkboxTheme,
         listTileTheme: listTileTheme,
         menuBarTheme: MenuBarThemeData(
           style: MenuStyle(
-            backgroundColor: MaterialStatePropertyAll(Colors.white),
+            backgroundColor: WidgetStatePropertyAll(
+              AppDesignTokens.light.surfaceElevated,
+            ),
           ),
         ),
         bottomNavigationBarTheme: BottomNavigationBarThemeData(
@@ -508,15 +798,61 @@ class MyTheme {
           type: BottomNavigationBarType.fixed,
           elevation: 10,
         ),
-        colorScheme: ColorScheme.light(
-          primary: accent,
-          secondary: Color(0xFF16B8A6),
-          tertiary: Color(0xFFFFB45B),
-          surface: Color(0xFFFFFFFF),
-          background: grayBg,
+        navigationBarTheme: _navigationBarTheme(
+          indicatorColor: const Color(0x1F247BFF),
+          selectedColor: accent,
+          unselectedColor: const Color(0xFF7B879C),
+          labelColor: const Color(0xFF172033),
+        ),
+        navigationRailTheme: NavigationRailThemeData(
+          elevation: 0,
+          backgroundColor: AppDesignTokens.light.surface,
+          indicatorColor: AppDesignTokens.light.accentContainer,
+          selectedIconTheme: const IconThemeData(color: accent, size: 23),
+          unselectedIconTheme: const IconThemeData(
+            color: Color(0xFF627188),
+            size: 21,
+          ),
+          selectedLabelTextStyle: const TextStyle(
+            color: accent,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+          unselectedLabelTextStyle: const TextStyle(
+            color: Color(0xFF627188),
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        dividerTheme: DividerThemeData(
+          color: AppDesignTokens.light.border,
+          thickness: 1,
+          space: 1,
+        ),
+        progressIndicatorTheme: ProgressIndicatorThemeData(
+          color: accent,
+          linearTrackColor: AppDesignTokens.light.accentContainer,
+          circularTrackColor: AppDesignTokens.light.surfaceContainer,
+        ),
+        bottomSheetTheme: BottomSheetThemeData(
+          backgroundColor: AppDesignTokens.light.surfaceElevated,
+          modalBackgroundColor: AppDesignTokens.light.surfaceElevated,
+          surfaceTintColor: Colors.transparent,
+          showDragHandle: true,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+          ),
+        ),
+        snackBarTheme: const SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Color(0xFF223047),
+          contentTextStyle: TextStyle(color: Colors.white),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(8)),
+          ),
         ),
         popupMenuTheme: PopupMenuThemeData(
-          color: Colors.white,
+          color: AppDesignTokens.light.surfaceElevated,
           shape: RoundedRectangleBorder(
             side: BorderSide(
               color: (isDesktop || isWebDesktop)
@@ -530,22 +866,29 @@ class MyTheme {
         extensions: <ThemeExtension<dynamic>>[
           ColorThemeExtension.light,
           TabbarTheme.light,
+          AppDesignTokens.light,
         ],
       );
-  static ThemeData darkTheme =
+  // ignore: unused_field
+  static final ThemeData _legacyDarkTheme =
       ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        hoverColor: Color.fromARGB(255, 45, 46, 53),
-        scaffoldBackgroundColor: Color(0xFF18191E),
-        dialogBackgroundColor: Color(0xFF18191E),
+        colorScheme: _darkColorScheme,
+        hoverColor: AppDesignTokens.dark.accentContainer,
+        focusColor: AppDesignTokens.dark.focusRing.withValues(alpha: 0.22),
+        scaffoldBackgroundColor: AppDesignTokens.dark.page,
         appBarTheme: AppBarTheme(
           elevation: 0,
-          centerTitle: true,
-          backgroundColor: Color(0xFF18191E),
+          centerTitle: !(isDesktop || isWebDesktop),
+          backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
         ),
-        dialogTheme: _dialogThemeCompat(Color(0xFF24252B)),
+        dialogTheme: _dialogTheme(
+          AppDesignTokens.dark.border,
+          AppDesignTokens.dark.surfaceElevated,
+        ),
         scrollbarTheme: scrollbarThemeDark,
         inputDecorationTheme: (isDesktop || isWebDesktop)
             ? InputDecorationTheme(
@@ -557,20 +900,41 @@ class MyTheme {
                 ),
               )
             : null,
-        textTheme: const TextTheme(
-          titleLarge: TextStyle(fontSize: 19),
-          titleSmall: TextStyle(fontSize: 14),
-          bodySmall: TextStyle(fontSize: 12, height: 1.25),
-          bodyMedium: TextStyle(fontSize: 14, height: 1.25),
+        textTheme: TextTheme(
+          headlineSmall: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+          titleLarge: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+          titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          titleSmall: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          bodySmall: TextStyle(
+            fontSize: 12,
+            color: AppDesignTokens.dark.muted,
+            height: 1.35,
+          ),
+          bodyMedium: TextStyle(fontSize: 14, height: 1.4),
+          bodyLarge: TextStyle(fontSize: 16, height: 1.4),
+          labelMedium: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppDesignTokens.dark.muted,
+          ),
           labelLarge: TextStyle(
-            fontSize: 16.0,
-            fontWeight: FontWeight.bold,
-            color: accent80,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF7CB7FF),
           ),
         ),
-        cardColor: Color(0xFF24252B),
+        cardColor: AppDesignTokens.dark.surface,
+        cardTheme: CardThemeData(
+          elevation: 0,
+          color: AppDesignTokens.dark.surface,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: BorderSide(color: AppDesignTokens.dark.border),
+          ),
+        ),
         visualDensity: VisualDensity.adaptivePlatformDensity,
-        tabBarTheme: _tabBarThemeCompat(Colors.white70),
+        tabBarTheme: _tabBarTheme(Colors.white70),
         tooltipTheme: tooltipTheme(),
         splashColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
         highlightColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
@@ -584,7 +948,7 @@ class MyTheme {
                   disabledForegroundColor: Colors.white70,
                   foregroundColor: Colors.white70,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18.0),
+                    borderRadius: BorderRadius.circular(AppVisual.radius),
                   ),
                 ),
               )
@@ -613,13 +977,36 @@ class MyTheme {
             ),
           ),
         ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF7CB7FF),
+            foregroundColor: const Color(0xFF101820),
+            elevation: 0,
+            minimumSize: Size(0, AppDesignTokens.dark.controlHeight),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+        iconButtonTheme: IconButtonThemeData(
+          style: IconButton.styleFrom(
+            foregroundColor: Colors.white70,
+            hoverColor: Colors.white10,
+            highlightColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
         switchTheme: switchTheme(),
         radioTheme: radioTheme(),
         checkboxTheme: checkboxTheme,
         listTileTheme: listTileTheme,
         menuBarTheme: MenuBarThemeData(
           style: MenuStyle(
-            backgroundColor: MaterialStatePropertyAll(Color(0xFF121212)),
+            backgroundColor: WidgetStatePropertyAll(
+              AppDesignTokens.dark.surfaceElevated,
+            ),
           ),
         ),
         bottomNavigationBarTheme: BottomNavigationBarThemeData(
@@ -629,14 +1016,64 @@ class MyTheme {
           type: BottomNavigationBarType.fixed,
           elevation: 10,
         ),
-        colorScheme: ColorScheme.dark(
-          primary: accent,
-          secondary: accent,
-          tertiary: Color(0xFFFFB45B),
-          surface: Color(0xFF24252B),
-          background: Color(0xFF24252B),
+        navigationBarTheme: _navigationBarTheme(
+          indicatorColor: const Color(0x337CB7FF),
+          selectedColor: const Color(0xFF7CB7FF),
+          unselectedColor: const Color(0xFF8C94A6),
+          labelColor: Colors.white,
+        ),
+        navigationRailTheme: NavigationRailThemeData(
+          elevation: 0,
+          backgroundColor: AppDesignTokens.dark.surface,
+          indicatorColor: AppDesignTokens.dark.accentContainer,
+          selectedIconTheme: const IconThemeData(
+            color: Color(0xFF7CB7FF),
+            size: 23,
+          ),
+          unselectedIconTheme: IconThemeData(
+            color: AppDesignTokens.dark.muted,
+            size: 21,
+          ),
+          selectedLabelTextStyle: const TextStyle(
+            color: Color(0xFF7CB7FF),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+          unselectedLabelTextStyle: TextStyle(
+            color: AppDesignTokens.dark.muted,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        dividerTheme: DividerThemeData(
+          color: AppDesignTokens.dark.border,
+          thickness: 1,
+          space: 1,
+        ),
+        progressIndicatorTheme: ProgressIndicatorThemeData(
+          color: Color(0xFF7CB7FF),
+          linearTrackColor: AppDesignTokens.dark.accentContainer,
+          circularTrackColor: AppDesignTokens.dark.surfaceContainer,
+        ),
+        bottomSheetTheme: BottomSheetThemeData(
+          backgroundColor: AppDesignTokens.dark.surfaceElevated,
+          modalBackgroundColor: AppDesignTokens.dark.surfaceElevated,
+          surfaceTintColor: Colors.transparent,
+          showDragHandle: true,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+          ),
+        ),
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppDesignTokens.dark.surfaceElevated,
+          contentTextStyle: TextStyle(color: Colors.white),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(8)),
+          ),
         ),
         popupMenuTheme: PopupMenuThemeData(
+          color: AppDesignTokens.dark.surfaceElevated,
           shape: RoundedRectangleBorder(
             side: BorderSide(color: Colors.white24),
             borderRadius: BorderRadius.all(Radius.circular(8.0)),
@@ -646,8 +1083,29 @@ class MyTheme {
         extensions: <ThemeExtension<dynamic>>[
           ColorThemeExtension.dark,
           TabbarTheme.dark,
+          AppDesignTokens.dark,
         ],
       );
+
+  static final ThemeData lightTheme = CamelliaTheme.build(
+    brightness: Brightness.light,
+    desktopDensity: isDesktop || isWebDesktop,
+    extensions: <ThemeExtension<dynamic>>[
+      ColorThemeExtension.light,
+      TabbarTheme.light,
+      AppDesignTokens.light,
+    ],
+  );
+
+  static final ThemeData darkTheme = CamelliaTheme.build(
+    brightness: Brightness.dark,
+    desktopDensity: isDesktop || isWebDesktop,
+    extensions: <ThemeExtension<dynamic>>[
+      ColorThemeExtension.dark,
+      TabbarTheme.dark,
+      AppDesignTokens.dark,
+    ],
+  );
 
   static ThemeMode getThemeModePreference() {
     return themeModeFromString(bind.mainGetLocalOption(key: kCommConfKeyTheme));
@@ -707,80 +1165,101 @@ class MyTheme {
   }
 }
 
+enum AppTone { brand, secondary, info, success, warning, danger, neutral }
+
 class AppVisual {
   AppVisual._();
 
   static const double radius = 8;
   static const double compactRadius = 6;
-  static const Color muted = Color(0xFF7B879C);
-  static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color lightCanvas = Color(0xFFF5F7FB);
-  static const Color darkSurface = Color(0xFF24252B);
-
   static const List<Color> connectGradient = [
-    Color(0xFF59B7FF),
-    Color(0xFF59E0C8),
+    CamelliaColors.indigo,
+    CamelliaColors.indigoStrong,
   ];
   static const List<Color> identityGradient = [
-    Color(0xFF8FC8FF),
-    Color(0xFFB8F2DC),
+    CamelliaColors.indigo,
+    CamelliaColors.indigoStrong,
   ];
   static const List<Color> securityGradient = [
-    Color(0xFFFFD08A),
-    Color(0xFFFF9FB2),
+    CamelliaColors.indigo,
+    CamelliaColors.indigoStrong,
   ];
   static const List<Color> settingsGradient = [
-    Color(0xFFC7B8FF),
-    Color(0xFF8FC8FF),
+    CamelliaColors.indigo,
+    CamelliaColors.indigoStrong,
   ];
   static const List<Color> warningGradient = [
-    Color(0xFFFF9FB2),
-    Color(0xFFFFC36D),
+    CamelliaColors.indigo,
+    CamelliaColors.indigoStrong,
   ];
+  static const List<Color> auroraGradient = [
+    CamelliaColors.indigo,
+    CamelliaColors.indigoStrong,
+  ];
+  static const List<Color> successGradient = [
+    CamelliaColors.indigo,
+    CamelliaColors.indigoStrong,
+  ];
+  static const List<Color> focusGradient = [
+    CamelliaColors.indigo,
+    CamelliaColors.indigoStrong,
+  ];
+
+  static AppDesignTokens tokens(BuildContext context) =>
+      Theme.of(context).extension<AppDesignTokens>() ??
+      (isLight(context) ? AppDesignTokens.light : AppDesignTokens.dark);
 
   static bool isLight(BuildContext context) =>
       Theme.of(context).brightness == Brightness.light;
 
-  static Color surface(BuildContext context) =>
-      isLight(context) ? lightSurface : darkSurface;
+  static Color surface(BuildContext context) => tokens(context).surface;
 
-  static Color border(BuildContext context) =>
-      isLight(context) ? const Color(0xFFDDE6F3) : Colors.white12;
+  static Color raisedSurface(BuildContext context) =>
+      tokens(context).surfaceElevated;
 
-  static Color subduedText(BuildContext context) =>
-      isLight(context) ? muted : Colors.white60;
+  static Color border(BuildContext context) => tokens(context).border;
+
+  static Color subduedText(BuildContext context) => tokens(context).muted;
+
+  static Color panel(BuildContext context) => tokens(context).surface;
+
+  static Color inset(BuildContext context) => tokens(context).surfaceContainer;
+
+  static Color tone(BuildContext context, AppTone tone) {
+    final design = tokens(context);
+    return switch (tone) {
+      AppTone.brand => Theme.of(context).colorScheme.primary,
+      AppTone.secondary => design.secondary,
+      AppTone.info => design.info,
+      AppTone.success => design.success,
+      AppTone.warning => design.warning,
+      AppTone.danger => design.danger,
+      AppTone.neutral => design.muted,
+    };
+  }
+
+  static Color toneContainer(BuildContext context, AppTone tone) {
+    final color = tone == AppTone.brand
+        ? tokens(context).accentContainer
+        : AppVisual.tone(
+            context,
+            tone,
+          ).withValues(alpha: isLight(context) ? 0.10 : 0.18);
+    return color;
+  }
 
   static List<BoxShadow> shadow(BuildContext context, {bool elevated = false}) {
-    if (!isLight(context)) {
-      return [
-        BoxShadow(
-          color: Colors.black.withOpacity(elevated ? 0.24 : 0.16),
-          blurRadius: elevated ? 18 : 12,
-          offset: const Offset(0, 8),
-        ),
-      ];
-    }
     return [
       BoxShadow(
-        color: const Color(0xFF9CA8C2).withOpacity(elevated ? 0.20 : 0.12),
-        blurRadius: elevated ? 22 : 14,
-        offset: const Offset(0, 8),
+        color: elevated ? tokens(context).shadowStrong : tokens(context).shadow,
+        blurRadius: elevated ? 18 : 8,
+        offset: Offset(0, elevated ? 6 : 2),
       ),
     ];
   }
 
-  static BoxDecoration pageDecoration(BuildContext context) {
-    if (!isLight(context)) {
-      return const BoxDecoration(color: Color(0xFF18191E));
-    }
-    return const BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFFFFFFFF), Color(0xFFF4F8FF), Color(0xFFF7FBF7)],
-      ),
-    );
-  }
+  static BoxDecoration pageDecoration(BuildContext context) =>
+      BoxDecoration(color: tokens(context).page);
 
   static BoxDecoration surfaceDecoration(
     BuildContext context, {
@@ -789,11 +1268,182 @@ class AppVisual {
     Color? color,
   }) {
     return BoxDecoration(
-      color: gradient == null ? color ?? surface(context) : null,
+      color: gradient == null
+          ? color ?? (elevated ? raisedSurface(context) : surface(context))
+          : null,
       gradient: gradient,
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(color: border(context)),
       boxShadow: elevated ? shadow(context, elevated: true) : const [],
+    );
+  }
+
+  static BoxDecoration panelDecoration(
+    BuildContext context, {
+    bool elevated = true,
+  }) {
+    return BoxDecoration(
+      color: panel(context),
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(color: border(context)),
+      boxShadow: elevated ? shadow(context, elevated: true) : const [],
+    );
+  }
+}
+
+class AppAmbientBackground extends StatelessWidget {
+  const AppAmbientBackground({
+    super.key,
+    required this.child,
+    this.padding = EdgeInsets.zero,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return CamelliaBackdrop(
+      padding: padding,
+      child: AnimatedContainer(
+        duration: AppMotion.duration(context, AppMotion.stateChange),
+        curve: Curves.easeOutCubic,
+        child: child,
+      ),
+    );
+  }
+}
+
+class AppSectionHeader extends StatelessWidget {
+  const AppSectionHeader({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.icon,
+    this.trailing,
+    this.colors = AppVisual.connectGradient,
+  });
+
+  final String title;
+  final String? subtitle;
+  final IconData? icon;
+  final Widget? trailing;
+  final List<Color> colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        if (icon != null) ...[
+          AppIconBadge(icon: icon!, colors: colors, size: 34, iconSize: 18),
+          const SizedBox(width: 10),
+        ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 3),
+                Text(
+                  subtitle!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppVisual.subduedText(context),
+                    height: 1.25,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (trailing != null) ...[const SizedBox(width: 10), trailing!],
+      ],
+    );
+  }
+}
+
+class AppStatusPill extends StatelessWidget {
+  const AppStatusPill({
+    super.key,
+    required this.label,
+    required this.color,
+    this.icon = Icons.circle_rounded,
+    this.busy = false,
+  });
+
+  final String label;
+  final Color color;
+  final IconData icon;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = color.withValues(
+      alpha: AppVisual.isLight(context) ? 0.13 : 0.22,
+    );
+    final showBusy = busy && !AppMotion.isReduced(context);
+    return AnimatedContainer(
+      duration: AppMotion.duration(context, AppMotion.stateChange),
+      curve: Curves.easeOutCubic,
+      constraints: const BoxConstraints(minHeight: 30),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(CamelliaRadius.status),
+        border: Border.all(color: color.withValues(alpha: 0.34)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedSwitcher(
+            duration: AppMotion.duration(context, AppMotion.feedback),
+            transitionBuilder: (child, animation) =>
+                FadeTransition(opacity: animation, child: child),
+            child: showBusy
+                ? SizedBox(
+                    key: const ValueKey<bool>(true),
+                    width: 10,
+                    height: 10,
+                    child: CircularProgressIndicator(
+                      color: color,
+                      strokeWidth: 1.5,
+                    ),
+                  )
+                : Icon(
+                    icon,
+                    key: const ValueKey<bool>(false),
+                    size: 10,
+                    color: color,
+                  ),
+          ),
+          const SizedBox(width: 7),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppVisual.isLight(context)
+                    ? const Color(0xFF223047)
+                    : Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -860,34 +1510,21 @@ class _AppIconBadgeState extends State<AppIconBadge> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOutCubic,
-        scale: _hovered ? 1.04 : 1,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          width: widget.size,
-          height: widget.size,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: widget.colors,
-            ),
-            borderRadius: BorderRadius.circular(AppVisual.compactRadius),
-            boxShadow: [
-              BoxShadow(
-                color: widget.colors.last.withOpacity(_hovered ? 0.36 : 0.22),
-                blurRadius: _hovered ? 16 : 10,
-                offset: const Offset(0, 6),
-              ),
-            ],
+      child: AnimatedContainer(
+        duration: AppMotion.duration(context, AppMotion.hover),
+        width: widget.size,
+        height: widget.size,
+        decoration: BoxDecoration(
+          color: widget.colors.first,
+          borderRadius: BorderRadius.circular(AppVisual.compactRadius),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: _hovered ? 0.38 : 0.18),
           ),
-          child: Icon(
-            widget.icon,
-            size: widget.iconSize,
-            color: widget.foregroundColor,
-          ),
+        ),
+        child: Icon(
+          widget.icon,
+          size: widget.iconSize,
+          color: widget.foregroundColor,
         ),
       ),
     );
@@ -3655,7 +4292,7 @@ Widget buildRemoteBlock({
           if (mask)
             Offstage(
               offstage: !block.value,
-              child: Container(color: Colors.black.withOpacity(0.5)),
+              child: Container(color: Colors.black.withValues(alpha: 0.5)),
             ),
         ],
       ),
@@ -4280,7 +4917,7 @@ class ComboBox extends StatelessWidget {
 Color? disabledTextColor(BuildContext context, bool enabled) {
   return enabled
       ? null
-      : Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.6);
+      : Theme.of(context).textTheme.titleLarge?.color?.withValues(alpha: 0.6);
 }
 
 Widget loadPowered(BuildContext context) {
@@ -4464,7 +5101,7 @@ Widget buildVirtualWindowFrame(BuildContext context, Widget child) {
       ? <BoxShadow>[
           if (stateGlobal.fullscreen.isFalse || stateGlobal.isMaximized.isFalse)
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               offset: Offset(
                 0.0,
                 stateGlobal.isFocused.isTrue

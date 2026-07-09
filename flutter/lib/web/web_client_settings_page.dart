@@ -84,13 +84,6 @@ class _WebClientSettingsPageState extends State<WebClientSettingsPage> {
     }
   }
 
-  Future<void> _setOption(String key, String value) async {
-    await bind.mainSetOption(key: key, value: value);
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
   Future<void> _setUserDefaultOption(String key, String value) async {
     await bind.mainSetUserDefaultOption(key: key, value: value);
     if (mounted) {

@@ -12,14 +12,18 @@ import '../utils/http_service.dart' as http;
 import 'model.dart';
 import 'platform_model.dart';
 
-bool refreshingUser = false;
+enum UserAccountState { disabled, signedOut, loading, ready, offline, error }
 
 class UserModel {
   final RxString userName = ''.obs;
   final RxString displayName = ''.obs;
   final RxString avatar = ''.obs;
+  final RxString email = ''.obs;
+  final RxString note = ''.obs;
   final RxBool isAdmin = false.obs;
   final RxString networkError = ''.obs;
+  final Rx<UserAccountState> accountState = UserAccountState.signedOut.obs;
+  Future<void>? _refreshOperation;
   bool get isLogin => userName.isNotEmpty;
   String get displayNameOrUserName =>
       displayName.value.trim().isEmpty ? userName.value : displayName.value;
@@ -47,42 +51,68 @@ class UserModel {
     });
   }
 
-  void refreshCurrentUser() async {
-    if (bind.isDisableAccount()) return;
+  Future<void> refreshCurrentUser() {
+    final active = _refreshOperation;
+    if (active != null) return active;
+    final operation = _refreshCurrentUser();
+    _refreshOperation = operation;
+    return operation.whenComplete(() {
+      if (identical(_refreshOperation, operation)) {
+        _refreshOperation = null;
+      }
+    });
+  }
+
+  Future<void> _refreshCurrentUser() async {
+    if (bind.isDisableAccount()) {
+      accountState.value = UserAccountState.disabled;
+      return;
+    }
     networkError.value = '';
     final token = bind.mainGetLocalOption(key: 'access_token');
     if (token == '') {
+      _clearReactiveUser();
+      accountState.value = UserAccountState.signedOut;
       await updateOtherModels();
       return;
     }
-    _updateLocalUserInfo();
+    final cached = _updateLocalUserInfo();
+    accountState.value = cached
+        ? UserAccountState.offline
+        : UserAccountState.loading;
     final url = await bind.mainGetApiServer();
     final body = {
       'id': await bind.mainGetMyId(),
-      'uuid': await bind.mainGetUuid()
+      'uuid': await bind.mainGetUuid(),
     };
-    if (refreshingUser) return;
     try {
-      refreshingUser = true;
       final http.Response response;
       try {
-        response = await http.post(Uri.parse('$url/api/currentUser'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token'
-            },
-            body: json.encode(body));
+        response = await http.post(
+          Uri.parse('$url/api/currentUser'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: json.encode(body),
+        );
       } catch (e) {
         networkError.value = e.toString();
         rethrow;
       }
-      refreshingUser = false;
       final status = response.statusCode;
       if (status == 401 || status == 400) {
-        reset(resetOther: status == 401);
+        await reset(resetOther: status == 401);
+        accountState.value = status == 401
+            ? UserAccountState.signedOut
+            : UserAccountState.error;
         return;
       }
-      final data = json.decode(decode_http_response(response));
+      final decoded = json.decode(decode_http_response(response));
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Invalid current user response');
+      }
+      final data = _mergeWithCachedUser(decoded, getLocalUserInfo());
       final error = data['error'];
       if (error != null) {
         throw error;
@@ -91,11 +121,35 @@ class UserModel {
       final user = UserPayload.fromJson(data);
       _parseAndUpdateUser(user);
     } catch (e) {
+      networkError.value = e.toString();
+      accountState.value = isLogin
+          ? UserAccountState.offline
+          : UserAccountState.error;
       debugPrint('Failed to refreshCurrentUser: $e');
     } finally {
-      refreshingUser = false;
       await updateOtherModels();
     }
+  }
+
+  static Map<String, dynamic> _mergeWithCachedUser(
+    Map<String, dynamic> remote,
+    Map<String, dynamic>? cached,
+  ) {
+    if (cached == null) return remote;
+    final merged = Map<String, dynamic>.from(remote);
+    for (final key in ['name', 'display_name', 'avatar', 'email', 'note']) {
+      final remoteValue = (merged[key] ?? '').toString().trim();
+      final cachedValue = (cached[key] ?? '').toString().trim();
+      if (remoteValue.isEmpty && cachedValue.isNotEmpty) {
+        merged[key] = cached[key];
+      }
+    }
+    for (final key in ['is_admin', 'status', 'verifier']) {
+      if (!merged.containsKey(key) && cached.containsKey(key)) {
+        merged[key] = cached[key];
+      }
+    }
+    return merged;
   }
 
   static Map<String, dynamic>? getLocalUserInfo() {
@@ -111,13 +165,18 @@ class UserModel {
     return null;
   }
 
-  _updateLocalUserInfo() {
+  bool _updateLocalUserInfo() {
     final userInfo = getLocalUserInfo();
     if (userInfo != null) {
       userName.value = (userInfo['name'] ?? '').toString();
       displayName.value = (userInfo['display_name'] ?? '').toString();
       avatar.value = (userInfo['avatar'] ?? '').toString();
+      email.value = (userInfo['email'] ?? '').toString();
+      note.value = (userInfo['note'] ?? '').toString();
+      isAdmin.value = userInfo['is_admin'] == true;
+      return userName.value.isNotEmpty;
     }
+    return false;
   }
 
   Future<void> reset({bool resetOther = false}) async {
@@ -127,16 +186,30 @@ class UserModel {
       await gFFI.abModel.reset();
       await gFFI.groupModel.reset();
     }
+    _clearReactiveUser();
+    accountState.value = UserAccountState.signedOut;
+  }
+
+  void _clearReactiveUser() {
     userName.value = '';
     displayName.value = '';
     avatar.value = '';
+    email.value = '';
+    note.value = '';
+    isAdmin.value = false;
+    networkError.value = '';
   }
 
-  _parseAndUpdateUser(UserPayload user) {
+  void _parseAndUpdateUser(UserPayload user) {
     userName.value = user.name;
     displayName.value = user.displayName;
     avatar.value = user.avatar;
+    email.value = user.email;
+    note.value = user.note;
     isAdmin.value = user.isAdmin;
+    accountState.value = user.status == UserStatus.kDisabled
+        ? UserAccountState.disabled
+        : UserAccountState.ready;
     bind.mainSetLocalOption(key: 'user_info', value: jsonEncode(user));
     if (isWeb) {
       // ugly here, tmp solution
@@ -148,7 +221,7 @@ class UserModel {
   static Future<void> updateOtherModels() async {
     await Future.wait([
       gFFI.abModel.pullAb(force: ForcePullAb.listAndCurrent, quiet: false),
-      gFFI.groupModel.pull()
+      gFFI.groupModel.pull(),
     ]);
   }
 
@@ -159,12 +232,14 @@ class UserModel {
       final authHeaders = getHttpHeaders();
       authHeaders['Content-Type'] = "application/json";
       await http
-          .post(Uri.parse('$url/api/logout'),
-              body: jsonEncode({
-                'id': await bind.mainGetMyId(),
-                'uuid': await bind.mainGetUuid(),
-              }),
-              headers: authHeaders)
+          .post(
+            Uri.parse('$url/api/logout'),
+            body: jsonEncode({
+              'id': await bind.mainGetMyId(),
+              'uuid': await bind.mainGetUuid(),
+            }),
+            headers: authHeaders,
+          )
           .timeout(Duration(seconds: 2));
     } catch (e) {
       debugPrint("request /api/logout failed: err=$e");
@@ -177,8 +252,10 @@ class UserModel {
   /// throw [RequestException]
   Future<LoginResponse> login(LoginRequest loginRequest) async {
     final url = await bind.mainGetApiServer();
-    final resp = await http.post(Uri.parse('$url/api/login'),
-        body: jsonEncode(loginRequest.toJson()));
+    final resp = await http.post(
+      Uri.parse('$url/api/login'),
+      body: jsonEncode(loginRequest.toJson()),
+    );
 
     final Map<String, dynamic> body;
     try {
@@ -187,7 +264,9 @@ class UserModel {
       debugPrint("login: jsonDecode resp body failed: ${e.toString()}");
       if (resp.statusCode != 200) {
         BotToast.showText(
-            contentColor: Colors.red, text: 'HTTP ${resp.statusCode}');
+          contentColor: Colors.red,
+          text: 'HTTP ${resp.statusCode}',
+        );
       }
       rethrow;
     }
@@ -210,7 +289,8 @@ class UserModel {
       rethrow;
     }
 
-    final isLogInDone = loginResponse.type == HttpType.kAuthResTypeToken &&
+    final isLogInDone =
+        loginResponse.type == HttpType.kAuthResTypeToken &&
         loginResponse.access_token != null;
     if (isLogInDone && loginResponse.user != null) {
       _parseAndUpdateUser(loginResponse.user!);
@@ -239,7 +319,8 @@ class UserModel {
           .toList();
     } catch (e) {
       debugPrint(
-          "queryOidcLoginOptions: jsonDecode resp body failed: ${e.toString()}");
+        "queryOidcLoginOptions: jsonDecode resp body failed: ${e.toString()}",
+      );
       return [];
     }
   }

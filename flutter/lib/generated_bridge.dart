@@ -7,7 +7,7 @@ import 'generated_bridge/flutter_ffi.dart' as ffi;
 import 'generated_bridge/flutter_ffi.dart' show EventToUI;
 
 export 'generated_bridge/frb_generated.dart';
-export 'generated_bridge/flutter_ffi.dart';
+export 'generated_bridge/flutter_ffi.dart' hide translate;
 export 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
     show ExternalLibrary;
 
@@ -146,11 +146,11 @@ class RustdeskImpl {
   Future<void> sessionTogglePrivacyMode({
     required UuidValue sessionId,
     required String implKey,
-    required bool on_,
+    required bool on,
   }) => ffi.sessionTogglePrivacyMode(
     sessionId: sessionId,
     implKey: implKey,
-    on_: on_,
+    on_: on,
   );
   Future<String?> sessionGetFlutterOption({
     required UuidValue sessionId,
@@ -833,11 +833,11 @@ class RustdeskImpl {
   Future<void> sessionToggleVirtualDisplay({
     required UuidValue sessionId,
     required int index,
-    required bool on_,
+    required bool on,
   }) => ffi.sessionToggleVirtualDisplay(
     sessionId: sessionId,
     index: index,
-    on_: on_,
+    on_: on,
   );
   Future<void> sessionPrinterResponse({
     required UuidValue sessionId,

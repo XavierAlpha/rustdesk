@@ -6,11 +6,12 @@ import desktop_multi_window
 
 import desktop_drop
 import device_info_plus
+import file_picker
+import file_selector_macos
 import flutter_custom_cursor
 import package_info_plus
-import path_provider_foundation
 import screen_retriever
-import sqflite
+import sqflite_darwin
 // import tray_manager
 import uni_links_desktop
 import url_launcher_macos
@@ -49,22 +50,23 @@ class MainFlutterWindow: NSWindow {
         RegisterGeneratedPlugins(registry: flutterViewController)
 
         FlutterMultiWindowPlugin.setOnWindowCreatedCallback { controller in
-            // Register the plugin which you want access from other isolate.
-            // DesktopLifecyclePlugin.register(with: controller.registrar(forPlugin: "DesktopLifecyclePlugin"))
-            // Note: copy below from above RegisterGeneratedPlugins
+            // Keep this in sync with GeneratedPluginRegistrant. The multi-window
+            // plugin has already registered its child-window channel at this point.
             self.setMethodHandler(registrar: controller.registrar(forPlugin: "RustDeskPlugin"))
             DesktopDropPlugin.register(with: controller.registrar(forPlugin: "DesktopDropPlugin"))
             DeviceInfoPlusMacosPlugin.register(with: controller.registrar(forPlugin: "DeviceInfoPlusMacosPlugin"))
+            FilePickerPlugin.register(with: controller.registrar(forPlugin: "FilePickerPlugin"))
+            FileSelectorPlugin.register(with: controller.registrar(forPlugin: "FileSelectorPlugin"))
             FlutterCustomCursorPlugin.register(with: controller.registrar(forPlugin: "FlutterCustomCursorPlugin"))
             FPPPackageInfoPlusPlugin.register(with: controller.registrar(forPlugin: "FPPPackageInfoPlusPlugin"))
-            PathProviderPlugin.register(with: controller.registrar(forPlugin: "PathProviderPlugin"))
+            ScreenRetrieverPlugin.register(with: controller.registrar(forPlugin: "ScreenRetrieverPlugin"))
             SqflitePlugin.register(with: controller.registrar(forPlugin: "SqflitePlugin"))
-            // TrayManagerPlugin.register(with: controller.registrar(forPlugin: "TrayManagerPlugin"))
+            TextureRgbaRendererPlugin.register(with: controller.registrar(forPlugin: "TextureRgbaRendererPlugin"))
             UniLinksDesktopPlugin.register(with: controller.registrar(forPlugin: "UniLinksDesktopPlugin"))
             UrlLauncherPlugin.register(with: controller.registrar(forPlugin: "UrlLauncherPlugin"))
             WakelockPlusMacosPlugin.register(with: controller.registrar(forPlugin: "WakelockPlusMacosPlugin"))
+            WindowManagerPlugin.register(with: controller.registrar(forPlugin: "WindowManagerPlugin"))
             WindowSizePlugin.register(with: controller.registrar(forPlugin: "WindowSizePlugin"))
-            TextureRgbaRendererPlugin.register(with: controller.registrar(forPlugin: "TextureRgbaRendererPlugin"))
         }
 
         super.awakeFromNib()

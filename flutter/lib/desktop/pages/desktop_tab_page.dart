@@ -18,11 +18,13 @@ class DesktopTabPage extends StatefulWidget {
   @override
   State<DesktopTabPage> createState() => _DesktopTabPageState();
 
-  static void onAddSetting(
-      {SettingsTabKey initialPage = SettingsTabKey.general}) {
+  static void onAddSetting({
+    SettingsTabKey initialPage = SettingsTabKey.general,
+  }) {
     try {
       DesktopTabController tabController = Get.find<DesktopTabController>();
-      tabController.add(TabInfo(
+      tabController.add(
+        TabInfo(
           key: kTabLabelSettingPage,
           label: kTabLabelSettingPage,
           selectedIcon: Icons.build_sharp,
@@ -30,7 +32,9 @@ class DesktopTabPage extends StatefulWidget {
           page: DesktopSettingPage(
             key: const ValueKey(kTabLabelSettingPage),
             initialTabkey: initialPage,
-          )));
+          ),
+        ),
+      );
     } catch (e) {
       debugPrintStack(label: '$e');
     }
@@ -43,15 +47,16 @@ class _DesktopTabPageState extends State<DesktopTabPage> {
   _DesktopTabPageState() {
     RemoteCountState.init();
     Get.put<DesktopTabController>(tabController);
-    tabController.add(TabInfo(
+    tabController.add(
+      TabInfo(
         key: kTabLabelHomePage,
         label: kTabLabelHomePage,
         selectedIcon: Icons.home_sharp,
         unselectedIcon: Icons.home_outlined,
         closable: false,
-        page: DesktopHomePage(
-          key: const ValueKey(kTabLabelHomePage),
-        )));
+        page: DesktopHomePage(key: const ValueKey(kTabLabelHomePage)),
+      ),
+    );
     if (bind.isIncomingOnly()) {
       tabController.onSelected = (key) {
         if (key == kTabLabelHomePage) {
@@ -91,21 +96,21 @@ class _DesktopTabPageState extends State<DesktopTabPage> {
 
   @override
   Widget build(BuildContext context) {
-    final tabWidget = Container(
-        child: Scaffold(
-            backgroundColor: Theme.of(context).colorScheme.background,
-            body: DesktopTab(
-              controller: tabController,
-              tail: Offstage(
-                offstage: bind.isIncomingOnly() || bind.isDisableSettings(),
-                child: ActionIcon(
-                  message: 'Settings',
-                  icon: IconFont.menu,
-                  onTap: DesktopTabPage.onAddSetting,
-                  isClose: false,
-                ),
-              ),
-            )));
+    final tabWidget = Scaffold(
+      backgroundColor: AppVisual.tokens(context).page,
+      body: DesktopTab(
+        controller: tabController,
+        tail: Offstage(
+          offstage: bind.isIncomingOnly() || bind.isDisableSettings(),
+          child: ActionIcon(
+            message: 'Settings',
+            icon: IconFont.menu,
+            onTap: DesktopTabPage.onAddSetting,
+            isClose: false,
+          ),
+        ),
+      ),
+    );
     return isMacOS
         ? tabWidget
         : Obx(

@@ -59,7 +59,7 @@ impl Server {
         */
     }
 
-    pub fn connect(addr: *const i8) -> Result<Server, Error> {
+    fn connect(addr: *const i8) -> Result<Server, Error> {
         unsafe {
             let mut screenp = 0;
             let raw = xcb_connect(addr, &mut screenp);

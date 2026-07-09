@@ -1,23 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">
-  <defs>
-    <radialGradient id="bg" cx="50%" cy="40%" r="60%">
-      <stop offset="0%" stop-color="#1d6b8f"/>
-      <stop offset="100%" stop-color="#0b1420"/>
-    </radialGradient>
-    <linearGradient id="petal" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#7fe8ff"/>
-      <stop offset="100%" stop-color="#1b7fb0"/>
-    </linearGradient>
-  </defs>
-  <circle cx="13" cy="13" r="11.5" fill="url(#bg)"/>
-  <g fill="url(#petal)" transform="translate(13 13)">
-    <ellipse cx="0" cy="-4.2" rx="3.4" ry="6.2"/>
-    <ellipse cx="0" cy="-4.2" rx="3.4" ry="6.2" transform="rotate(72)"/>
-    <ellipse cx="0" cy="-4.2" rx="3.4" ry="6.2" transform="rotate(144)"/>
-    <ellipse cx="0" cy="-4.2" rx="3.4" ry="6.2" transform="rotate(216)"/>
-    <ellipse cx="0" cy="-4.2" rx="3.4" ry="6.2" transform="rotate(288)"/>
-  </g>
-  <circle cx="13" cy="13" r="2.6" fill="#0a1f2c"/>
-  <circle cx="12.2" cy="12.2" r="1.5" fill="#a5f0ff"/>
-  <path d="M17 9 A6 6 0 1 0 17 17" fill="none" stroke="#c7f4ff" stroke-width="1.6" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" rx="224" fill="#1b1d23"/>
+  <rect x="18" y="18" width="988" height="988" rx="206" fill="none" stroke="#393c45" stroke-width="12"/>
+  <defs><path id="petal" d="M467 482C332 405 343 247 512 154C681 247 692 405 557 482Q512 522 467 482Z"/></defs>
+  <use href="#petal" fill="#7378f2"/><use href="#petal" fill="#5b94e8" transform="rotate(60 512 512)"/><use href="#petal" fill="#43b8d1" transform="rotate(120 512 512)"/><use href="#petal" fill="#7378f2" transform="rotate(180 512 512)"/><use href="#petal" fill="#5b94e8" transform="rotate(240 512 512)"/><use href="#petal" fill="#43b8d1" transform="rotate(300 512 512)"/>
+  <circle cx="512" cy="512" r="91" fill="#1b1d23"/><circle cx="512" cy="512" r="49" fill="#f7f8fa"/>
 </svg>

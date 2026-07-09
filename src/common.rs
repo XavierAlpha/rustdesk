@@ -13,7 +13,6 @@ use hbb_common::whoami;
 use hbb_common::{
     allow_err,
     anyhow::{anyhow, Context},
-    async_recursion::async_recursion,
     bail, base64,
     bytes::Bytes,
     config::{
@@ -28,7 +27,7 @@ use hbb_common::{
     socket_client,
     sodiumoxide::crypto::{box_, secretbox, sign},
     timeout,
-    tls::{get_cached_tls_accept_invalid_cert, get_cached_tls_type, upsert_tls_cache, TlsType},
+    tls::{get_cached_tls_type, upsert_tls_cache, TlsType},
     tokio::{
         self,
         net::UdpSocket,
@@ -38,7 +37,7 @@ use hbb_common::{
 };
 
 use crate::{
-    hbbs_http::{create_http_client_async, get_url_for_tls},
+    hbbs_http::{create_http_client_async_with_tls, get_url_for_tls},
     ui_interface::{get_api_server as ui_get_api_server, get_option, is_installed, set_option},
 };
 
@@ -946,8 +945,6 @@ pub fn check_software_update() {
     }
 }
 
-// No need to check `danger_accept_invalid_cert` for now.
-// Because the url is always `https://api.camellia.aimmv.com/version/latest`.
 #[tokio::main(flavor = "current_thread")]
 pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
     let (request, url) =
@@ -956,10 +953,10 @@ pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
     let tls_url = get_url_for_tls(&url, &proxy_conf);
     let tls_type = get_cached_tls_type(tls_url);
     let tls_type = tls_type.unwrap_or(TlsType::Rustls);
-    let client = create_http_client_async(tls_type, false);
+    let client = create_http_client_async_with_tls(tls_type);
     let latest_release_response = match client.post(&url).json(&request).send().await {
         Ok(resp) => {
-            upsert_tls_cache(tls_url, tls_type, false);
+            upsert_tls_cache(tls_url, tls_type);
             resp
         }
         Err(err) => return Err(err.into()),
@@ -1331,17 +1328,7 @@ async fn post_request_http(url: &str, body: &str, header: &str) -> ResultType<(u
     let proxy_conf = Config::get_socks();
     let tls_url = get_url_for_tls(url, &proxy_conf);
     let tls_type = get_cached_tls_type(tls_url);
-    let danger_accept_invalid_cert = get_cached_tls_accept_invalid_cert(tls_url);
-    let response = post_request_(
-        url,
-        tls_url,
-        body.to_owned(),
-        header,
-        tls_type,
-        danger_accept_invalid_cert,
-        danger_accept_invalid_cert,
-    )
-    .await?;
+    let response = post_request_(url, tls_url, body.to_owned(), header, tls_type).await?;
     let status = response.status().as_u16();
     let text = response.text().await?;
     Ok((status, text))
@@ -1406,21 +1393,15 @@ pub async fn post_request(url: String, body: String, header: &str) -> ResultType
     .await
 }
 
-#[async_recursion]
 async fn post_request_(
     url: &str,
     tls_url: &str,
     body: String,
     header: &str,
     tls_type: Option<TlsType>,
-    danger_accept_invalid_cert: Option<bool>,
-    original_danger_accept_invalid_cert: Option<bool>,
 ) -> ResultType<reqwest::Response> {
-    let mut req = create_http_client_async(
-        tls_type.unwrap_or(TlsType::Rustls),
-        danger_accept_invalid_cert.unwrap_or(false),
-    )
-    .post(url);
+    let tls_type = tls_type.unwrap_or(TlsType::Rustls);
+    let mut req = create_http_client_async_with_tls(tls_type).post(url);
     if !header.is_empty() {
         let tmp: Vec<&str> = header.split(": ").collect();
         if tmp.len() == 2 {
@@ -1429,55 +1410,12 @@ async fn post_request_(
     }
     req = req.header("Content-Type", "application/json");
     let to = std::time::Duration::from_secs(12);
-    if tls_type.is_some() && danger_accept_invalid_cert.is_some() {
-        // This branch is used to reduce a `clone()` when both `tls_type` and
-        // `danger_accept_invalid_cert` are cached.
-        match req.body(body.clone()).timeout(to).send().await {
-            Ok(resp) => {
-                upsert_tls_cache(
-                    tls_url,
-                    tls_type.unwrap_or(TlsType::Rustls),
-                    danger_accept_invalid_cert.unwrap_or(false),
-                );
-                Ok(resp)
-            }
-            Err(e) => Err(anyhow!("{:?}", e)),
+    match req.body(body).timeout(to).send().await {
+        Ok(resp) => {
+            upsert_tls_cache(tls_url, tls_type);
+            Ok(resp)
         }
-    } else {
-        match req.body(body.clone()).timeout(to).send().await {
-            Ok(resp) => {
-                upsert_tls_cache(
-                    tls_url,
-                    tls_type.unwrap_or(TlsType::Rustls),
-                    danger_accept_invalid_cert.unwrap_or(false),
-                );
-                Ok(resp)
-            }
-            Err(e) => {
-                if (tls_type.is_none() || danger_accept_invalid_cert.is_none()) && e.is_request() {
-                    if danger_accept_invalid_cert.is_none() {
-                        log::warn!(
-                            "HTTP request failed: {:?}, try again, danger accept invalid cert",
-                            e
-                        );
-                        post_request_(
-                            url,
-                            tls_url,
-                            body,
-                            header,
-                            tls_type,
-                            Some(true),
-                            original_danger_accept_invalid_cert,
-                        )
-                        .await
-                    } else {
-                        Err(anyhow!("{:?}", e))
-                    }
-                } else {
-                    Err(anyhow!("{:?}", e))
-                }
-            }
-        }
+        Err(e) => Err(anyhow!("{:?}", e)),
     }
 }
 
@@ -1486,7 +1424,6 @@ pub async fn post_request_sync(url: String, body: String, header: &str) -> Resul
     post_request(url, body, header).await
 }
 
-#[async_recursion]
 async fn get_http_response_async(
     url: &str,
     tls_url: &str,
@@ -1494,13 +1431,9 @@ async fn get_http_response_async(
     body: Option<String>,
     header: &str,
     tls_type: Option<TlsType>,
-    danger_accept_invalid_cert: Option<bool>,
-    original_danger_accept_invalid_cert: Option<bool>,
 ) -> ResultType<reqwest::Response> {
-    let http_client = create_http_client_async(
-        tls_type.unwrap_or(TlsType::Rustls),
-        danger_accept_invalid_cert.unwrap_or(false),
-    );
+    let tls_type = tls_type.unwrap_or(TlsType::Rustls);
+    let http_client = create_http_client_async_with_tls(tls_type);
     let normalized_method = method.to_ascii_lowercase();
     let mut http_client = match normalized_method.as_str() {
         "get" => http_client.get(url),
@@ -1513,69 +1446,19 @@ async fn get_http_response_async(
         http_client = http_client.header(entry.name, entry.value);
     }
 
-    if tls_type.is_some() && danger_accept_invalid_cert.is_some() {
-        if let Some(b) = body {
-            http_client = http_client.body(b);
+    if let Some(b) = body {
+        http_client = http_client.body(b);
+    }
+    match http_client
+        .timeout(std::time::Duration::from_secs(12))
+        .send()
+        .await
+    {
+        Ok(resp) => {
+            upsert_tls_cache(tls_url, tls_type);
+            Ok(resp)
         }
-        match http_client
-            .timeout(std::time::Duration::from_secs(12))
-            .send()
-            .await
-        {
-            Ok(resp) => {
-                upsert_tls_cache(
-                    tls_url,
-                    tls_type.unwrap_or(TlsType::Rustls),
-                    danger_accept_invalid_cert.unwrap_or(false),
-                );
-                Ok(resp)
-            }
-            Err(e) => Err(anyhow!("{:?}", e)),
-        }
-    } else {
-        if let Some(b) = body.clone() {
-            http_client = http_client.body(b);
-        }
-
-        match http_client
-            .timeout(std::time::Duration::from_secs(12))
-            .send()
-            .await
-        {
-            Ok(resp) => {
-                upsert_tls_cache(
-                    tls_url,
-                    tls_type.unwrap_or(TlsType::Rustls),
-                    danger_accept_invalid_cert.unwrap_or(false),
-                );
-                Ok(resp)
-            }
-            Err(e) => {
-                if (tls_type.is_none() || danger_accept_invalid_cert.is_none()) && e.is_request() {
-                    if danger_accept_invalid_cert.is_none() {
-                        log::warn!(
-                            "HTTP request failed: {:?}, try again, danger accept invalid cert",
-                            e
-                        );
-                        get_http_response_async(
-                            url,
-                            tls_url,
-                            method,
-                            body,
-                            header,
-                            tls_type,
-                            Some(true),
-                            original_danger_accept_invalid_cert,
-                        )
-                        .await
-                    } else {
-                        Err(anyhow!("{:?}", e))
-                    }
-                } else {
-                    Err(anyhow!("{:?}", e))
-                }
-            }
-        }
+        Err(e) => Err(anyhow!("{:?}", e)),
     }
 }
 
@@ -1590,18 +1473,7 @@ async fn http_request_http(
     let proxy_conf = Config::get_socks();
     let tls_url = get_url_for_tls(url, &proxy_conf);
     let tls_type = get_cached_tls_type(tls_url);
-    let danger_accept_invalid_cert = get_cached_tls_accept_invalid_cert(tls_url);
-    let response = get_http_response_async(
-        url,
-        tls_url,
-        method,
-        body,
-        header,
-        tls_type,
-        danger_accept_invalid_cert,
-        danger_accept_invalid_cert,
-    )
-    .await?;
+    let response = get_http_response_async(url, tls_url, method, body, header, tls_type).await?;
     // Serialize response headers
     let mut response_headers = Map::new();
     for (key, value) in response.headers() {

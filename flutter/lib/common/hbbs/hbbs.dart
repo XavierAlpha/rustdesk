@@ -52,6 +52,10 @@ class UserPayload {
       'name': name,
       'display_name': displayName,
       'avatar': avatar,
+      'email': email,
+      'note': note,
+      'is_admin': isAdmin,
+      if (verifier != null) 'verifier': verifier,
       'status': status == UserStatus.kDisabled
           ? 0
           : status == UserStatus.kUnverified

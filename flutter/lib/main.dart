@@ -514,12 +514,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
           ],
           builder: isAndroid
               ? (context, child) => AccessibilityListener(
-                    child: MediaQuery(
-                      data: MediaQuery.of(context).copyWith(
-                        textScaler: TextScaler.linear(1.0),
-                      ),
-                      child: child ?? Container(),
-                    ),
+                    child: child ?? Container(),
                   )
               : (context, child) {
                   child = _keepScaleBuilder(context, child);
@@ -531,7 +526,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                   if (isWeb) {
                     child = FocusTraversalGroup(
                       policy: WidgetOrderTraversalPolicy(),
-                      child: child ?? const SizedBox.shrink(),
+                      child: child,
                     );
                   }
                   if (isLinux) {
@@ -547,12 +542,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
 }
 
 Widget _keepScaleBuilder(BuildContext context, Widget? child) {
-  return MediaQuery(
-    data: MediaQuery.of(context).copyWith(
-      textScaler: TextScaler.linear(1.0),
-    ),
-    child: child ?? Container(),
-  );
+  return child ?? Container();
 }
 
 _registerEventHandler() {

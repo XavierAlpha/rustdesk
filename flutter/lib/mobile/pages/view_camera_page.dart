@@ -37,13 +37,13 @@ void _disableAndroidSoftKeyboard({bool? isKeyboardVisible}) {
 }
 
 class ViewCameraPage extends StatefulWidget {
-  ViewCameraPage(
-      {Key? key,
-      required this.id,
-      this.password,
-      this.isSharedPassword,
-      this.forceRelay})
-      : super(key: key);
+  ViewCameraPage({
+    Key? key,
+    required this.id,
+    this.password,
+    this.isSharedPassword,
+    this.forceRelay,
+  }) : super(key: key);
 
   final String id;
   final String? password;
@@ -74,8 +74,9 @@ class _ViewCameraPageState extends State<ViewCameraPage>
   InputModel get inputModel => gFFI.inputModel;
   SessionID get sessionId => gFFI.sessionId;
 
-  final TextEditingController _textController =
-      TextEditingController(text: initText);
+  final TextEditingController _textController = TextEditingController(
+    text: initText,
+  );
 
   _ViewCameraPageState(String id) {
     initSharedStates(id);
@@ -96,24 +97,29 @@ class _ViewCameraPageState extends State<ViewCameraPage>
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
-      gFFI.dialogManager
-          .showLoading(translate('Connecting...'), onCancel: closeConnection);
+      gFFI.dialogManager.showLoading(
+        translate('Connecting...'),
+        onCancel: closeConnection,
+      );
     });
     WakelockManager.enable(_uniqueKey);
     _physicalFocusNode.requestFocus();
     gFFI.inputModel.listenToMouse(true);
     gFFI.qualityMonitorModel.checkShowQualityMonitor(sessionId);
-    gFFI.chatModel
-        .changeCurrentKey(MessageKey(widget.id, ChatModel.clientModeID));
+    gFFI.chatModel.changeCurrentKey(
+      MessageKey(widget.id, ChatModel.clientModeID),
+    );
     _blockableOverlayState.applyFfi(gFFI);
     gFFI.imageModel.addCallbackOnFirstImage((String peerId) {
-      gFFI.recordingModel
-          .updateStatus(bind.sessionGetIsRecording(sessionId: gFFI.sessionId));
+      gFFI.recordingModel.updateStatus(
+        bind.sessionGetIsRecording(sessionId: gFFI.sessionId),
+      );
       if (gFFI.recordingModel.start) {
         showToast(translate('Automatically record outgoing sessions'));
       }
       _disableAndroidSoftKeyboard(
-          isKeyboardVisible: keyboardVisibilityController.isVisible);
+        isKeyboardVisible: keyboardVisibilityController.isVisible,
+      );
     });
     WidgetsBinding.instance.addObserver(this);
   }
@@ -134,8 +140,10 @@ class _ViewCameraPageState extends State<ViewCameraPage>
     _timer?.cancel();
     _timerDidChangeMetrics?.cancel();
     gFFI.dialogManager.dismissAll();
-    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
-        overlays: SystemUiOverlay.values);
+    await SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
     WakelockManager.disable(_uniqueKey);
     removeSharedStates(widget.id);
     // `on_voice_call_closed` should be called when the connection is ended.
@@ -172,13 +180,11 @@ class _ViewCameraPageState extends State<ViewCameraPage>
   // I'm sure that the white color is caused by the Overlay widget in BlockableOverlay.
   // But I don't know why and how to fix it.
   Widget emptyOverlay(Color bgColor) => BlockableOverlay(
-        /// the Overlay key will be set with _blockableOverlayState in BlockableOverlay
-        /// see override build() in [BlockableOverlay]
-        state: _blockableOverlayState,
-        underlying: Container(
-          color: bgColor,
-        ),
-      );
+    /// the Overlay key will be set with _blockableOverlayState in BlockableOverlay
+    /// see override build() in [BlockableOverlay]
+    state: _blockableOverlayState,
+    underlying: Container(color: bgColor),
+  );
 
   Widget _bottomWidget() => (_showBar && gFFI.ffiModel.pi.displays.isNotEmpty
       ? getBottomAppBar()
@@ -196,84 +202,95 @@ class _ViewCameraPageState extends State<ViewCameraPage>
         return false;
       },
       child: Scaffold(
-          // workaround for https://github.com/rustdesk/rustdesk/issues/3131
-          floatingActionButtonLocation: keyboardIsVisible
-              ? FABLocation(FloatingActionButtonLocation.endFloat, 0, -35)
-              : null,
-          floatingActionButton: !showActionButton
-              ? null
-              : FloatingActionButton(
-                  mini: !keyboardIsVisible,
-                  child: Icon(
-                    (keyboardIsVisible || _showGestureHelp)
-                        ? Icons.expand_more
-                        : Icons.expand_less,
-                    color: Colors.white,
-                  ),
-                  backgroundColor: MyTheme.accent,
-                  onPressed: () {
-                    setState(() {
-                      if (keyboardIsVisible) {
-                        _showEdit = false;
-                        gFFI.invokeMethod("enable_soft_keyboard", false);
-                        _mobileFocusNode.unfocus();
-                        _physicalFocusNode.requestFocus();
-                      } else if (_showGestureHelp) {
-                        _showGestureHelp = false;
-                      } else {
-                        _showBar = !_showBar;
-                      }
-                    });
-                  }),
-          bottomNavigationBar: Obx(() => Stack(
-                alignment: Alignment.bottomCenter,
-                children: [
-                  gFFI.ffiModel.pi.isSet.isTrue &&
-                          gFFI.ffiModel.waitForFirstImage.isTrue
-                      ? emptyOverlay(MyTheme.canvasColor)
-                      : () {
-                          gFFI.ffiModel.tryShowAndroidActionsOverlay();
-                          return Offstage();
-                        }(),
-                  _bottomWidget(),
-                  gFFI.ffiModel.pi.isSet.isFalse
-                      ? emptyOverlay(MyTheme.canvasColor)
-                      : Offstage(),
-                ],
-              )),
-          body: Obx(
-            () => getRawPointerAndKeyBody(Overlay(
+        // workaround for https://github.com/rustdesk/rustdesk/issues/3131
+        floatingActionButtonLocation: keyboardIsVisible
+            ? FABLocation(FloatingActionButtonLocation.endFloat, 0, -35)
+            : null,
+        floatingActionButton: !showActionButton
+            ? null
+            : FloatingActionButton(
+                mini: !keyboardIsVisible,
+                child: Icon(
+                  (keyboardIsVisible || _showGestureHelp)
+                      ? Icons.expand_more
+                      : Icons.expand_less,
+                  color: Colors.white,
+                ),
+                backgroundColor: const Color(0xFF10BFA8),
+                onPressed: () {
+                  setState(() {
+                    if (keyboardIsVisible) {
+                      _showEdit = false;
+                      gFFI.invokeMethod("enable_soft_keyboard", false);
+                      _mobileFocusNode.unfocus();
+                      _physicalFocusNode.requestFocus();
+                    } else if (_showGestureHelp) {
+                      _showGestureHelp = false;
+                    } else {
+                      _showBar = !_showBar;
+                    }
+                  });
+                },
+              ),
+        bottomNavigationBar: Obx(
+          () => Stack(
+            alignment: Alignment.bottomCenter,
+            children: [
+              gFFI.ffiModel.pi.isSet.isTrue &&
+                      gFFI.ffiModel.waitForFirstImage.isTrue
+                  ? emptyOverlay(MyTheme.canvasColor)
+                  : () {
+                      gFFI.ffiModel.tryShowAndroidActionsOverlay();
+                      return Offstage();
+                    }(),
+              _bottomWidget(),
+              gFFI.ffiModel.pi.isSet.isFalse
+                  ? emptyOverlay(MyTheme.canvasColor)
+                  : Offstage(),
+            ],
+          ),
+        ),
+        body: Obx(
+          () => getRawPointerAndKeyBody(
+            Overlay(
               initialEntries: [
-                OverlayEntry(builder: (context) {
-                  return Container(
-                    color: kColorCanvas,
-                    child: SafeArea(
-                      child: OrientationBuilder(builder: (ctx, orientation) {
-                        if (_currentOrientation != orientation) {
-                          Timer(const Duration(milliseconds: 200), () {
-                            gFFI.dialogManager
-                                .resetMobileActionsOverlay(ffi: gFFI);
-                            _currentOrientation = orientation;
-                            gFFI.canvasModel.updateViewStyle();
-                          });
-                        }
-                        return Container(
-                          color: MyTheme.canvasColor,
-                          child: inputModel.isPhysicalMouse.value
-                              ? getBodyForMobile()
-                              : RawTouchGestureDetectorRegion(
-                                  child: getBodyForMobile(),
+                OverlayEntry(
+                  builder: (context) {
+                    return Container(
+                      color: kColorCanvas,
+                      child: SafeArea(
+                        child: OrientationBuilder(
+                          builder: (ctx, orientation) {
+                            if (_currentOrientation != orientation) {
+                              Timer(const Duration(milliseconds: 200), () {
+                                gFFI.dialogManager.resetMobileActionsOverlay(
                                   ffi: gFFI,
-                                  isCamera: true,
-                                ),
-                        );
-                      }),
-                    ),
-                  );
-                })
+                                );
+                                _currentOrientation = orientation;
+                                gFFI.canvasModel.updateViewStyle();
+                              });
+                            }
+                            return Container(
+                              color: MyTheme.canvasColor,
+                              child: inputModel.isPhysicalMouse.value
+                                  ? getBodyForMobile()
+                                  : RawTouchGestureDetectorRegion(
+                                      child: getBodyForMobile(),
+                                      ffi: gFFI,
+                                      isCamera: true,
+                                    ),
+                            );
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ],
-            )),
-          )),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -286,7 +303,8 @@ class _ViewCameraPageState extends State<ViewCameraPage>
           ? RawKeyFocusScope(
               focusNode: _physicalFocusNode,
               inputModel: inputModel,
-              child: child)
+              child: child,
+            )
           : child,
     );
   }
@@ -300,61 +318,71 @@ class _ViewCameraPageState extends State<ViewCameraPage>
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: <Widget>[
           Row(
-              children: <Widget>[
-                    IconButton(
-                      color: Colors.white,
-                      icon: Icon(Icons.clear),
-                      onPressed: () {
-                        clientClose(sessionId, gFFI);
-                      },
-                    ),
-                    IconButton(
-                      color: Colors.white,
-                      icon: Icon(Icons.tv),
-                      onPressed: () {
-                        setState(() => _showEdit = false);
-                        showOptions(context, widget.id, gFFI.dialogManager);
-                      },
-                    )
-                  ] +
-                  (isWeb
-                      ? []
-                      : <Widget>[
-                          futureBuilder(
-                              future: gFFI.invokeMethod(
-                                  "get_value", "KEY_IS_SUPPORT_VOICE_CALL"),
-                              hasData: (isSupportVoiceCall) => IconButton(
-                                    color: Colors.white,
-                                    icon: isAndroid && isSupportVoiceCall
-                                        ? SvgPicture.asset('assets/chat.svg',
-                                            colorFilter: ColorFilter.mode(
-                                                Colors.white, BlendMode.srcIn))
-                                        : Icon(Icons.message),
-                                    onPressed: () =>
-                                        isAndroid && isSupportVoiceCall
-                                            ? showChatOptions(widget.id)
-                                            : onPressedTextChat(widget.id),
-                                  ))
-                        ]) +
-                  [
-                    IconButton(
-                      color: Colors.white,
-                      icon: Icon(Icons.more_vert),
-                      onPressed: () {
-                        setState(() => _showEdit = false);
-                        showActions(widget.id);
-                      },
-                    ),
-                  ]),
-          Obx(() => IconButton(
-                color: Colors.white,
-                icon: Icon(Icons.expand_more),
-                onPressed: gFFI.ffiModel.waitForFirstImage.isTrue
-                    ? null
-                    : () {
-                        setState(() => _showBar = !_showBar);
-                      },
-              )),
+            children:
+                <Widget>[
+                  IconButton(
+                    color: Colors.white,
+                    icon: Icon(Icons.clear),
+                    onPressed: () {
+                      clientClose(sessionId, gFFI);
+                    },
+                  ),
+                  IconButton(
+                    color: Colors.white,
+                    icon: Icon(Icons.tv),
+                    onPressed: () {
+                      setState(() => _showEdit = false);
+                      showOptions(context, widget.id, gFFI.dialogManager);
+                    },
+                  ),
+                ] +
+                (isWeb
+                    ? []
+                    : <Widget>[
+                        futureBuilder(
+                          future: gFFI.invokeMethod(
+                            "get_value",
+                            "KEY_IS_SUPPORT_VOICE_CALL",
+                          ),
+                          hasData: (isSupportVoiceCall) => IconButton(
+                            color: Colors.white,
+                            icon: isAndroid && isSupportVoiceCall
+                                ? SvgPicture.asset(
+                                    'assets/chat.svg',
+                                    colorFilter: ColorFilter.mode(
+                                      Colors.white,
+                                      BlendMode.srcIn,
+                                    ),
+                                  )
+                                : Icon(Icons.message),
+                            onPressed: () => isAndroid && isSupportVoiceCall
+                                ? showChatOptions(widget.id)
+                                : onPressedTextChat(widget.id),
+                          ),
+                        ),
+                      ]) +
+                [
+                  IconButton(
+                    color: Colors.white,
+                    icon: Icon(Icons.more_vert),
+                    onPressed: () {
+                      setState(() => _showEdit = false);
+                      showActions(widget.id);
+                    },
+                  ),
+                ],
+          ),
+          Obx(
+            () => IconButton(
+              color: Colors.white,
+              icon: Icon(Icons.expand_more),
+              onPressed: gFFI.ffiModel.waitForFirstImage.isTrue
+                  ? null
+                  : () {
+                      setState(() => _showBar = !_showBar);
+                    },
+            ),
+          ),
         ],
       ),
     );
@@ -362,8 +390,9 @@ class _ViewCameraPageState extends State<ViewCameraPage>
 
   Widget getBodyForMobile() {
     return Container(
-        color: MyTheme.canvasColor,
-        child: Stack(children: () {
+      color: MyTheme.canvasColor,
+      child: Stack(
+        children: () {
           final paints = [
             ImagePaint(),
             Positioned(
@@ -403,13 +432,17 @@ class _ViewCameraPageState extends State<ViewCameraPage>
             ),
           ];
           return paints;
-        }()));
+        }(),
+      ),
+    );
   }
 
   Widget getBodyForDesktopWithListener() {
     var paints = <Widget>[ImagePaint()];
     return Container(
-        color: MyTheme.canvasColor, child: Stack(children: paints));
+      color: MyTheme.canvasColor,
+      child: Stack(children: paints),
+    );
   }
 
   List<TTextMenu> _getMobileActionMenus() {
@@ -458,16 +491,20 @@ class _ViewCameraPageState extends State<ViewCameraPage>
       ...mobileActionMenus
           .asMap()
           .entries
-          .map((e) =>
-              PopupMenuItem<int>(child: e.value.getChild(), value: e.key))
+          .map(
+            (e) => PopupMenuItem<int>(child: e.value.getChild(), value: e.key),
+          )
           .toList(),
       if (mobileActionMenus.isNotEmpty) PopupMenuDivider(),
       ...menus
           .asMap()
           .entries
-          .map((e) => PopupMenuItem<int>(
+          .map(
+            (e) => PopupMenuItem<int>(
               child: e.value.getChild(),
-              value: e.key + mobileActionMenus.length))
+              value: e.key + mobileActionMenus.length,
+            ),
+          )
           .toList(),
     ];
     () async {
@@ -496,46 +533,51 @@ class _ViewCameraPageState extends State<ViewCameraPage>
     onPressVoiceCall() => bind.sessionRequestVoiceCall(sessionId: sessionId);
     onPressEndVoiceCall() => bind.sessionCloseVoiceCall(sessionId: sessionId);
 
-    makeTextMenu(String label, Widget icon, VoidCallback onPressed,
-            {TextStyle? labelStyle}) =>
-        TTextMenu(
-          child: Text(translate(label), style: labelStyle),
-          trailingIcon: Transform.scale(
-            scale: (isDesktop || isWebDesktop) ? 0.8 : 1,
-            child: IgnorePointer(
-              child: IconButton(
-                onPressed: null,
-                icon: icon,
-              ),
-            ),
-          ),
-          onPressed: onPressed,
-        );
+    makeTextMenu(
+      String label,
+      Widget icon,
+      VoidCallback onPressed, {
+      TextStyle? labelStyle,
+    }) => TTextMenu(
+      child: Text(translate(label), style: labelStyle),
+      trailingIcon: Transform.scale(
+        scale: (isDesktop || isWebDesktop) ? 0.8 : 1,
+        child: IgnorePointer(child: IconButton(onPressed: null, icon: icon)),
+      ),
+      onPressed: onPressed,
+    );
 
     final isInVoice = [
       VoiceCallStatus.waitingForResponse,
-      VoiceCallStatus.connected
+      VoiceCallStatus.connected,
     ].contains(gFFI.chatModel.voiceCallStatus.value);
     final menus = [
-      makeTextMenu('Text chat', Icon(Icons.message, color: MyTheme.accent),
-          () => onPressedTextChat(widget.id)),
+      makeTextMenu(
+        'Text chat',
+        Icon(Icons.message, color: MyTheme.accent),
+        () => onPressedTextChat(widget.id),
+      ),
       isInVoice
           ? makeTextMenu(
               'End voice call',
               SvgPicture.asset(
                 'assets/call_wait.svg',
-                colorFilter:
-                    ColorFilter.mode(Colors.redAccent, BlendMode.srcIn),
+                colorFilter: ColorFilter.mode(
+                  Colors.redAccent,
+                  BlendMode.srcIn,
+                ),
               ),
               onPressEndVoiceCall,
-              labelStyle: TextStyle(color: Colors.redAccent))
+              labelStyle: TextStyle(color: Colors.redAccent),
+            )
           : makeTextMenu(
               'Voice call',
               SvgPicture.asset(
                 'assets/call_wait.svg',
                 colorFilter: ColorFilter.mode(MyTheme.accent, BlendMode.srcIn),
               ),
-              onPressVoiceCall),
+              onPressVoiceCall,
+            ),
     ];
 
     final menuItems = menus
@@ -569,13 +611,20 @@ class ImagePaint extends StatelessWidget {
     final adjust = c.getAdjustY();
     return CustomPaint(
       painter: ImagePainter(
-          image: m.image, x: c.x / s, y: (c.y + adjust) / s, scale: s),
+        image: m.image,
+        x: c.x / s,
+        y: (c.y + adjust) / s,
+        scale: s,
+      ),
     );
   }
 }
 
 void showOptions(
-    BuildContext context, String id, OverlayDialogManager dialogManager) async {
+  BuildContext context,
+  String id,
+  OverlayDialogManager dialogManager,
+) async {
   var displays = <Widget>[];
   final pi = gFFI.ffiModel.pi;
   final image = gFFI.ffiModel.getConnectionImageText();
@@ -591,128 +640,174 @@ void showOptions(
     // We can't use `Theme.of(context).primaryColor` here, the color is:
     // - light theme: 0xff2196f3 (Colors.blue)
     // - dark theme: 0xff212121 (the canvas color?)
-    final numBgSelected =
-        Theme.of(context).colorScheme.primary.withOpacity(0.6);
+    final numBgSelected = Theme.of(
+      context,
+    ).colorScheme.primary.withOpacity(0.6);
     for (var i = 0; i < pi.displays.length; ++i) {
-      children.add(InkWell(
+      children.add(
+        InkWell(
           onTap: () {
             if (i == cur) return;
             openMonitorInTheSameTab(i, gFFI, pi);
             gFFI.dialogManager.dismissAll();
           },
           child: Ink(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                  border: Border.all(color: Theme.of(context).hintColor),
-                  borderRadius: BorderRadius.circular(2),
-                  color: i == cur ? numBgSelected : null),
-              child: Center(
-                  child: Text((i + 1).toString(),
-                      style: TextStyle(
-                          color:
-                              i == cur ? numColorSelected : numColorUnselected,
-                          fontWeight: FontWeight.bold))))));
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              border: Border.all(color: Theme.of(context).hintColor),
+              borderRadius: BorderRadius.circular(2),
+              color: i == cur ? numBgSelected : null,
+            ),
+            child: Center(
+              child: Text(
+                (i + 1).toString(),
+                style: TextStyle(
+                  color: i == cur ? numColorSelected : numColorUnselected,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
     }
-    displays.add(Padding(
+    displays.add(
+      Padding(
         padding: const EdgeInsets.only(top: 8),
         child: Wrap(
           alignment: WrapAlignment.center,
           spacing: 8,
           children: children,
-        )));
+        ),
+      ),
+    );
   }
   if (displays.isNotEmpty) {
     displays.add(const Divider(color: MyTheme.border));
   }
 
-  List<TRadioMenu<String>> viewStyleRadios =
-      await toolbarViewStyle(context, id, gFFI);
-  List<TRadioMenu<String>> imageQualityRadios =
-      await toolbarImageQuality(context, id, gFFI);
+  List<TRadioMenu<String>> viewStyleRadios = await toolbarViewStyle(
+    context,
+    id,
+    gFFI,
+  );
+  List<TRadioMenu<String>> imageQualityRadios = await toolbarImageQuality(
+    context,
+    id,
+    gFFI,
+  );
   List<TRadioMenu<String>> codecRadios = await toolbarCodec(context, id, gFFI);
-  List<TToggleMenu> displayToggles =
-      await toolbarDisplayToggle(context, id, gFFI);
+  List<TToggleMenu> displayToggles = await toolbarDisplayToggle(
+    context,
+    id,
+    gFFI,
+  );
 
-  dialogManager.show((setState, close, context) {
-    var viewStyle =
-        (viewStyleRadios.isNotEmpty ? viewStyleRadios[0].groupValue : '').obs;
-    var imageQuality =
-        (imageQualityRadios.isNotEmpty ? imageQualityRadios[0].groupValue : '')
-            .obs;
-    var codec = (codecRadios.isNotEmpty ? codecRadios[0].groupValue : '').obs;
-    final radios = [
-      for (var e in viewStyleRadios)
-        Obx(() => getRadio<String>(
-            e.child,
-            e.value,
-            viewStyle.value,
-            e.onChanged != null
-                ? (v) {
-                    e.onChanged?.call(v);
-                    if (v != null) viewStyle.value = v;
-                  }
-                : null)),
-      const Divider(color: MyTheme.border),
-      for (var e in imageQualityRadios)
-        Obx(() => getRadio<String>(
-            e.child,
-            e.value,
-            imageQuality.value,
-            e.onChanged != null
-                ? (v) {
-                    e.onChanged?.call(v);
-                    if (v != null) imageQuality.value = v;
-                  }
-                : null)),
-      const Divider(color: MyTheme.border),
-      for (var e in codecRadios)
-        Obx(() => getRadio<String>(
-            e.child,
-            e.value,
-            codec.value,
-            e.onChanged != null
-                ? (v) {
-                    e.onChanged?.call(v);
-                    if (v != null) codec.value = v;
-                  }
-                : null)),
-      if (codecRadios.isNotEmpty) const Divider(color: MyTheme.border),
-    ];
+  dialogManager
+      .show(
+        (setState, close, context) {
+          var viewStyle =
+              (viewStyleRadios.isNotEmpty ? viewStyleRadios[0].groupValue : '')
+                  .obs;
+          var imageQuality =
+              (imageQualityRadios.isNotEmpty
+                      ? imageQualityRadios[0].groupValue
+                      : '')
+                  .obs;
+          var codec =
+              (codecRadios.isNotEmpty ? codecRadios[0].groupValue : '').obs;
+          final radios = [
+            for (var e in viewStyleRadios)
+              Obx(
+                () => getRadio<String>(
+                  e.child,
+                  e.value,
+                  viewStyle.value,
+                  e.onChanged != null
+                      ? (v) {
+                          e.onChanged?.call(v);
+                          if (v != null) viewStyle.value = v;
+                        }
+                      : null,
+                ),
+              ),
+            const Divider(color: MyTheme.border),
+            for (var e in imageQualityRadios)
+              Obx(
+                () => getRadio<String>(
+                  e.child,
+                  e.value,
+                  imageQuality.value,
+                  e.onChanged != null
+                      ? (v) {
+                          e.onChanged?.call(v);
+                          if (v != null) imageQuality.value = v;
+                        }
+                      : null,
+                ),
+              ),
+            const Divider(color: MyTheme.border),
+            for (var e in codecRadios)
+              Obx(
+                () => getRadio<String>(
+                  e.child,
+                  e.value,
+                  codec.value,
+                  e.onChanged != null
+                      ? (v) {
+                          e.onChanged?.call(v);
+                          if (v != null) codec.value = v;
+                        }
+                      : null,
+                ),
+              ),
+            if (codecRadios.isNotEmpty) const Divider(color: MyTheme.border),
+          ];
 
-    final rxToggleValues = displayToggles.map((e) => e.value.obs).toList();
-    final displayTogglesList = displayToggles
-        .asMap()
-        .entries
-        .map((e) => Obx(() => CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            visualDensity: VisualDensity.compact,
-            value: rxToggleValues[e.key].value,
-            onChanged: e.value.onChanged != null
-                ? (v) {
-                    e.value.onChanged?.call(v);
-                    if (v != null) rxToggleValues[e.key].value = v;
-                  }
-                : null,
-            title: e.value.child)))
-        .toList();
-    final toggles = [
-      ...displayTogglesList,
-    ];
+          final rxToggleValues = displayToggles
+              .map((e) => e.value.obs)
+              .toList();
+          final displayTogglesList = displayToggles
+              .asMap()
+              .entries
+              .map(
+                (e) => Obx(
+                  () => CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    value: rxToggleValues[e.key].value,
+                    onChanged: e.value.onChanged != null
+                        ? (v) {
+                            e.value.onChanged?.call(v);
+                            if (v != null) rxToggleValues[e.key].value = v;
+                          }
+                        : null,
+                    title: e.value.child,
+                  ),
+                ),
+              )
+              .toList();
+          final toggles = [...displayTogglesList];
 
-    var popupDialogMenus = List<Widget>.empty(growable: true);
-    if (popupDialogMenus.isNotEmpty) {
-      popupDialogMenus.add(const Divider(color: MyTheme.border));
-    }
+          var popupDialogMenus = List<Widget>.empty(growable: true);
+          if (popupDialogMenus.isNotEmpty) {
+            popupDialogMenus.add(const Divider(color: MyTheme.border));
+          }
 
-    return CustomAlertDialog(
-      content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: displays + radios + popupDialogMenus + toggles),
-    );
-  }, clickMaskDismiss: true, backDismiss: true).then((value) {
-    _disableAndroidSoftKeyboard();
-  });
+          return CustomAlertDialog(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: displays + radios + popupDialogMenus + toggles,
+            ),
+          );
+        },
+        clickMaskDismiss: true,
+        backDismiss: true,
+      )
+      .then((value) {
+        _disableAndroidSoftKeyboard();
+      });
 }
 
 class FABLocation extends FloatingActionButtonLocation {

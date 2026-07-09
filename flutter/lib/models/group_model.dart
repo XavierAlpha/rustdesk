@@ -31,13 +31,13 @@ class GroupModel {
 
   GroupModel(this.parent) {
     peersModel = Peers(
-        name: PeersModelName.group,
-        getInitPeers: () => peers,
-        loadEvent: LoadEvent.group);
+      name: PeersModelName.group,
+      getInitPeers: () => peers,
+      loadEvent: LoadEvent.group,
+    );
   }
 
   Future<void> pull({force = true, quiet = false}) async {
-    if (bind.isDisableGroupPanel()) return;
     if (!gFFI.userModel.isLogin || groupLoading.value) return;
     if (gFFI.userModel.networkError.isNotEmpty) return;
     if (!force && initialized) return;
@@ -64,8 +64,7 @@ class GroupModel {
   Future<void> _pull() async {
     List<DeviceGroupPayload> tmpDeviceGroups = List.empty(growable: true);
     if (!await _getDeviceGroups(tmpDeviceGroups)) {
-      // old hbbs doesn't support this api
-      // return;
+      return;
     }
     tmpDeviceGroups.sort((a, b) => a.name.compareTo(b.name));
     List<UserPayload> tmpUsers = List.empty(growable: true);
@@ -78,8 +77,9 @@ class GroupModel {
     }
     deviceGroups.value = tmpDeviceGroups;
     // me first
-    var index = tmpUsers
-        .indexWhere((user) => user.name == gFFI.userModel.userName.value);
+    var index = tmpUsers.indexWhere(
+      (user) => user.name == gFFI.userModel.userName.value,
+    );
     if (index != -1) {
       var user = tmpUsers.removeAt(index);
       tmpUsers.insert(0, user);
@@ -101,7 +101,8 @@ class GroupModel {
   }
 
   Future<bool> _getDeviceGroups(
-      List<DeviceGroupPayload> tmpDeviceGroups) async {
+    List<DeviceGroupPayload> tmpDeviceGroups,
+  ) async {
     final api = "${await bind.mainGetApiServer()}/api/device-group/accessible";
     try {
       var uri0 = Uri.parse(api);
@@ -111,18 +112,21 @@ class GroupModel {
       do {
         current += 1;
         var uri = Uri(
-            scheme: uri0.scheme,
-            host: uri0.host,
-            path: uri0.path,
-            port: uri0.port,
-            queryParameters: {
-              'current': current.toString(),
-              'pageSize': pageSize.toString(),
-            });
+          scheme: uri0.scheme,
+          host: uri0.host,
+          path: uri0.path,
+          port: uri0.port,
+          queryParameters: {
+            'current': current.toString(),
+            'pageSize': pageSize.toString(),
+          },
+        );
         final resp = await http.get(uri, headers: getHttpHeaders());
         _statusCode = resp.statusCode;
-        Map<String, dynamic> json =
-            _jsonDecodeResp(decode_http_response(resp), resp.statusCode);
+        Map<String, dynamic> json = _jsonDecodeResp(
+          decode_http_response(resp),
+          resp.statusCode,
+        );
         if (json.containsKey('error')) {
           throw json['error'];
         }
@@ -150,9 +154,8 @@ class GroupModel {
       return true;
     } catch (err) {
       debugPrint('get accessible device groups: $err');
-      // old hbbs doesn't support this api
-      // groupLoadError.value =
-      //     '${translate('pull_group_failed_tip')}: ${translate(err.toString())}';
+      groupLoadError.value =
+          '${translate('pull_group_failed_tip')}: ${translate(err.toString())}';
     }
     return false;
   }
@@ -167,25 +170,28 @@ class GroupModel {
       do {
         current += 1;
         var uri = Uri(
-            scheme: uri0.scheme,
-            host: uri0.host,
-            path: uri0.path,
-            port: uri0.port,
-            queryParameters: {
-              'current': current.toString(),
-              'pageSize': pageSize.toString(),
-              'accessible': '',
-              'status': '1',
-            });
+          scheme: uri0.scheme,
+          host: uri0.host,
+          path: uri0.path,
+          port: uri0.port,
+          queryParameters: {
+            'current': current.toString(),
+            'pageSize': pageSize.toString(),
+            'accessible': '',
+            'status': '1',
+          },
+        );
         final resp = await http.get(uri, headers: getHttpHeaders());
         _statusCode = resp.statusCode;
-        Map<String, dynamic> json =
-            _jsonDecodeResp(decode_http_response(resp), resp.statusCode);
+        Map<String, dynamic> json = _jsonDecodeResp(
+          decode_http_response(resp),
+          resp.statusCode,
+        );
         if (json.containsKey('error')) {
           if (json['error'] == 'Admin required!' ||
-              json['error']
-                  .toString()
-                  .contains('ambiguous column name: status')) {
+              json['error'].toString().contains(
+                'ambiguous column name: status',
+              )) {
             throw translate('upgrade_rustdesk_server_pro_to_{1.1.10}_tip');
           } else {
             throw json['error'];
@@ -237,16 +243,19 @@ class GroupModel {
           'status': '1',
         };
         var uri = Uri(
-            scheme: uri0.scheme,
-            host: uri0.host,
-            path: uri0.path,
-            port: uri0.port,
-            queryParameters: queryParameters);
+          scheme: uri0.scheme,
+          host: uri0.host,
+          path: uri0.path,
+          port: uri0.port,
+          queryParameters: queryParameters,
+        );
         final resp = await http.get(uri, headers: getHttpHeaders());
         _statusCode = resp.statusCode;
 
-        Map<String, dynamic> json =
-            _jsonDecodeResp(decode_http_response(resp), resp.statusCode);
+        Map<String, dynamic> json = _jsonDecodeResp(
+          decode_http_response(resp),
+          resp.statusCode,
+        );
         if (json.containsKey('error')) {
           throw json['error'];
         }
@@ -300,7 +309,7 @@ class GroupModel {
         "access_token": bind.mainGetLocalOption(key: 'access_token'),
         "device_groups": deviceGroups.map((e) => e.toGroupCacheJson()).toList(),
         "users": users.map((e) => e.toGroupCacheJson()).toList(),
-        'peers': peers.map((e) => e.toGroupCacheJson()).toList()
+        'peers': peers.map((e) => e.toGroupCacheJson()).toList(),
       });
       bind.mainSaveGroup(json: jsonEncode(map));
     } catch (e) {

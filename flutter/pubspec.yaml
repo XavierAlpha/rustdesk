@@ -42,7 +42,7 @@ dependencies:
   settings_ui: ^3.0.1
   flutter_breadcrumb: ^1.0.1
   http: ^1.1.0
-  qr_code_scanner: ^1.0.0
+  qr_code_scanner_plus: ^2.2.0
   zxing2: ^0.2.0
   image_picker: ^1.1.2
   image: ^4.0.17
@@ -119,16 +119,21 @@ dev_dependencies:
   ffigen: ^20.1.1
 
 # rerun: flutter pub run flutter_launcher_icons
-flutter_icons:
+flutter_launcher_icons:
   image_path: "../res/icon.png"
   remove_alpha_ios: true
   android: true
+  adaptive_icon_background: "#F1F4FF"
+  adaptive_icon_foreground: "../res/android-foreground.png"
+  adaptive_icon_monochrome: "../res/android-monochrome.png"
   ios: true
   windows:
     generate: true
   macos:
     image_path: "../res/mac-icon.png"
-    generate: true
+    # This project uses a direct AppIcon.icns resource; the brand generator
+    # writes it without requiring an asset catalog.
+    generate: false
   linux: true
   web:
     generate: true

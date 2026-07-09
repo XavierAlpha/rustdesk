@@ -4,11 +4,18 @@ import 'dart:convert';
 import 'package:auto_size_text_field/auto_size_text_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common/formatter/id_formatter.dart';
+import 'package:flutter_hbb/common/widgets/adaptive_layout.dart';
 import 'package:flutter_hbb/common/widgets/autocomplete.dart';
+import 'package:flutter_hbb/common/widgets/brand_shell.dart';
 import 'package:flutter_hbb/common/widgets/peer_tab_page.dart';
+import 'package:flutter_hbb/models/ab_model.dart';
 import 'package:flutter_hbb/models/peer_model.dart';
+import 'package:flutter_hbb/models/peer_tab_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
+import 'package:flutter_hbb/models/user_model.dart';
+import 'package:flutter_hbb/ui/camellia_design.dart';
 import 'package:flutter_hbb/web/settings_page.dart';
+import 'package:flutter_hbb/web/web_client_settings_page.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -17,15 +24,14 @@ import '../common.dart';
 import '../models/model.dart';
 import '../models/platform_model.dart';
 
-const Color _camelliaInk = Color(0xFF1C1C1E);
-const Color _camelliaRose = Color(0xFF007AFF);
-const Color _camelliaRoseDark = Color(0xFF005FCC);
-const Color _camelliaBlush = Color(0xFFEAF2FF);
-const Color _camelliaCream = Color(0xFFF2F4F8);
-const Color _camelliaGold = Color(0xFFFF9F0A);
-const Color _camelliaSlate = Color(0xFF636366);
-const Color _camelliaMint = Color(0xFF34C759);
-const Color _camelliaLine = Color(0xFFE1E4EA);
+const Color _camelliaInk = CamelliaColors.lightText;
+const Color _camelliaRose = CamelliaColors.coral;
+const Color _camelliaRoseDark = CamelliaColors.coralStrong;
+const Color _camelliaBlush = CamelliaColors.lightPetalWash;
+const Color _camelliaGold = CamelliaColors.sun;
+const Color _camelliaSlate = CamelliaColors.lightMuted;
+const Color _camelliaMint = CamelliaColors.aqua;
+const Color _camelliaLine = CamelliaColors.lightBorder;
 
 TextStyle _camelliaFraunces({
   double? fontSize,
@@ -41,7 +47,12 @@ TextStyle _camelliaFraunces({
     letterSpacing: letterSpacing,
     height: height,
     fontFamily: 'SF Pro Display',
-    fontFamilyFallback: const ['SF Pro Text', 'Segoe UI', 'Helvetica Neue', 'Arial'],
+    fontFamilyFallback: const [
+      'SF Pro Text',
+      'Segoe UI',
+      'Helvetica Neue',
+      'Arial',
+    ],
   );
 }
 
@@ -59,7 +70,12 @@ TextStyle _camelliaOutfit({
     letterSpacing: letterSpacing,
     height: height,
     fontFamily: 'SF Pro Text',
-    fontFamilyFallback: const ['Segoe UI', 'Helvetica Neue', 'Arial', 'sans-serif'],
+    fontFamilyFallback: const [
+      'Segoe UI',
+      'Helvetica Neue',
+      'Arial',
+      'sans-serif',
+    ],
   );
 }
 
@@ -82,6 +98,7 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
   bool _isFieldFocused = false;
   Timer? _statusTimer;
   String _myId = '';
+  int _navigationIndex = 0;
 
   @override
   void initState() {
@@ -123,6 +140,7 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
     _statusTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       _syncClientStatus();
     });
+    gFFI.peerTabModel.addListener(_syncNavigationWithPeerTab);
   }
 
   @override
@@ -134,6 +152,7 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
     _idEditingController.dispose();
     _statusTimer?.cancel();
     _allPeersLoader.clear();
+    gFFI.peerTabModel.removeListener(_syncNavigationWithPeerTab);
     if (Get.isRegistered<IDTextEditingController>()) {
       Get.delete<IDTextEditingController>();
     }
@@ -190,74 +209,177 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
   @override
   Widget build(BuildContext context) {
     Provider.of<FfiModel>(context);
-    return Scaffold(
-      backgroundColor: _camelliaCream,
-      body: FocusTraversalGroup(
-        policy: WidgetOrderTraversalPolicy(),
-        child: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFFF9FBFF),
-                Color(0xFFF3F7FD),
-                Color(0xFFEFF3FA),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final layout = AppLayout.forWidth(constraints.maxWidth);
+        final compact = layout == AppLayoutSize.compact;
+        final content = AdaptiveContent(
+          maxWidth: 1220,
+          child: Column(
+            children: [
+              _buildWorkspaceHeader(context, compact),
+              Obx(() => _buildUpdateBanner(stateGlobal.updateUrl.value)),
+              const SizedBox(height: 18),
+              if (compact) ...[
+                _buildConnectionSection(true),
+                const SizedBox(height: 12),
+                _buildStatusCard(),
+              ] else
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: _buildConnectionSection(false)),
+                      const SizedBox(width: 18),
+                      SizedBox(width: 324, child: _buildStatusCard()),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 18),
+              _buildPeersPanel(compact),
+            ],
+          ),
+        );
+        return Scaffold(
+          backgroundColor: AppVisual.tokens(context).page,
+          bottomNavigationBar: compact
+              ? NavigationBar(
+                  selectedIndex: _navigationIndex,
+                  onDestinationSelected: _selectNavigationDestination,
+                  destinations: [
+                    NavigationDestination(
+                      icon: const Icon(Icons.devices_outlined),
+                      selectedIcon: const Icon(Icons.devices_rounded),
+                      label: translate('Devices'),
+                    ),
+                    NavigationDestination(
+                      icon: const Icon(Icons.menu_book_outlined),
+                      selectedIcon: const Icon(Icons.menu_book_rounded),
+                      label: translate('Address book'),
+                    ),
+                    NavigationDestination(
+                      icon: const Icon(Icons.tune_outlined),
+                      selectedIcon: const Icon(Icons.tune_rounded),
+                      label: translate('Settings'),
+                    ),
+                  ],
+                )
+              : null,
+          body: CamelliaBackdrop(
+            child: Row(
+              children: [
+                if (!compact)
+                  CamelliaNavigationRail(
+                    extended: layout == AppLayoutSize.expanded,
+                    selectedIndex: _navigationIndex,
+                    onDestinationSelected: _selectNavigationDestination,
+                    destinations: [
+                      NavigationDestination(
+                        icon: const Icon(Icons.devices_outlined),
+                        selectedIcon: const Icon(Icons.devices_rounded),
+                        label: translate('Devices'),
+                      ),
+                      NavigationDestination(
+                        icon: const Icon(Icons.menu_book_outlined),
+                        selectedIcon: const Icon(Icons.menu_book_rounded),
+                        label: translate('Address book'),
+                      ),
+                      NavigationDestination(
+                        icon: const Icon(Icons.tune_outlined),
+                        selectedIcon: const Icon(Icons.tune_rounded),
+                        label: translate('Settings'),
+                      ),
+                    ],
+                  ),
+                Expanded(
+                  child: SafeArea(
+                    child: FocusTraversalGroup(
+                      policy: WidgetOrderTraversalPolicy(),
+                      child: SingleChildScrollView(child: content),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
-          child: SafeArea(
-            child: LayoutBuilder(builder: (context, constraints) {
-              final isNarrow = constraints.maxWidth < 1060;
-              final isPhone = constraints.maxWidth < 640;
-              final contentWidth =
-                  constraints.maxWidth > 1260 ? 1260.0 : constraints.maxWidth;
-              return Stack(
-                children: [
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: _buildBackgroundDecoration(),
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.topCenter,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: contentWidth),
-                      child: CustomScrollView(
-                        slivers: [
-                          const SliverToBoxAdapter(
-                            child: SizedBox(height: 8),
-                          ),
-                          SliverToBoxAdapter(
-                            child: _buildTopBar(isNarrow, isPhone),
-                          ),
-                          SliverToBoxAdapter(
-                            child: Obx(() =>
-                                _buildUpdateBanner(stateGlobal.updateUrl.value)),
-                          ),
-                          SliverToBoxAdapter(
-                            child: _buildHeroSection(isNarrow, isPhone),
-                          ),
-                          SliverToBoxAdapter(
-                            child: _buildConnectionSection(isNarrow),
-                          ),
-                          SliverToBoxAdapter(
-                            child: _buildFeatureSection(isNarrow),
-                          ),
-                          SliverToBoxAdapter(
-                            child: _buildPeersPanel(isNarrow),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            }),
-          ),
+        );
+      },
+    );
+  }
+
+  void _selectNavigationDestination(int index) {
+    if (index == 2) {
+      _openSettings();
+      return;
+    }
+    gFFI.peerTabModel.setCurrentTab(
+      index == 1 ? PeerTabIndex.ab.index : PeerTabIndex.recent.index,
+    );
+    if (index == 1) {
+      gFFI.abModel.pullAb(force: ForcePullAb.listAndCurrent, quiet: false);
+    }
+    setState(() => _navigationIndex = index);
+  }
+
+  void _syncNavigationWithPeerTab() {
+    final index = gFFI.peerTabModel.currentTab == PeerTabIndex.ab.index ? 1 : 0;
+    if (mounted && index != _navigationIndex) {
+      setState(() => _navigationIndex = index);
+    }
+  }
+
+  void _openSettings() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const WebClientSettingsPage()),
+    );
+  }
+
+  Widget _buildWorkspaceHeader(BuildContext context, bool compact) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: CamelliaPageHeader(
+        title: translate('Remote workspace'),
+        subtitle: translate(
+          'Connect and manage trusted devices in your browser',
         ),
+        leading: compact ? const CamelliaAnimatedBrandMark(size: 42) : null,
+        actions: [
+          _buildAccountButton(compact),
+        ],
       ),
     );
+  }
+
+  Widget _buildAccountButton(bool compact) {
+    return Obx(() {
+      final model = gFFI.userModel;
+      final state = model.accountState.value;
+      return CamelliaAccountButton(
+        label: model.isLogin
+            ? model.displayNameOrUserName
+            : translate('Sign in'),
+        detail: model.isLogin
+            ? model.email.value.trim().isNotEmpty
+                  ? model.email.value.trim()
+                  : '@${model.userName.value}'
+            : translate('Account'),
+        avatarUrl: model.avatar.value,
+        statusColor: switch (state) {
+          UserAccountState.ready => AppVisual.tone(context, AppTone.success),
+          UserAccountState.offline => AppVisual.tone(context, AppTone.warning),
+          UserAccountState.error => AppVisual.tone(context, AppTone.danger),
+          _ => Theme.of(context).colorScheme.primary,
+        },
+        statusIcon: state == UserAccountState.offline
+            ? Icons.cloud_off_rounded
+            : Icons.check_circle_rounded,
+        busy: state == UserAccountState.loading,
+        compact: compact,
+        onPressed: _openSettings,
+      );
+    });
   }
 
   void _onFocusChanged() {
@@ -273,8 +395,10 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
         _allPeersLoader.getAllPeers();
       }
       final textLength = _idEditingController.value.text.length;
-      _idEditingController.selection =
-          TextSelection(baseOffset: 0, extentOffset: textLength);
+      _idEditingController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: textLength,
+      );
     }
   }
 
@@ -375,6 +499,10 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
       );
     }
   }
+
+  // Legacy decorative helpers remain available for downstream custom web
+  // builds, but the default client uses the theme-driven workspace above.
+  // ignore: unused_element
   Widget _buildBackgroundDecoration() {
     return Stack(
       children: [
@@ -382,47 +510,55 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
           top: -120,
           left: -130,
           child: _buildGlow(
-              size: 300,
-              color: _camelliaRose.withValues(alpha: 0.18),
-              intensity: 0.42),
+            size: 300,
+            color: _camelliaRose.withValues(alpha: 0.18),
+            intensity: 0.42,
+          ),
         ),
         Positioned(
           top: -140,
           right: -70,
           child: _buildGlow(
-              size: 360, color: _camelliaBlush.withValues(alpha: 0.7), intensity: 0.6),
+            size: 360,
+            color: _camelliaBlush.withValues(alpha: 0.7),
+            intensity: 0.6,
+          ),
         ),
         Positioned(
           top: 140,
           right: -120,
           child: _buildGlow(
-              size: 280,
-              color: _camelliaGold.withValues(alpha: 0.16),
-              intensity: 0.34),
+            size: 280,
+            color: _camelliaGold.withValues(alpha: 0.16),
+            intensity: 0.34,
+          ),
         ),
         Positioned(
           bottom: -170,
           left: -40,
           child: _buildGlow(
-              size: 340,
-              color: _camelliaMint.withValues(alpha: 0.16),
-              intensity: 0.45),
+            size: 340,
+            color: _camelliaMint.withValues(alpha: 0.16),
+            intensity: 0.45,
+          ),
         ),
         Positioned(
           top: 210,
           left: -100,
           child: _buildGlow(
-              size: 260,
-              color: _camelliaGold.withValues(alpha: 0.14),
-              intensity: 0.35),
+            size: 260,
+            color: _camelliaGold.withValues(alpha: 0.14),
+            intensity: 0.35,
+          ),
         ),
         Positioned(
           bottom: 90,
           right: -60,
           child: _buildGlow(
-              size: 260,
-              color: _camelliaMint.withValues(alpha: 0.15),
-              intensity: 0.34),
+            size: 260,
+            color: _camelliaMint.withValues(alpha: 0.15),
+            intensity: 0.34,
+          ),
         ),
         Positioned(
           top: 280,
@@ -450,8 +586,11 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
     );
   }
 
-  Widget _buildGlow(
-      {required double size, required Color color, double intensity = 0.5}) {
+  Widget _buildGlow({
+    required double size,
+    required Color color,
+    double intensity = 0.5,
+  }) {
     return Container(
       width: size,
       height: size,
@@ -467,6 +606,7 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildTopBar(bool isNarrow, bool isPhone) {
     if (isPhone) {
       return Padding(
@@ -516,7 +656,9 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _camelliaLine.withValues(alpha: 0.8)),
+                    border: Border.all(
+                      color: _camelliaLine.withValues(alpha: 0.8),
+                    ),
                   ),
                   child: const WebSettingsPage(),
                 ),
@@ -528,7 +670,10 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
     }
 
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isNarrow ? 16 : 24, vertical: 8),
+      padding: EdgeInsets.symmetric(
+        horizontal: isNarrow ? 16 : 24,
+        vertical: 8,
+      ),
       child: Row(
         children: [
           _buildBrandMark(),
@@ -614,7 +759,7 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
       return const SizedBox.shrink();
     }
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.only(bottom: 12),
       child: InkWell(
         onTap: () async {
           const url = 'https://camellia.aimmv.com/download';
@@ -623,15 +768,8 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: _camelliaRose,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: _camelliaRose.withValues(alpha: 0.35),
-                blurRadius: 12,
-                offset: const Offset(0, 8),
-              ),
-            ],
+            color: Theme.of(context).colorScheme.primary,
+            borderRadius: BorderRadius.circular(AppVisual.radius),
           ),
           child: Row(
             children: [
@@ -654,6 +792,8 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
       ),
     );
   }
+
+  // ignore: unused_element
   Widget _buildHeroSection(bool isNarrow, bool isPhone) {
     final hero = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -670,7 +810,8 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
         const SizedBox(height: 10),
         Text(
           translate(
-              'Secure Camellia sessions directly in your browser with the same tools you trust on desktop.'),
+            'Secure Camellia sessions directly in your browser with the same tools you trust on desktop.',
+          ),
           style: _camelliaOutfit(
             fontSize: 15,
             height: 1.5,
@@ -705,15 +846,14 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
     final card = _buildStatusCard();
 
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isNarrow ? 16 : 24, vertical: 10),
+      padding: EdgeInsets.symmetric(
+        horizontal: isNarrow ? 16 : 24,
+        vertical: 10,
+      ),
       child: isNarrow
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                hero,
-                const SizedBox(height: 18),
-                card,
-              ],
+              children: [hero, const SizedBox(height: 18), card],
             )
           : Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -728,20 +868,10 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
 
   Widget _buildStatusCard() {
     const rowGap = SizedBox(height: 12);
-    return Container(
+    final muted = AppVisual.subduedText(context);
+    return CamelliaSection(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _camelliaLine.withValues(alpha: 0.85)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
+      accent: CamelliaColors.aqua,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -750,8 +880,7 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
             style: _camelliaOutfit(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: _camelliaSlate,
-              letterSpacing: 0.3,
+              color: muted,
             ),
           ),
           const SizedBox(height: 12),
@@ -762,15 +891,15 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
             switch (status) {
               case SvcStatus.ready:
                 label = translate('Ready');
-                color = _camelliaMint;
+                color = AppVisual.tone(context, AppTone.success);
                 break;
               case SvcStatus.connecting:
                 label = translate('Connecting');
-                color = _camelliaGold;
+                color = AppVisual.tone(context, AppTone.warning);
                 break;
               default:
                 label = translate('Not ready');
-                color = _camelliaSlate;
+                color = muted;
             }
             return _buildStatusRow(
               icon: Icons.circle,
@@ -782,19 +911,20 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
           rowGap,
           _buildStatusRow(
             icon: Icons.lock_outline,
-            color: _camelliaSlate,
+            color: muted,
             title: translate('Mode'),
             value: translate('Control-only'),
             trailing: Tooltip(
               message: translate(
-                  'Web client does not accept incoming connections. Use desktop/mobile to be controlled.'),
+                'Web client does not accept incoming connections. Use desktop/mobile to be controlled.',
+              ),
               child: const Icon(Icons.info_outline, size: 16),
             ),
           ),
           rowGap,
           _buildStatusRow(
             icon: Icons.badge_outlined,
-            color: _camelliaSlate,
+            color: muted,
             title: translate('Your ID'),
             value: _myId.isEmpty ? '—' : _myId,
             trailing: isChangeIdDisabled()
@@ -806,22 +936,25 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
                       icon: const Icon(Icons.autorenew_rounded),
                       iconSize: 16,
                       padding: EdgeInsets.zero,
-                      color: _camelliaRose,
-                      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                      color: Theme.of(context).colorScheme.primary,
+                      constraints: const BoxConstraints(
+                        minWidth: 24,
+                        minHeight: 24,
+                      ),
                     ),
                   ),
           ),
           rowGap,
           _buildStatusRow(
             icon: Icons.shield_outlined,
-            color: _camelliaRose,
+            color: Theme.of(context).colorScheme.primary,
             title: translate('Security'),
             value: translate('Encrypted channels'),
           ),
           rowGap,
           _buildStatusRow(
             icon: Icons.tune,
-            color: _camelliaSlate,
+            color: muted,
             title: translate('Relay'),
             value: translate('Auto routing'),
           ),
@@ -837,46 +970,44 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
     required String value,
     Widget? trailing,
   }) {
-    return SizedBox(
-      height: 28,
+    final theme = Theme.of(context);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 32),
       child: Row(
         children: [
-          SizedBox(
-            width: 18,
-            child: Icon(icon, size: 16, color: color),
-          ),
+          SizedBox(width: 18, child: Icon(icon, size: 16, color: color)),
           const SizedBox(width: 8),
-          SizedBox(
-            width: 120,
+          Expanded(
+            flex: 4,
             child: Text(
               title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: _camelliaOutfit(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: _camelliaInk,
+                color: theme.colorScheme.onSurface,
               ),
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
+            flex: 5,
             child: Text(
               value,
               textAlign: TextAlign.right,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: _camelliaOutfit(
                 fontSize: 13,
-                color: _camelliaSlate,
+                color: AppVisual.subduedText(context),
               ),
             ),
           ),
           const SizedBox(width: 8),
           SizedBox(
             width: 24,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: trailing,
-            ),
+            child: Align(alignment: Alignment.centerRight, child: trailing),
           ),
         ],
       ),
@@ -907,61 +1038,45 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
       ),
     );
   }
+
   Widget _buildConnectionSection(bool isNarrow) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isNarrow ? 16 : 24, vertical: 10),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.94),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: _camelliaLine.withValues(alpha: 0.9)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 22,
-              offset: const Offset(0, 12),
+    return CamelliaSection(
+      padding: const EdgeInsets.all(20),
+      accent: CamelliaColors.coral,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            translate('Connect to a device'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            translate('Enter a Remote ID to start a session.'),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppVisual.subduedText(context),
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              translate('Connect to a device'),
-              style: _camelliaFraunces(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: _camelliaInk,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              translate('Enter a Remote ID to start a session.'),
-              style: _camelliaOutfit(
-                fontSize: 13,
-                color: _camelliaSlate,
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildRemoteIdField(),
-            const SizedBox(height: 12),
-            _buildQuickActions(isNarrow),
-          ],
-        ),
+          ),
+          const SizedBox(height: 16),
+          _buildRemoteIdField(),
+          const SizedBox(height: 12),
+          _buildQuickActions(isNarrow),
+        ],
       ),
     );
   }
 
   Widget _buildRemoteIdField() {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+      duration: AppMotion.duration(context, AppMotion.stateChange),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: _camelliaCream.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(16),
+        color: AppVisual.inset(context),
+        borderRadius: BorderRadius.circular(AppVisual.radius),
         border: Border.all(
-          color: _isFieldFocused ? _camelliaRose : _camelliaLine,
+          color: _isFieldFocused
+              ? CamelliaColors.azure
+              : AppVisual.border(context),
           width: _isFieldFocused ? 1.4 : 1.0,
         ),
       ),
@@ -992,8 +1107,10 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
                   );
                   _autocompleteOpts = [emptyPeer];
                 } else {
-                  String textWithoutSpaces =
-                      textEditingValue.text.replaceAll(" ", "");
+                  String textWithoutSpaces = textEditingValue.text.replaceAll(
+                    " ",
+                    "",
+                  );
                   if (int.tryParse(textWithoutSpaces) != null) {
                     textEditingValue = TextEditingValue(
                       text: textWithoutSpaces,
@@ -1002,108 +1119,112 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
                   }
                   String textToFind = textEditingValue.text.toLowerCase();
                   _autocompleteOpts = _allPeersLoader.peers
-                      .where((peer) =>
-                          peer.id.toLowerCase().contains(textToFind) ||
-                          peer.username.toLowerCase().contains(textToFind) ||
-                          peer.hostname.toLowerCase().contains(textToFind) ||
-                          peer.alias.toLowerCase().contains(textToFind))
+                      .where(
+                        (peer) =>
+                            peer.id.toLowerCase().contains(textToFind) ||
+                            peer.username.toLowerCase().contains(textToFind) ||
+                            peer.hostname.toLowerCase().contains(textToFind) ||
+                            peer.alias.toLowerCase().contains(textToFind),
+                      )
                       .toList();
                 }
                 return _autocompleteOpts;
               },
               focusNode: _idFocusNode,
               textEditingController: _idEditingController,
-              fieldViewBuilder: (BuildContext context,
-                  TextEditingController fieldTextEditingController,
-                  FocusNode fieldFocusNode,
-                  VoidCallback onFieldSubmitted) {
-                updateTextAndPreserveSelection(
-                    fieldTextEditingController, _idController.text);
-                return AutoSizeTextField(
-                  controller: fieldTextEditingController,
-                  focusNode: fieldFocusNode,
-                  minFontSize: 18,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  keyboardType: TextInputType.visiblePassword,
-                  onChanged: (String text) {
-                    _idController.id = text;
+              fieldViewBuilder:
+                  (
+                    BuildContext context,
+                    TextEditingController fieldTextEditingController,
+                    FocusNode fieldFocusNode,
+                    VoidCallback onFieldSubmitted,
+                  ) {
+                    updateTextAndPreserveSelection(
+                      fieldTextEditingController,
+                      _idController.text,
+                    );
+                    return AutoSizeTextField(
+                      controller: fieldTextEditingController,
+                      focusNode: fieldFocusNode,
+                      minFontSize: 18,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      keyboardType: TextInputType.visiblePassword,
+                      onChanged: (String text) {
+                        _idController.id = text;
+                      },
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: translate('Remote ID'),
+                        border: InputBorder.none,
+                        labelStyle: Theme.of(context).textTheme.labelMedium,
+                      ),
+                      inputFormatters: [IDTextInputFormatter()],
+                      onSubmitted: (_) {
+                        _onConnect();
+                      },
+                    );
                   },
-                  style: _camelliaOutfit(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                    color: _camelliaInk,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: translate('Remote ID'),
-                    border: InputBorder.none,
-                    labelStyle: _camelliaOutfit(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: _camelliaSlate,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                  inputFormatters: [IDTextInputFormatter()],
-                  onSubmitted: (_) {
-                    _onConnect();
-                  },
-                );
-              },
               onSelected: (option) {
                 setState(() {
                   _idController.id = option.id;
                   FocusScope.of(context).unfocus();
                 });
               },
-              optionsViewBuilder: (BuildContext context,
-                  AutocompleteOnSelected<Peer> onSelected,
-                  Iterable<Peer> options) {
-                options = _autocompleteOpts;
-                double maxHeight = options.length * 50.0;
-                if (options.length == 1) {
-                  maxHeight = 52;
-                } else if (options.length == 3) {
-                  maxHeight = 146;
-                } else if (options.length == 4) {
-                  maxHeight = 193;
-                }
-                maxHeight = maxHeight.clamp(0, 220);
-                return Align(
-                  alignment: Alignment.topLeft,
-                  child: Material(
-                    elevation: 6,
-                    borderRadius: BorderRadius.circular(12),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: maxHeight,
-                        maxWidth: 360,
-                      ),
-                      child: _allPeersLoader.peers.isEmpty &&
-                              !_allPeersLoader.isPeersLoaded
-                          ? const SizedBox(
-                              height: 80,
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            )
-                          : ListView(
-                              padding: const EdgeInsets.only(top: 6),
-                              children: options
-                                  .map(
-                                    (peer) => AutocompletePeerTile(
-                                      onSelect: () => onSelected(peer),
-                                      peer: peer,
+              optionsViewBuilder:
+                  (
+                    BuildContext context,
+                    AutocompleteOnSelected<Peer> onSelected,
+                    Iterable<Peer> options,
+                  ) {
+                    options = _autocompleteOpts;
+                    double maxHeight = options.length * 50.0;
+                    if (options.length == 1) {
+                      maxHeight = 52;
+                    } else if (options.length == 3) {
+                      maxHeight = 146;
+                    } else if (options.length == 4) {
+                      maxHeight = 193;
+                    }
+                    maxHeight = maxHeight.clamp(0, 220);
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 4,
+                        borderRadius: BorderRadius.circular(AppVisual.radius),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: maxHeight,
+                            maxWidth: 360,
+                          ),
+                          child:
+                              _allPeersLoader.peers.isEmpty &&
+                                  !_allPeersLoader.isPeersLoaded
+                              ? const SizedBox(
+                                  height: 80,
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
                                     ),
-                                  )
-                                  .toList(),
-                            ),
-                    ),
-                  ),
-                );
-              },
+                                  ),
+                                )
+                              : ListView(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  children: options
+                                      .map(
+                                        (peer) => AutocompletePeerTile(
+                                          onSelect: () => onSelected(peer),
+                                          peer: peer,
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
+                        ),
+                      ),
+                    );
+                  },
             ),
           ),
           if (!_idEmpty)
@@ -1114,7 +1235,7 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
                 });
               },
               icon: const Icon(Icons.clear),
-              color: _camelliaSlate,
+              color: AppVisual.subduedText(context),
               tooltip: translate('Clear'),
             ),
           const SizedBox(width: 6),
@@ -1128,6 +1249,7 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
       ),
     );
   }
+
   Widget _buildQuickActions(bool isNarrow) {
     return Wrap(
       spacing: 10,
@@ -1141,8 +1263,7 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
         _ActionButton(
           label: translate('File Transfer'),
           icon: Icons.folder_copy_outlined,
-          onPressed:
-              _idEmpty ? null : () => _onConnect(isFileTransfer: true),
+          onPressed: _idEmpty ? null : () => _onConnect(isFileTransfer: true),
         ),
         _ActionButton(
           label: translate('Terminal'),
@@ -1158,6 +1279,7 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildFeatureSection(bool isNarrow) {
     final cards = [
       _FeatureCard(
@@ -1190,7 +1312,10 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
       ),
     ];
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isNarrow ? 16 : 24, vertical: 10),
+      padding: EdgeInsets.symmetric(
+        horizontal: isNarrow ? 16 : 24,
+        vertical: 10,
+      ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           const spacing = 14.0;
@@ -1198,17 +1323,14 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
           final columns = width >= 1120
               ? 4
               : width >= 760
-                  ? 2
-                  : 1;
+              ? 2
+              : 1;
           final cardWidth = (width - (columns - 1) * spacing) / columns;
           return Wrap(
             spacing: spacing,
             runSpacing: spacing,
             children: cards
-                .map((card) => SizedBox(
-                      width: cardWidth,
-                      child: card,
-                    ))
+                .map((card) => SizedBox(width: cardWidth, child: card))
                 .toList(),
           );
         },
@@ -1219,48 +1341,26 @@ class _WebClientHomePageState extends State<WebClientHomePage> {
   Widget _buildPeersPanel(bool isNarrow) {
     final viewportHeight = MediaQuery.of(context).size.height;
     final peersPanelHeight = viewportHeight < 760 ? 340.0 : 420.0;
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isNarrow ? 16 : 24, vertical: 10),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.93),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: _camelliaLine.withValues(alpha: 0.9)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 20,
-              offset: const Offset(0, 12),
+    return AppSurface(
+      padding: const EdgeInsets.all(20),
+      elevated: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            translate('Your devices'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            translate('Recent, favorites, LAN, and address book peers.'),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppVisual.subduedText(context),
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              translate('Your devices'),
-              style: _camelliaFraunces(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: _camelliaInk,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              translate('Recent, favorites, LAN, and address book peers.'),
-              style: _camelliaOutfit(
-                fontSize: 13,
-                color: _camelliaSlate,
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: peersPanelHeight,
-              child: PeerTabPage(),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(height: peersPanelHeight, child: PeerTabPage()),
+        ],
       ),
     );
   }
@@ -1311,26 +1411,32 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final baseColor = isPrimary ? _camelliaRose : Colors.white;
-    final borderColor = isPrimary ? _camelliaRose : _camelliaLine;
-    final textColor = isPrimary ? Colors.white : _camelliaInk;
+    final labelWidget = Text(
+      label,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.center,
+    );
+    final style = ButtonStyle(
+      minimumSize: const WidgetStatePropertyAll(Size(0, 44)),
+      padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      ),
+      animationDuration: AppMotion.duration(context, AppMotion.feedback),
+    );
+    if (isPrimary) {
+      return FilledButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 18),
+        label: labelWidget,
+        style: style,
+      );
+    }
     return OutlinedButton.icon(
       onPressed: onPressed,
-      icon: Icon(icon, size: 18, color: textColor),
-      label: Text(
-        label,
-        style: _camelliaOutfit(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: textColor,
-        ),
-      ),
-      style: OutlinedButton.styleFrom(
-        backgroundColor: baseColor,
-        side: BorderSide(color: borderColor),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
-      ),
+      icon: Icon(icon, size: 18),
+      label: labelWidget,
+      style: style,
     );
   }
 }
@@ -1412,4 +1518,3 @@ class _FeatureCard extends StatelessWidget {
     );
   }
 }
-

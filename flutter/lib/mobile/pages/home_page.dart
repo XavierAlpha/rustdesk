@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_hbb/common/widgets/adaptive_layout.dart';
+import 'package:flutter_hbb/common/widgets/brand_shell.dart';
 import 'package:flutter_hbb/mobile/pages/connection_page.dart';
 import 'package:flutter_hbb/mobile/pages/server_page.dart';
 import 'package:flutter_hbb/mobile/pages/settings_page.dart';
@@ -6,7 +8,7 @@ import 'package:get/get.dart';
 import '../../common.dart';
 import '../../common/widgets/chat_page.dart';
 import '../../models/platform_model.dart';
-import '../../models/state_model.dart';
+import '../../models/user_model.dart';
 
 abstract class PageShape extends Widget {
   final String title = "";
@@ -42,6 +44,13 @@ class HomePageState extends State<HomePage> {
     });
   }
 
+  void selectChatPage() {
+    if (_chatPageTabIndex < 0 || _chatPageTabIndex >= _pages.length) {
+      return;
+    }
+    _onDestinationSelected(_chatPageTabIndex);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -51,9 +60,7 @@ class HomePageState extends State<HomePage> {
   void initPages() {
     _pages.clear();
     if (!bind.isIncomingOnly()) {
-      _pages.add(ConnectionPage(
-        appBarActions: [],
-      ));
+      _pages.add(ConnectionPage(appBarActions: []));
     }
     if (isAndroid && !bind.isOutgoingOnly()) {
       _chatPageTabIndex = _pages.length;
@@ -64,62 +71,59 @@ class HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-        onWillPop: () async {
-          if (_selectedIndex != 0) {
-            setState(() {
-              _selectedIndex = 0;
-            });
-          } else {
-            return true;
-          }
-          return false;
-        },
-        child: Scaffold(
-          // backgroundColor: MyTheme.grayBg,
+    return PopScope(
+      canPop: _selectedIndex == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _selectedIndex != 0) {
+          setState(() => _selectedIndex = 0);
+        }
+      },
+      child: AppAmbientBackground(
+        child: AdaptiveNavigationScaffold(
+          backgroundColor: Colors.transparent,
           appBar: AppBar(
+            toolbarHeight: 62,
             elevation: 0,
             backgroundColor: Theme.of(context).colorScheme.surface,
             foregroundColor: Theme.of(context).textTheme.titleLarge?.color,
-            centerTitle: true,
-            title: appTitle(),
-            actions: _pages.elementAt(_selectedIndex).appBarActions,
-          ),
-          bottomNavigationBar: DecoratedBox(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              boxShadow: AppVisual.shadow(context),
+            centerTitle: false,
+            titleSpacing: 16,
+            title: Row(
+              children: [
+                const CamelliaAnimatedBrandMark(size: 34),
+                const SizedBox(width: 10),
+                Expanded(child: appTitle()),
+              ],
             ),
-            child: BottomNavigationBar(
-              key: navigationBarKey,
-              items: _pages
-                  .map((page) => BottomNavigationBarItem(
-                      icon: page.icon, label: page.title))
-                  .toList(),
-              currentIndex: _selectedIndex,
-              type: BottomNavigationBarType.fixed,
-              selectedItemColor: MyTheme.accent,
-              unselectedItemColor: AppVisual.subduedText(context),
-              onTap: (index) => setState(() {
-                // close chat overlay when go chat page
-                if (_selectedIndex != index) {
-                  _selectedIndex = index;
-                  if (isChatPageCurrentTab) {
-                    gFFI.chatModel.hideChatIconOverlay();
-                    gFFI.chatModel.hideChatWindowOverlay();
-                    gFFI.chatModel.mobileClearClientUnread(
-                        gFFI.chatModel.currentKey.connId);
-                  }
-                }
-              }),
-            ),
+            actions: [
+              ..._pages.elementAt(_selectedIndex).appBarActions,
+              Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: _buildAccountButton(
+                  context,
+                  MediaQuery.sizeOf(context).width < 600,
+                ),
+              ),
+            ],
           ),
-          body: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (child, animation) {
-              return FadeTransition(
+          selectedIndex: _selectedIndex,
+          destinations: _pages
+              .map(
+                (page) => NavigationDestination(
+                  icon: page.icon,
+                  selectedIcon: page.icon,
+                  label: page.title,
+                ),
+              )
+              .toList(growable: false),
+          onDestinationSelected: _onDestinationSelected,
+          body: SafeArea(
+            bottom: false,
+            child: AnimatedSwitcher(
+              duration: AppMotion.duration(context, AppMotion.route),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
                 opacity: animation,
                 child: SlideTransition(
                   position: Tween<Offset>(
@@ -128,14 +132,84 @@ class HomePageState extends State<HomePage> {
                   ).animate(animation),
                   child: child,
                 ),
-              );
-            },
-            child: KeyedSubtree(
-              key: ValueKey<int>(_selectedIndex),
-              child: _pages.elementAt(_selectedIndex),
+              ),
+              child: KeyedSubtree(
+                key: ValueKey<int>(_selectedIndex),
+                child: _pages.elementAt(_selectedIndex),
+              ),
             ),
           ),
-        ));
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAccountButton(BuildContext context, bool compact) {
+    return Obx(() {
+      final model = gFFI.userModel;
+      final state = model.accountState.value;
+      final label = model.isLogin
+          ? model.displayNameOrUserName
+          : state == UserAccountState.disabled
+          ? translate('Account')
+          : translate('Sign in');
+      final detail = switch (state) {
+        UserAccountState.disabled => translate('Disabled'),
+        UserAccountState.signedOut => translate('Account'),
+        UserAccountState.loading => translate('Loading...'),
+        UserAccountState.ready =>
+          model.email.value.trim().isNotEmpty
+              ? model.email.value.trim()
+              : model.userName.value.trim().isEmpty
+              ? translate('Connected')
+              : '@${model.userName.value.trim()}',
+        UserAccountState.offline => translate('Offline'),
+        UserAccountState.error => translate('Unavailable'),
+      };
+      final color = switch (state) {
+        UserAccountState.ready => AppVisual.tone(context, AppTone.success),
+        UserAccountState.offline => AppVisual.tone(context, AppTone.warning),
+        UserAccountState.error => AppVisual.tone(context, AppTone.danger),
+        UserAccountState.disabled => AppVisual.subduedText(context),
+        _ => Theme.of(context).colorScheme.primary,
+      };
+      return CamelliaAccountButton(
+        label: label,
+        detail: detail,
+        avatarUrl: model.avatar.value,
+        statusColor: color,
+        statusIcon: switch (state) {
+          UserAccountState.ready => Icons.check_circle_rounded,
+          UserAccountState.offline => Icons.cloud_off_rounded,
+          UserAccountState.error => Icons.error_rounded,
+          UserAccountState.disabled => Icons.block_rounded,
+          _ => Icons.circle_rounded,
+        },
+        busy: state == UserAccountState.loading,
+        compact: compact,
+        onPressed: bind.isDisableAccount() ? null : _openAccountSettings,
+      );
+    });
+  }
+
+  void _openAccountSettings() {
+    final settingsIndex = _pages.indexWhere((page) => page is SettingsPage);
+    if (settingsIndex >= 0) _onDestinationSelected(settingsIndex);
+  }
+
+  void _onDestinationSelected(int index) {
+    setState(() {
+      if (_selectedIndex != index) {
+        _selectedIndex = index;
+        if (isChatPageCurrentTab) {
+          gFFI.chatModel.hideChatIconOverlay();
+          gFFI.chatModel.hideChatWindowOverlay();
+          gFFI.chatModel.mobileClearClientUnread(
+            gFFI.chatModel.currentKey.connId,
+          );
+        }
+      }
+    });
   }
 
   Widget appTitle() {
@@ -144,8 +218,9 @@ class HomePageState extends State<HomePage> {
     if (isChatPageCurrentTab &&
         currentUser != null &&
         currentKey.peerId.isNotEmpty) {
-      final connected =
-          gFFI.serverModel.clients.any((e) => e.id == currentKey.connId);
+      final connected = gFFI.serverModel.clients.any(
+        (e) => e.id == currentKey.connId,
+      );
       return Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -164,16 +239,15 @@ class HomePageState extends State<HomePage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    "${currentUser.firstName}   ${currentUser.id}",
-                  ),
+                  Text("${currentUser.firstName}   ${currentUser.id}"),
                   if (connected)
                     Container(
                       width: 10,
                       height: 10,
                       decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color.fromARGB(255, 133, 246, 199)),
+                        shape: BoxShape.circle,
+                        color: Color.fromARGB(255, 133, 246, 199),
+                      ),
                     ).marginSymmetric(horizontal: 2),
                 ],
               ),
@@ -182,6 +256,14 @@ class HomePageState extends State<HomePage> {
         ],
       );
     }
-    return Text(bind.mainGetAppNameSync());
+    return Text(
+      _pages.elementAt(_selectedIndex).title,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0,
+      ),
+    );
   }
 }

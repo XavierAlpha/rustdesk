@@ -2703,7 +2703,6 @@ export class WebRuntime {
 
     this.localOptionDefaults.clear();
     this.localOptionDefaults.set('lang', 'default');
-    this.localOptionDefaults.set('disable-group-panel', 'N');
     this.localOptionDefaults.set('disable-discovery-panel', 'Y');
     this.localOptionDefaults.set('input-source', 'Input source 1');
 

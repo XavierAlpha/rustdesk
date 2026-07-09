@@ -471,6 +471,17 @@ jobs:
     if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_android_arm64) }}
     runs-on: ubuntu-latest
     steps:
+      # The Android toolchain, Flutter cache, vcpkg, and Rust artifacts exceed
+      # the free space available on some runners unless unused preinstalls are removed.
+      - name: Reclaim disk space for Android build
+        shell: bash
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android/sdk/ndk
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+          df -h /
       - uses: actions/checkout@v7
         with:
           submodules: recursive

@@ -44,8 +44,10 @@ class TerminalPage extends StatefulWidget {
 
 class _TerminalPageState extends State<TerminalPage>
     with AutomaticKeepAliveClientMixin {
-  static const EdgeInsets _defaultTerminalPadding =
-      EdgeInsets.symmetric(horizontal: 5.0, vertical: 2.0);
+  static const EdgeInsets _defaultTerminalPadding = EdgeInsets.symmetric(
+    horizontal: 5.0,
+    vertical: 2.0,
+  );
 
   late FFI _ffi;
   late TerminalModel _terminalModel;
@@ -58,7 +60,9 @@ class _TerminalPageState extends State<TerminalPage>
     super.initState();
 
     // Listen for tab selection changes to request focus
-    _tabStateSubscription = widget.tabController.state.listen(_onTabStateChanged);
+    _tabStateSubscription = widget.tabController.state.listen(
+      _onTabStateChanged,
+    );
 
     // Use shared FFI instance from connection manager
     _ffi = TerminalConnectionManager.getConnection(
@@ -72,7 +76,8 @@ class _TerminalPageState extends State<TerminalPage>
     // Create terminal model with specific terminal ID
     _terminalModel = TerminalModel(_ffi, widget.terminalId);
     debugPrint(
-        '[TerminalPage] Terminal model created for terminal ${widget.terminalId}');
+      '[TerminalPage] Terminal model created for terminal ${widget.terminalId}',
+    );
 
     _terminalModel.onResizeExternal = (w, h, pw, ph) {
       _cellHeight = ph * 1.0;
@@ -110,12 +115,14 @@ class _TerminalPageState extends State<TerminalPage>
       // Note: When a connection exists, the ref count will be > 1 after this terminal is added
       final isExistingConnection =
           TerminalConnectionManager.hasConnection(widget.id) &&
-              TerminalConnectionManager.getTerminalCount(widget.id) > 1;
+          TerminalConnectionManager.getTerminalCount(widget.id) > 1;
 
       if (!isExistingConnection) {
         // First terminal - show loading dialog, wait for onReady
-        _ffi.dialogManager
-            .showLoading(translate('Connecting...'), onCancel: closeConnection);
+        _ffi.dialogManager.showLoading(
+          translate('Connecting...'),
+          onCancel: closeConnection,
+        );
       } else {
         // Additional terminal - connection already established
         // Open the terminal directly
@@ -152,7 +159,10 @@ class _TerminalPageState extends State<TerminalPage>
     // Use post-frame callback to ensure widget is fully laid out in focus tree
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // Re-check conditions after frame: mounted, focusable, still selected, not already focused
-      if (!mounted || !_terminalFocusNode.canRequestFocus || _terminalFocusNode.hasFocus) return;
+      if (!mounted ||
+          !_terminalFocusNode.canRequestFocus ||
+          _terminalFocusNode.hasFocus)
+        return;
       final state = widget.tabController.state.value;
       if (state.selected >= 0 && state.selected < state.tabs.length) {
         if (state.tabs[state.selected].key == widget.tabKey) {
@@ -194,33 +204,43 @@ class _TerminalPageState extends State<TerminalPage>
     super.build(context);
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final heightPx = constraints.maxHeight;
-          return TerminalView(
-            _terminalModel.terminal,
-            controller: _terminalModel.terminalController,
-            focusNode: _terminalFocusNode,
-            // Note: autofocus is not used here because focus is managed manually
-            // via _onTabStateChanged() to handle tab switching properly.
-            backgroundOpacity: 0.7,
-            padding: _calculatePadding(heightPx),
-            onSecondaryTapDown: (details, offset) async {
-              final selection = _terminalModel.terminalController.selection;
-              if (selection != null) {
-                final text = _terminalModel.terminal.buffer.getText(selection);
-                _terminalModel.terminalController.clearSelection();
-                await Clipboard.setData(ClipboardData(text: text));
-              } else {
-                final data = await Clipboard.getData('text/plain');
-                final text = data?.text;
-                if (text != null) {
-                  _terminalModel.terminal.paste(text);
-                }
-              }
-            },
-          );
-        },
+      body: Column(
+        children: [
+          Container(height: 3, color: Theme.of(context).colorScheme.primary),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final heightPx = constraints.maxHeight;
+                return TerminalView(
+                  _terminalModel.terminal,
+                  controller: _terminalModel.terminalController,
+                  focusNode: _terminalFocusNode,
+                  // Note: autofocus is not used here because focus is managed manually
+                  // via _onTabStateChanged() to handle tab switching properly.
+                  backgroundOpacity: 0.7,
+                  padding: _calculatePadding(heightPx),
+                  onSecondaryTapDown: (details, offset) async {
+                    final selection =
+                        _terminalModel.terminalController.selection;
+                    if (selection != null) {
+                      final text = _terminalModel.terminal.buffer.getText(
+                        selection,
+                      );
+                      _terminalModel.terminalController.clearSelection();
+                      await Clipboard.setData(ClipboardData(text: text));
+                    } else {
+                      final data = await Clipboard.getData('text/plain');
+                      final text = data?.text;
+                      if (text != null) {
+                        _terminalModel.terminal.paste(text);
+                      }
+                    }
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
