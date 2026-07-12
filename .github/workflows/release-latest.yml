@@ -365,7 +365,7 @@ jobs:
           lipo -create \
             target/aarch64-apple-darwin/release/liblibrustdesk.dylib \
             target/x86_64-apple-darwin/release/liblibrustdesk.dylib \
-            -output target/release/librustdesk.dylib
+            -output target/release/liblibrustdesk.dylib
           (cd flutter && FLUTTER_XCODE_ARCHS="arm64 x86_64" flutter build macos --release)
           mkdir -p artifacts
           ditto -c -k --keepParent flutter/build/macos/Build/Products/Release/Camellia.app artifacts/camellia-${{ needs.prepare.outputs.version }}-macos-universal.zip

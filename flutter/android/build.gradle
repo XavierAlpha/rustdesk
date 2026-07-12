@@ -9,6 +9,18 @@ allprojects {
 rootProject.buildDir = '../build'
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
+
+    // The maintained RustDesk fork of uni_links predates AGP's namespace
+    // requirement. Configure it from the consuming project so builds remain
+    // reproducible without modifying Flutter's shared pub cache.
+    if (project.name == 'uni_links') {
+        project.pluginManager.withPlugin('com.android.library') {
+            project.android.namespace = 'name.avioli.unilinks'
+            project.android.sourceSets.main.java.setSrcDirs([
+                rootProject.file('uni_links_v2/src/main/java')
+            ])
+        }
+    }
 }
 subprojects {
     project.evaluationDependsOn(':app')
