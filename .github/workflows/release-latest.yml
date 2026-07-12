@@ -252,6 +252,7 @@ jobs:
       - uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: C:\vcpkg
+      - uses: microsoft/setup-msbuild@v2
       - name: Build
         shell: bash
         env:
@@ -266,6 +267,27 @@ jobs:
           (cd flutter && flutter build windows --release)
           mkdir -p artifacts
           powershell -NoProfile -Command "Compress-Archive -Path 'flutter/build/windows/x64/runner/Release/*' -DestinationPath 'artifacts/camellia-${{ needs.prepare.outputs.version }}-windows-x64.zip' -Force"
+      - name: Build Windows installers
+        shell: pwsh
+        run: |
+          python -m pip install -r libs/portable/requirements.txt
+          python libs/portable/generate.py `
+            -f flutter/build/windows/x64/runner/Release `
+            -o libs/portable `
+            -e flutter/build/windows/x64/runner/Release/camellia.exe `
+            -t x86_64-pc-windows-msvc
+          Copy-Item target/x86_64-pc-windows-msvc/release/rustdesk-portable-packer.exe `
+            artifacts/camellia-${{ needs.prepare.outputs.version }}-windows-x64-portable.exe
+          Push-Location res/msi
+          python preprocess.py --arp `
+            -d ../../flutter/build/windows/x64/runner/Release `
+            --app-name Camellia --exe-name camellia `
+            -v "${{ needs.prepare.outputs.version }}"
+          nuget restore msi.sln
+          msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
+          $msi = Get-ChildItem ./Package/bin/*/Release/en-us/Package.msi | Select-Object -First 1
+          Copy-Item $msi.FullName ../../artifacts/camellia-${{ needs.prepare.outputs.version }}-windows-x64.msi
+          Pop-Location
       - uses: actions/upload-artifact@v7
         if: env.UPLOAD_ARTIFACT == 'true'
         with:
@@ -302,6 +324,7 @@ jobs:
       - uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: C:\vcpkg
+      - uses: microsoft/setup-msbuild@v2
       - name: Build
         shell: bash
         env:
@@ -318,6 +341,27 @@ jobs:
           (cd flutter && flutter.bat build windows --release)
           mkdir -p artifacts
           powershell -NoProfile -Command "Compress-Archive -Path 'flutter/build/windows/arm64/runner/Release/*' -DestinationPath 'artifacts/camellia-${{ needs.prepare.outputs.version }}-windows-arm64.zip' -Force"
+      - name: Build Windows installers
+        shell: pwsh
+        run: |
+          python -m pip install -r libs/portable/requirements.txt
+          python libs/portable/generate.py `
+            -f flutter/build/windows/arm64/runner/Release `
+            -o libs/portable `
+            -e flutter/build/windows/arm64/runner/Release/camellia.exe `
+            -t aarch64-pc-windows-msvc
+          Copy-Item target/aarch64-pc-windows-msvc/release/rustdesk-portable-packer.exe `
+            artifacts/camellia-${{ needs.prepare.outputs.version }}-windows-arm64-portable.exe
+          Push-Location res/msi
+          python preprocess.py --arp `
+            -d ../../flutter/build/windows/arm64/runner/Release `
+            --app-name Camellia --exe-name camellia `
+            -v "${{ needs.prepare.outputs.version }}"
+          nuget restore msi.sln
+          msbuild msi.sln -p:Configuration=Release -p:Platform=ARM64 /p:TargetVersion=Windows10
+          $msi = Get-ChildItem ./Package/bin/*/Release/en-us/Package.msi | Select-Object -First 1
+          Copy-Item $msi.FullName ../../artifacts/camellia-${{ needs.prepare.outputs.version }}-windows-arm64.msi
+          Pop-Location
       - uses: actions/upload-artifact@v7
         if: env.UPLOAD_ARTIFACT == 'true'
         with:
@@ -369,6 +413,12 @@ jobs:
           (cd flutter && FLUTTER_XCODE_ARCHS="arm64 x86_64" flutter build macos --release)
           mkdir -p artifacts
           ditto -c -k --keepParent flutter/build/macos/Build/Products/Release/Camellia.app artifacts/camellia-${{ needs.prepare.outputs.version }}-macos-universal.zip
+          dmg_root="$RUNNER_TEMP/camellia-dmg"
+          rm -rf "$dmg_root"
+          mkdir -p "$dmg_root"
+          cp -R flutter/build/macos/Build/Products/Release/Camellia.app "$dmg_root/"
+          ln -s /Applications "$dmg_root/Applications"
+          hdiutil create -volname Camellia -srcfolder "$dmg_root" -ov -format UDZO artifacts/camellia-${{ needs.prepare.outputs.version }}-macos-universal.dmg
       - uses: actions/upload-artifact@v7
         if: env.UPLOAD_ARTIFACT == 'true'
         with:
@@ -388,11 +438,15 @@ jobs:
             runner: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             vcpkg_triplet: x64-linux
+            deb_arch: amd64
+            appimage_arch: x86_64
             enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_linux_x64) }}
           - arch: arm64
             runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             vcpkg_triplet: arm64-linux
+            deb_arch: arm64
+            appimage_arch: aarch64
             enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_linux_arm64) }}
     runs-on: ${{ matrix.runner }}
     steps:
@@ -458,11 +512,19 @@ jobs:
           mkdir -p artifacts/camellia-${{ needs.prepare.outputs.version }}-linux-${{ matrix.arch }}
           cp -R flutter/build/linux/*/release/bundle/* artifacts/camellia-${{ needs.prepare.outputs.version }}-linux-${{ matrix.arch }}/
           tar -C artifacts -czf artifacts/camellia-${{ needs.prepare.outputs.version }}-linux-${{ matrix.arch }}.tar.gz camellia-${{ needs.prepare.outputs.version }}-linux-${{ matrix.arch }}
+          bash .github/scripts/package-linux.sh \
+            "${{ needs.prepare.outputs.version }}" \
+            "${{ matrix.arch }}" \
+            "${{ matrix.deb_arch }}" \
+            "${{ matrix.appimage_arch }}"
       - uses: actions/upload-artifact@v7
         if: ${{ matrix.enabled && env.UPLOAD_ARTIFACT == 'true' }}
         with:
           name: camellia-${{ needs.prepare.outputs.version }}-linux-${{ matrix.arch }}
-          path: artifacts/*.tar.gz
+          path: |
+            artifacts/*.tar.gz
+            artifacts/*.deb
+            artifacts/*.AppImage
           if-no-files-found: error
 
   build_android_arm64:
@@ -590,13 +652,21 @@ jobs:
           cp target/aarch64-apple-ios/release/liblibrustdesk.a flutter/ios/Runner/librustdesk.a
           (cd flutter && flutter build ipa --release --no-codesign)
           mkdir -p artifacts
-          cp -R flutter/build/ios/archive/*.xcarchive artifacts/ || true
+          archive="$(find flutter/build/ios/archive -maxdepth 1 -name '*.xcarchive' -print -quit)"
+          test -n "$archive"
+          ditto -c -k --keepParent "$archive" artifacts/camellia-${{ needs.prepare.outputs.version }}-ios-xcarchive.zip
+          app="$(find "$archive/Products/Applications" -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$app"
+          ipa_root="$RUNNER_TEMP/camellia-ipa"
+          mkdir -p "$ipa_root/Payload"
+          cp -R "$app" "$ipa_root/Payload/"
+          (cd "$ipa_root" && zip -qry "$GITHUB_WORKSPACE/artifacts/camellia-${{ needs.prepare.outputs.version }}-ios-unsigned.ipa" Payload)
       - uses: actions/upload-artifact@v7
         if: env.UPLOAD_ARTIFACT == 'true'
         with:
           name: camellia-${{ needs.prepare.outputs.version }}-ios
-          path: artifacts
-          if-no-files-found: warn
+          path: artifacts/*
+          if-no-files-found: error
 
   build_web:
     name: Web
@@ -628,6 +698,7 @@ jobs:
           ./flutter/web/tools/build_web.sh --mode release
           mkdir -p artifacts
           tar -C flutter/build -czf artifacts/camellia-${{ needs.prepare.outputs.version }}-web.tar.gz web
+          (cd flutter/build && zip -qry "$GITHUB_WORKSPACE/artifacts/camellia-${{ needs.prepare.outputs.version }}-web.zip" web)
       - uses: actions/upload-artifact@v7
         if: env.UPLOAD_ARTIFACT == 'true'
         with:
