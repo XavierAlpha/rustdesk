@@ -1245,15 +1245,18 @@ impl<T: InvokeUiSession> Remote<T> {
                 auto_fps = 1;
             }
             if Some(auto_fps) != last_auto_fps {
+                // Report this as the automatic cap, not as a user preference:
+                // custom_fps carries what the user chose, and the peer already
+                // takes the lower of the two. Sending the decode-derived value
+                // through custom_fps would overwrite that choice for the rest of
+                // the session, so a moment of slow decoding would permanently
+                // lower the ceiling the user asked for.
                 let mut misc = Misc::new();
-                misc.set_option(OptionMessage {
-                    custom_fps: auto_fps as _,
-                    ..Default::default()
-                });
+                misc.set_auto_adjust_fps(auto_fps as _);
                 let mut msg = Message::new();
                 msg.set_misc(misc);
                 self.sender.send(Data::Message(msg)).ok();
-                log::info!("Set fps to {}", auto_fps);
+                log::info!("Set auto adjust fps to {}", auto_fps);
                 self.handler.lc.write().unwrap().last_auto_fps = Some(auto_fps);
             }
         }

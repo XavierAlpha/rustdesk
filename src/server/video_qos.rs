@@ -88,7 +88,11 @@ impl UserDelay {
 // User session data structure
 #[derive(Default, Debug, Clone)]
 struct UserData {
-    auto_adjust_fps: Option<u32>, // reserve for compatibility
+    /// Cap the viewer derived from how fast it can actually decode. Kept apart
+    /// from `custom_fps` so a slow moment never rewrites the user's own choice;
+    /// the effective rate is the lower of the two.
+    auto_adjust_fps: Option<u32>,
+    /// Frame rate the user asked for.
     custom_fps: Option<u32>,
     quality: Option<(i64, Quality)>, // (time, quality)
     delay: UserDelay,
@@ -596,4 +600,66 @@ impl RttCalculator {
         }
         None
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn qos_with_user(id: i32) -> VideoQoS {
+        let mut qos = VideoQoS::default();
+        qos.on_connection_open(id);
+        qos
+    }
+
+    #[test]
+    fn automatic_cap_does_not_overwrite_the_user_choice() {
+        let mut qos = qos_with_user(1);
+        qos.user_custom_fps(1, 90);
+        assert_eq!(qos.highest_fps(), 90);
+
+        // A slow decoder reports a lower ceiling ...
+        qos.user_auto_adjust_fps(1, 24);
+        assert_eq!(qos.highest_fps(), 24);
+
+        // ... and once it recovers, the user's own setting is still there.
+        qos.user_auto_adjust_fps(1, 120);
+        assert_eq!(qos.highest_fps(), 90);
+    }
+
+    #[test]
+    fn the_slowest_viewer_sets_the_pace() {
+        let mut qos = qos_with_user(1);
+        qos.on_connection_open(2);
+        qos.user_custom_fps(1, 60);
+        qos.user_custom_fps(2, 30);
+        assert_eq!(qos.highest_fps(), 30);
+    }
+
+    #[test]
+    fn out_of_range_frame_rates_are_ignored() {
+        let mut qos = qos_with_user(1);
+        qos.user_custom_fps(1, 60);
+        qos.user_custom_fps(1, MAX_FPS + 1);
+        qos.user_custom_fps(1, 0);
+        assert_eq!(qos.highest_fps(), 60);
+    }
+
+    #[test]
+    fn bitrate_ratio_follows_the_frame_rate() {
+        let mut qos = qos_with_user(1);
+        qos.ratio = BR_BALANCED;
+
+        qos.fps = REFERENCE_FPS_FOR_TEST;
+        let at_reference = qos.ratio();
+        qos.fps = REFERENCE_FPS_FOR_TEST * 4;
+        let at_quadruple = qos.ratio();
+
+        // More frames must buy more bandwidth, or per-frame detail collapses ...
+        assert!(at_quadruple > at_reference);
+        // ... but not proportionally, since neighbouring frames are similar.
+        assert!(at_quadruple < at_reference * 4.0);
+    }
+
+    const REFERENCE_FPS_FOR_TEST: u32 = 30;
 }
