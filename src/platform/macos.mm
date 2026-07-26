@@ -12,12 +12,8 @@
 #include <string>
 
 extern "C" bool CanUseNewApiForScreenCaptureCheck() {
-    #ifdef NO_InputMonitoringAuthStatus
-    return false;
-    #else
     NSOperatingSystemVersion version = [[NSProcessInfo processInfo] operatingSystemVersion];
     return version.majorVersion >= 11;
-    #endif
 }
 
 extern "C" uint32_t majorVersion() {
@@ -26,24 +22,17 @@ extern "C" uint32_t majorVersion() {
 }
 
 extern "C" bool IsCanScreenRecording(bool prompt) {
-    #ifdef NO_InputMonitoringAuthStatus
-    return false;
-    #else
     bool res = CGPreflightScreenCaptureAccess();
     if (!res && prompt) {
         CGRequestScreenCaptureAccess();
     }
     return res;
-    #endif
 }
 
 
 // https://github.com/codebytere/node-mac-permissions/blob/main/permissions.mm
 
 extern "C" bool InputMonitoringAuthStatus(bool prompt) {
-    #ifdef NO_InputMonitoringAuthStatus
-    return true;
-    #else
     if (floor(NSAppKitVersionNumber) >= NSAppKitVersionNumber10_15) {
         IOHIDAccessType theType = IOHIDCheckAccess(kIOHIDRequestTypeListenEvent);
         NSLog(@"IOHIDCheckAccess = %d, kIOHIDAccessTypeGranted = %d", theType, kIOHIDAccessTypeGranted);
@@ -72,7 +61,6 @@ extern "C" bool InputMonitoringAuthStatus(bool prompt) {
         return true;
     }
     return false;
-    #endif
 }
 
 extern "C" bool Elevate(char* process, char** args) {

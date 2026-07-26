@@ -11,14 +11,10 @@ fn build_windows() {
 #[cfg(target_os = "macos")]
 fn build_mac() {
     let file = "src/platform/macos.mm";
-    let mut b = cc::Build::new();
-    if let Ok(os_version::OsVersion::MacOS(v)) = os_version::detect() {
-        let v = v.version;
-        if v.contains("10.14") {
-            b.flag("-DNO_InputMonitoringAuthStatus=1");
-        }
-    }
-    b.flag("-std=c++17").file(file).compile("macos");
+    cc::Build::new()
+        .flag("-std=c++17")
+        .file(file)
+        .compile("macos");
     println!("cargo:rerun-if-changed={}", file);
 }
 
