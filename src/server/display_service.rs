@@ -110,9 +110,8 @@ fn refresh_wayland_uinput_rect_if_changed() {
     // path needs the current per-display geometry to correct coordinates.
     let drifted = {
         let mut layout = WAYLAND_LAYOUT.lock().unwrap();
-        let drifted = !layout.baseline.is_empty()
-            && !live_rects.is_empty()
-            && layout.baseline != live_rects;
+        let drifted =
+            !layout.baseline.is_empty() && !live_rects.is_empty() && layout.baseline != live_rects;
         layout.live = live_rects;
         drifted
     };

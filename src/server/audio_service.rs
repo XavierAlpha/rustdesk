@@ -79,16 +79,34 @@ pub fn restart() {
 mod pa_impl {
     use super::*;
 
-    // SAFETY: constrains of hbb_common::mem::aligned_u8_vec must be held
-    unsafe fn align_to_32(data: Vec<u8>) -> Vec<u8> {
+    /// Audio samples are reinterpreted as `f32`, so the backing buffer must be
+    /// 4-byte aligned. Copying into a plain `Vec<u8>` would drop that guarantee,
+    /// hence the owned wrapper that keeps whichever allocation is already aligned.
+    enum Aligned32 {
+        /// The incoming buffer already satisfied the alignment requirement.
+        Native(Vec<u8>),
+        Realigned(hbb_common::mem::AlignedU8Vec),
+    }
+
+    impl std::ops::Deref for Aligned32 {
+        type Target = [u8];
+
+        fn deref(&self) -> &Self::Target {
+            match self {
+                Self::Native(data) => data,
+                Self::Realigned(data) => data,
+            }
+        }
+    }
+
+    fn align_to_32(data: Vec<u8>) -> Aligned32 {
         if (data.as_ptr() as usize & 3) == 0 {
-            return data;
+            return Aligned32::Native(data);
         }
 
-        let mut buf = vec![];
-        buf = unsafe { hbb_common::mem::aligned_u8_vec(data.len(), 4) };
+        let mut buf = hbb_common::mem::aligned_u8_vec(data.len(), 4);
         buf.extend_from_slice(data.as_ref());
-        buf
+        Aligned32::Realigned(buf)
     }
 
     #[tokio::main(flavor = "current_thread")]
@@ -131,23 +149,25 @@ mod pa_impl {
                     continue;
                 }
 
-                let data = unsafe { align_to_32(data.into()) };
+                let aligned = align_to_32(data.into());
                 let data = unsafe {
-                    std::slice::from_raw_parts::<f32>(data.as_ptr() as _, data.len() / 4)
+                    std::slice::from_raw_parts::<f32>(aligned.as_ptr() as _, aligned.len() / 4)
                 };
                 send_f32(data, &mut encoder, &sp);
             }
 
             #[cfg(target_os = "android")]
             if scrap::android::ffi::get_audio_raw(&mut android_data, &mut vec![]).is_some() {
+                let aligned = align_to_32(std::mem::take(&mut android_data));
                 let data = unsafe {
-                    android_data = align_to_32(android_data);
-                    std::slice::from_raw_parts::<f32>(
-                        android_data.as_ptr() as _,
-                        android_data.len() / 4,
-                    )
+                    std::slice::from_raw_parts::<f32>(aligned.as_ptr() as _, aligned.len() / 4)
                 };
                 send_f32(data, &mut encoder, &sp);
+                // Give the scratch buffer back when it was already aligned, so the
+                // common path keeps reusing one allocation.
+                if let Aligned32::Native(data) = aligned {
+                    android_data = data;
+                }
             } else {
                 hbb_common::sleep(0.1).await;
             }

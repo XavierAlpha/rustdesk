@@ -30,6 +30,8 @@ use hbb_common::{
     tokio_util::codec::Framed,
     ResultType,
 };
+#[cfg(target_os = "macos")]
+use ipc_auth::authorize_user_server_process;
 #[cfg(windows)]
 pub(crate) use ipc_auth::authorize_windows_portable_service_ipc_connection;
 #[cfg(windows)]
@@ -38,8 +40,6 @@ pub(crate) use ipc_auth::ensure_peer_executable_matches_current_by_pid_opt;
 pub(crate) use ipc_auth::log_rejected_windows_ipc_connection;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use ipc_auth::{active_uid, authorize_service_scoped_ipc_connection};
-#[cfg(target_os = "macos")]
-use ipc_auth::authorize_user_server_process;
 #[cfg(windows)]
 use ipc_auth::{
     authorize_windows_main_ipc_connection, portable_service_listener_security_attributes,
@@ -1341,9 +1341,7 @@ pub async fn connect_for_uid(
     let path = Config::ipc_path_for_uid(uid, postfix);
     let conn = connect_with_path(ms_timeout, &path).await?;
     #[cfg(target_os = "macos")]
-    if postfix.is_empty()
-        && !authorize_user_server_process(conn.peer_uid(), conn.peer_pid(), uid)
-    {
+    if postfix.is_empty() && !authorize_user_server_process(conn.peer_uid(), conn.peer_pid(), uid) {
         bail!("Rejected user IPC peer for uid {}", uid);
     }
     Ok(conn)

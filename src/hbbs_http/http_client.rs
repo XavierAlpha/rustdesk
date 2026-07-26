@@ -161,31 +161,3 @@ pub fn create_http_client_with_url(url: &str) -> SyncClient {
     }
     client
 }
-
-pub async fn create_http_client_async_with_url(url: &str) -> AsyncClient {
-    let proxy_conf = Config::get_socks();
-    let tls_url = get_url_for_tls(url, &proxy_conf);
-    let tls_type = get_cached_tls_type(tls_url);
-    let is_tls_type_cached = tls_type.is_some();
-    let tls_type = tls_type.unwrap_or(TlsType::Rustls);
-    let client = create_http_client_async_with_tls(tls_type);
-    if is_tls_type_cached {
-        return client;
-    }
-    if let Err(e) = client.head(url).send().await {
-        log::error!(
-            "Failed to connect to server {} with {:?}, err: {:?}.",
-            tls_url,
-            tls_type,
-            e
-        );
-    } else {
-        log::info!(
-            "Successfully connected to server {} with {:?}",
-            tls_url,
-            tls_type
-        );
-        upsert_tls_cache(tls_url, tls_type);
-    }
-    client
-}

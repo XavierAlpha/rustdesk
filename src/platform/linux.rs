@@ -646,14 +646,9 @@ fn try_start_server_(desktop: Option<&Desktop>) -> ResultType<Option<Child>> {
             if !desktop.dbus.is_empty() {
                 envs.push(("DBUS_SESSION_BUS_ADDRESS", desktop.dbus.clone()));
             }
-            if let Ok(forced_display_server) =
-                std::env::var("RUSTDESK_FORCED_DISPLAY_SERVER")
-            {
+            if let Ok(forced_display_server) = std::env::var("RUSTDESK_FORCED_DISPLAY_SERVER") {
                 if !forced_display_server.is_empty() {
-                    envs.push((
-                        "RUSTDESK_FORCED_DISPLAY_SERVER",
-                        forced_display_server,
-                    ));
+                    envs.push(("RUSTDESK_FORCED_DISPLAY_SERVER", forced_display_server));
                 }
             }
             envs.push((

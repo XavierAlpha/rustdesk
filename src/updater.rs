@@ -428,7 +428,11 @@ pub fn has_no_active_conns_ipc() -> bool {
         // Check each user's server — fail closed if any has active connections
         for uid in uids {
             if let Ok(mut conn) = crate::ipc::connect_for_uid(1000, uid, "").await {
-                if conn.send(&crate::ipc::Data::HasNoActiveConns(None)).await.is_ok() {
+                if conn
+                    .send(&crate::ipc::Data::HasNoActiveConns(None))
+                    .await
+                    .is_ok()
+                {
                     match conn.next_timeout(1000).await {
                         Ok(Some(crate::ipc::Data::HasNoActiveConns(Some(true)))) => {
                             // Explicit no active connections — safe to continue
@@ -465,11 +469,7 @@ fn wait_for_failed_update_retry() {
     let remaining = std::fs::metadata(marker)
         .and_then(|metadata| metadata.modified())
         .ok()
-        .and_then(|modified| {
-            std::time::SystemTime::now()
-                .duration_since(modified)
-                .ok()
-        })
+        .and_then(|modified| std::time::SystemTime::now().duration_since(modified).ok())
         .map(|elapsed| RETRY_INTERVAL.saturating_sub(elapsed))
         .unwrap_or(RETRY_INTERVAL);
     if !remaining.is_zero() {
@@ -584,10 +584,22 @@ pub fn check_update_as_root() -> ResultType<bool> {
         return Ok(false);
     }
     let download_url = update_url.replace("tag", "download");
-    let version = download_url.split('/').last().unwrap_or_default().to_string();
-    let arch = if std::env::consts::ARCH == "aarch64" { "aarch64" } else { "x86_64" };
+    let version = download_url
+        .split('/')
+        .last()
+        .unwrap_or_default()
+        .to_string();
+    let arch = if std::env::consts::ARCH == "aarch64" {
+        "aarch64"
+    } else {
+        "x86_64"
+    };
     let dmg_url = format!("{}/rustdesk-{}-{}.dmg", download_url, version, arch);
-    log::info!("[root-update] New version: {}, downloading from {}", version, dmg_url);
+    log::info!(
+        "[root-update] New version: {}, downloading from {}",
+        version,
+        dmg_url
+    );
     // Validate URL against GitHub release allowlist before downloading as root
     let Some(file_path_validated) = get_update_download_file_from_url(&dmg_url) else {
         bail!("[root-update] URL failed allowlist check: {}", dmg_url);
@@ -631,15 +643,24 @@ pub fn check_update_as_root() -> ResultType<bool> {
             .write(true)
             .create_new(true)
             .open(&file_path)
-            .map_err(|e| { let _ = std::fs::remove_dir_all(&private_tmp); e })?;
-        std::io::copy(&mut response, &mut file)
-            .map_err(|e| { let _ = std::fs::remove_dir_all(&private_tmp); e })?;
+            .map_err(|e| {
+                let _ = std::fs::remove_dir_all(&private_tmp);
+                e
+            })?;
+        std::io::copy(&mut response, &mut file).map_err(|e| {
+            let _ = std::fs::remove_dir_all(&private_tmp);
+            e
+        })?;
     }
     log::info!("[root-update] Downloaded to {}", tmp_path);
     // Recheck active sessions before installing — download can take minutes
     if !has_no_active_conns_ipc() {
         if let Err(e) = std::fs::remove_dir_all(&private_tmp) {
-            log::warn!("[root-update] Failed to remove temp dir {}: {}", private_tmp, e);
+            log::warn!(
+                "[root-update] Failed to remove temp dir {}: {}",
+                private_tmp,
+                e
+            );
         }
         bail!("[root-update] Active session started during download, deferring update.");
     }
@@ -647,7 +668,11 @@ pub fn check_update_as_root() -> ResultType<bool> {
     let result = crate::platform::update_from_dmg_as_root(&tmp_path, &version);
     // Clean up download directory
     if let Err(e) = std::fs::remove_dir_all(&private_tmp) {
-        log::warn!("[root-update] Failed to remove temp dir {}: {}", private_tmp, e);
+        log::warn!(
+            "[root-update] Failed to remove temp dir {}: {}",
+            private_tmp,
+            e
+        );
     }
     result.map(|_| true)
 }
