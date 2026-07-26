@@ -1,16 +1,22 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:image/image.dart' as image;
 
-const _plate = (27, 29, 35);
-const _plateBorder = (57, 60, 69);
-const _indigo = (115, 120, 242);
-const _blue = (91, 148, 232);
-const _cyan = (67, 184, 209);
-const _ivory = (247, 248, 250);
-const _petalColors = [_indigo, _blue, _cyan];
+const _lightPlate = (241, 246, 249);
+const _lightPlateBorder = (196, 210, 219);
+const _darkPlate = (24, 33, 45);
+const _darkPlateBorder = (53, 69, 86);
+const _amber = (243, 163, 58);
+const _orange = (240, 128, 60);
+const _coral = (237, 106, 82);
+const _rose = (216, 78, 126);
+const _ember = (227, 100, 72);
+const _ivory = (240, 250, 252);
+const _darkInk = (19, 37, 54);
+const _bladeColors = [_amber, _orange, _coral, _rose, _ember];
 
 image.ColorRgba8 _color((int, int, int) value, [int alpha = 255]) =>
     image.ColorRgba8(value.$1, value.$2, value.$3, alpha);
@@ -23,28 +29,29 @@ double _cubic(double a, double b, double c, double d, double t) {
       t * t * t * d;
 }
 
-List<(double, double)> _petal(double radius) {
+List<(double, double)> _blade(double radius) {
   const segments = 24;
   final points = <(double, double)>[];
   for (var index = 0; index <= segments; index++) {
     final t = index / segments;
     points.add((
-      _cubic(-0.12, -0.48, -0.45, 0, t) * radius,
-      _cubic(-0.08, -0.28, -0.70, -0.96, t) * radius,
+      _cubic(-0.10, -0.36, -0.30, 0.18, t) * radius,
+      _cubic(-0.04, -0.18, -0.66, -0.99, t) * radius,
     ));
   }
   for (var index = 1; index <= segments; index++) {
     final t = index / segments;
     points.add((
-      _cubic(0, 0.45, 0.48, 0.12, t) * radius,
-      _cubic(-0.96, -0.70, -0.28, -0.08, t) * radius,
+      _cubic(0.18, 0.36, 0.34, 0.10, t) * radius,
+      _cubic(-0.99, -0.68, -0.30, -0.01, t) * radius,
     ));
   }
   for (var index = 1; index <= 8; index++) {
     final t = index / 8;
     points.add((
-      (0.12 * (1 - t) - 0.12 * t) * radius,
-      (-0.08 * (1 - t) + (-0.08 + 0.10 * math.sin(math.pi * t)) * t) * radius,
+      ((1 - t) * (1 - t) * 0.10 - 0.10 * t * t) * radius,
+      ((1 - t) * (1 - t) * -0.01 + 2 * (1 - t) * t * 0.08 - 0.04 * t * t) *
+          radius,
     ));
   }
   return points;
@@ -71,19 +78,20 @@ void _drawMark(
   required double radius,
   bool monochrome = false,
   bool white = false,
+  bool darkSurface = true,
 }) {
   final mono = white ? (255, 255, 255) : (0, 0, 0);
-  final petal = _petal(radius);
-  for (var index = 0; index < 6; index++) {
+  final blade = _blade(radius);
+  for (var index = 0; index < 5; index++) {
     image.fillPolygon(
       target,
       vertices: _rotatePoints(
-        petal,
-        angle: index * math.pi / 3,
+        blade,
+        angle: index * math.pi * 2 / 5,
         cx: cx,
         cy: cy,
       ),
-      color: _color(monochrome ? mono : _petalColors[index % 3]),
+      color: _color(monochrome ? mono : _bladeColors[index]),
     );
   }
   final hub = (radius * 0.245).round();
@@ -104,7 +112,7 @@ void _drawMark(
       x: cx.round(),
       y: cy.round(),
       radius: hub,
-      color: _color(_plate),
+      color: _color(darkSurface ? _darkPlate : _lightPlate),
       antialias: true,
     );
     image.fillCircle(
@@ -112,9 +120,21 @@ void _drawMark(
       x: cx.round(),
       y: cy.round(),
       radius: aperture,
-      color: _color(_ivory),
+      color: _color(darkSurface ? _ivory : _darkInk),
       antialias: true,
     );
+    final ringRadius = (hub * 1.12).round();
+    final ringWidth = math.max(2, (radius * 0.025).round());
+    for (var offset = 0; offset < ringWidth; offset++) {
+      image.drawCircle(
+        target,
+        x: cx.round(),
+        y: cy.round(),
+        radius: ringRadius - offset,
+        color: _color(_amber, 220),
+        antialias: true,
+      );
+    }
   }
 }
 
@@ -129,7 +149,11 @@ void _clearCircle(image.Image target, int cx, int cy, int radius) {
   }
 }
 
-image.Image _renderAppIcon(int size, {bool transparentCorners = false}) {
+image.Image _renderAppIcon(
+  int size, {
+  bool transparentCorners = false,
+  bool dark = false,
+}) {
   final renderSize = size * 2;
   final icon = image.Image(
     width: renderSize,
@@ -145,7 +169,7 @@ image.Image _renderAppIcon(int size, {bool transparentCorners = false}) {
     x2: renderSize - margin - 1,
     y2: renderSize - margin - 1,
     radius: (224 * scale).round(),
-    color: _color(_plate),
+    color: _color(dark ? _darkPlate : _lightPlate),
   );
   image.drawRect(
     icon,
@@ -154,10 +178,16 @@ image.Image _renderAppIcon(int size, {bool transparentCorners = false}) {
     x2: renderSize - margin - 1 - (10 * scale).round(),
     y2: renderSize - margin - 1 - (10 * scale).round(),
     radius: (214 * scale).round(),
-    color: _color(_plateBorder, 210),
+    color: _color(dark ? _darkPlateBorder : _lightPlateBorder, 220),
     thickness: math.max(2, (4 * scale).round()),
   );
-  _drawMark(icon, cx: renderSize / 2, cy: renderSize / 2, radius: 372 * scale);
+  _drawMark(
+    icon,
+    cx: renderSize / 2,
+    cy: renderSize / 2,
+    radius: 372 * scale,
+    darkSurface: dark,
+  );
   return image.copyResize(
     icon,
     width: size,
@@ -275,19 +305,21 @@ void _writeIcns(String path, image.Image source) {
 
 const _markSvg =
     '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" rx="224" fill="#1b1d23"/>
-  <rect x="18" y="18" width="988" height="988" rx="206" fill="none" stroke="#393c45" stroke-width="12"/>
-  <defs><path id="petal" d="M467 482C332 405 343 247 512 154C681 247 692 405 557 482Q512 522 467 482Z"/></defs>
-  <use href="#petal" fill="#7378f2"/><use href="#petal" fill="#5b94e8" transform="rotate(60 512 512)"/><use href="#petal" fill="#43b8d1" transform="rotate(120 512 512)"/><use href="#petal" fill="#7378f2" transform="rotate(180 512 512)"/><use href="#petal" fill="#5b94e8" transform="rotate(240 512 512)"/><use href="#petal" fill="#43b8d1" transform="rotate(300 512 512)"/>
-  <circle cx="512" cy="512" r="91" fill="#1b1d23"/><circle cx="512" cy="512" r="49" fill="#f7f8fa"/>
+  <rect width="1024" height="1024" rx="224" fill="#f1f6f9"/>
+  <rect x="18" y="18" width="988" height="988" rx="206" fill="none" stroke="#c4d2db" stroke-width="12"/>
+  <defs><path id="blade" d="M475 497C378 445 400 266 579 144C646 259 638 400 549 508Q512 542 475 497Z"/></defs>
+  <use href="#blade" fill="#f3a33a"/><use href="#blade" fill="#f0803c" transform="rotate(72 512 512)"/><use href="#blade" fill="#ed6a52" transform="rotate(144 512 512)"/><use href="#blade" fill="#d84e7e" transform="rotate(216 512 512)"/><use href="#blade" fill="#e36448" transform="rotate(288 512 512)"/>
+  <circle cx="512" cy="512" r="91" fill="#f1f6f9"/><circle cx="512" cy="512" r="49" fill="#132536"/>
+  <circle cx="512" cy="512" r="102" fill="none" stroke="#f3a33a" stroke-width="10"/>
 </svg>
 ''';
 
 const _faviconSvg =
     '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <rect width="128" height="128" rx="28" fill="#1b1d23"/>
-  <g transform="scale(.125)"><defs><path id="p" d="M467 482C332 405 343 247 512 154C681 247 692 405 557 482Q512 522 467 482Z"/></defs><use href="#p" fill="#7378f2"/><use href="#p" fill="#5b94e8" transform="rotate(60 512 512)"/><use href="#p" fill="#43b8d1" transform="rotate(120 512 512)"/><use href="#p" fill="#7378f2" transform="rotate(180 512 512)"/><use href="#p" fill="#5b94e8" transform="rotate(240 512 512)"/><use href="#p" fill="#43b8d1" transform="rotate(300 512 512)"/></g>
-  <circle cx="64" cy="64" r="11.4" fill="#1b1d23"/><circle cx="64" cy="64" r="6.1" fill="#f7f8fa"/>
+  <rect width="128" height="128" rx="28" fill="#f1f6f9"/>
+  <g transform="scale(.125)"><defs><path id="b" d="M475 497C378 445 400 266 579 144C646 259 638 400 549 508Q512 542 475 497Z"/></defs><use href="#b" fill="#f3a33a"/><use href="#b" fill="#f0803c" transform="rotate(72 512 512)"/><use href="#b" fill="#ed6a52" transform="rotate(144 512 512)"/><use href="#b" fill="#d84e7e" transform="rotate(216 512 512)"/><use href="#b" fill="#e36448" transform="rotate(288 512 512)"/></g>
+  <circle cx="64" cy="64" r="11.4" fill="#f1f6f9"/><circle cx="64" cy="64" r="6.1" fill="#132536"/>
+  <circle cx="64" cy="64" r="12.75" fill="none" stroke="#f3a33a" stroke-width="1.25"/>
 </svg>
 ''';
 
@@ -302,8 +334,37 @@ void _writeVectorAssets() {
   File('web/favicon.svg').writeAsStringSync(_faviconSvg);
 }
 
+void _writeAppleIconSet(String directory, image.Image source) {
+  final manifestFile = File('$directory/Contents.json');
+  if (!manifestFile.existsSync()) return;
+  final manifest = jsonDecode(manifestFile.readAsStringSync());
+  for (final entry in manifest['images'] as List<dynamic>) {
+    if (entry is! Map<String, dynamic>) continue;
+    final filename = entry['filename'];
+    final logicalSize = entry['size'];
+    final scaleText = entry['scale'];
+    if (filename is! String || logicalSize is! String || scaleText is! String) {
+      continue;
+    }
+    final points = double.tryParse(logicalSize.split('x').first);
+    final scale = double.tryParse(scaleText.replaceAll('x', ''));
+    if (points == null || scale == null) continue;
+    final pixels = (points * scale).round();
+    _writePng(
+      '$directory/$filename',
+      image.copyResize(
+        source,
+        width: pixels,
+        height: pixels,
+        interpolation: image.Interpolation.cubic,
+      ),
+    );
+  }
+}
+
 void main() {
   final app = _renderAppIcon(1024);
+  final darkApp = _renderAppIcon(1024, dark: true);
   final mac = _renderAppIcon(1024, transparentCorners: true);
   _writePng('../res/icon.png', app);
   _writePng('../res/mac-icon.png', mac);
@@ -313,7 +374,19 @@ void main() {
     _renderMark(1024, monochrome: true, white: true),
   );
   _writeIco('../res/icon.ico', app, [16, 20, 24, 32, 40, 48, 64, 128, 256]);
+  _writeIco('windows/runner/resources/app_icon.ico', app, [
+    16,
+    20,
+    24,
+    32,
+    40,
+    48,
+    64,
+    128,
+    256,
+  ]);
   _writeIcns('macos/Runner/AppIcon.icns', mac);
+  _writeAppleIconSet('ios/Runner/Assets.xcassets/AppIcon.appiconset', app);
 
   for (final size in [32, 64, 128]) {
     _writePng(
@@ -353,6 +426,24 @@ void main() {
       _renderMark(entry.value, monochrome: true, white: true),
     );
   }
+  const androidLegacyLauncherDensities = {
+    'mdpi': 48,
+    'hdpi': 72,
+    'xhdpi': 96,
+    'xxhdpi': 144,
+    'xxxhdpi': 192,
+  };
+  for (final entry in androidLegacyLauncherDensities.entries) {
+    _writePng(
+      'android/app/src/main/res/mipmap-${entry.key}/ic_launcher.png',
+      image.copyResize(
+        app,
+        width: entry.value,
+        height: entry.value,
+        interpolation: image.Interpolation.cubic,
+      ),
+    );
+  }
   const androidLauncherDensities = {
     'mdpi': 108,
     'hdpi': 162,
@@ -372,5 +463,12 @@ void main() {
     );
   }
   _writePng('assets/brand-mark.png', app);
+  _writePng('assets/brand-mark-dark.png', darkApp);
+  _writePng('web/favicon.png', image.copyResize(app, width: 32, height: 32));
+  for (final size in [192, 512]) {
+    final icon = image.copyResize(app, width: size, height: size);
+    _writePng('web/icons/Icon-$size.png', icon);
+    _writePng('web/icons/Icon-maskable-$size.png', icon);
+  }
   _writeVectorAssets();
 }
