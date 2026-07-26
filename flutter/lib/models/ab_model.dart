@@ -1026,22 +1026,24 @@ class Ab extends BaseAb {
 
   @override
   Future<bool> pullAbImpl({quiet = false}) async {
+    // Only adopt a result the server actually delivered. A transient failure
+    // used to publish the partial list anyway, and every caller persists what
+    // it sees, so one dropped request could blank the address book on screen
+    // and overwrite the offline cache with an empty book.
     bool ret = true;
     List<Peer> tmpPeers = [];
-    if (!await _fetchPeers(tmpPeers, quiet: quiet)) {
+    if (await _fetchPeers(tmpPeers, quiet: quiet)) {
+      peers.value = tmpPeers;
+    } else {
       ret = false;
     }
-    peers.value = tmpPeers;
     List<AbTag> tmpTags = [];
-    if (!await _fetchTags(tmpTags, quiet: quiet)) {
+    if (await _fetchTags(tmpTags, quiet: quiet)) {
+      tags.value = tmpTags.map((e) => e.name).toList();
+      tagColors.value = {for (final t in tmpTags) t.name: t.color};
+    } else {
       ret = false;
     }
-    tags.value = tmpTags.map((e) => e.name).toList();
-    Map<String, int> tmpTagColors = {};
-    for (var t in tmpTags) {
-      tmpTagColors[t.name] = t.color;
-    }
-    tagColors.value = tmpTagColors;
     return ret;
   }
 
@@ -1114,10 +1116,12 @@ class Ab extends BaseAb {
             '${translate('pull_ab_failed_tip')}: ${translate(err.toString())}';
       }
     } finally {
-      if (pullError.isNotEmpty) {
-        if (statusCode == 401) {
-          gFFI.userModel.reset(resetOther: true);
-        }
+      // An expired or revoked token has to sign the user out however the pull
+      // was started. Gating this on pullError skipped it for background pulls,
+      // which are the ones that run after every edit - so the session stayed
+      // half-alive, showing an empty book with no way back to the login form.
+      if (statusCode == 401) {
+        gFFI.userModel.reset(resetOther: true);
       }
     }
     return false;
@@ -1163,10 +1167,12 @@ class Ab extends BaseAb {
             '${translate('pull_ab_failed_tip')}: ${translate(err.toString())}';
       }
     } finally {
-      if (pullError.isNotEmpty) {
-        if (statusCode == 401) {
-          gFFI.userModel.reset(resetOther: true);
-        }
+      // An expired or revoked token has to sign the user out however the pull
+      // was started. Gating this on pullError skipped it for background pulls,
+      // which are the ones that run after every edit - so the session stayed
+      // half-alive, showing an empty book with no way back to the login form.
+      if (statusCode == 401) {
+        gFFI.userModel.reset(resetOther: true);
       }
     }
     return false;
