@@ -26,6 +26,36 @@
   - Mobile: `flutter/lib/mobile/`
   - Shared: `flutter/lib/common/` and `flutter/lib/models/`
 
+## Video Quality Model
+
+The encoder target is
+
+    base_bitrate(width, height) * Quality::ratio() * fps_bitrate_scale(fps)
+
+all defined in `libs/scrap/src/common/codec.rs`. `VideoQoS::ratio()`
+(`src/server/video_qos.rs`) applies the frame-rate term, so the adaptive control
+loop keeps reasoning in quality space alone.
+
+Two invariants to preserve when touching any of it:
+
+* **Bits are spent per frame.** A target that ignores frame rate divides the
+  same bandwidth across more frames, so quality silently collapses exactly where
+  the display is fastest. Any new rate path must keep the fps term.
+* **The quantizer must be allowed to spend what the rate controller grants.**
+  `calc_q_values` in `vpxcodec.rs` / `aom.rs` widens the quantizer window across
+  the whole reachable ratio range; capping it hands out bandwidth the encoder is
+  then forbidden to use.
+
+Changes here are measurable rather than a matter of taste. The harness in
+`libs/scrap/src/common/quality_harness.rs` encodes synthetic desktop content and
+reports encode/decode time, achieved bitrate, PSNR and SSIM:
+
+    cargo test -p scrap --features linux-pkg-config --release -- \
+        --ignored --nocapture bitrate_model_matrix
+
+Note `scrap` needs `--features linux-pkg-config` on a machine without
+`VCPKG_ROOT`.
+
 ## Rust Rules
 
 * Avoid `unwrap()` / `expect()` in production code.
