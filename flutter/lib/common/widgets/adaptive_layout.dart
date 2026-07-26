@@ -9,8 +9,14 @@ enum AppLayoutSize { compact, medium, expanded }
 class AppLayout {
   AppLayout._();
 
-  static const double compactBreakpoint = 600;
-  static const double expandedBreakpoint = 1024;
+  static const double compactBreakpoint = 720;
+  static const double expandedBreakpoint = 1200;
+
+  /// Width at which a two-pane home workspace becomes comfortable.
+  static const double splitBreakpoint = 960;
+
+  /// Width at which the navigation rail can afford inline labels.
+  static const double railExtendBreakpoint = 1440;
 
   static AppLayoutSize forWidth(double width) {
     if (width < compactBreakpoint) return AppLayoutSize.compact;

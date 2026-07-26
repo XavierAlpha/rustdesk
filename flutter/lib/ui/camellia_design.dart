@@ -2,22 +2,36 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 abstract final class CamelliaColors {
-  static const indigo = Color(0xFF4F46E5);
-  static const indigoStrong = Color(0xFF3730A3);
-  static const indigoSoft = Color(0xFFE8E7FF);
+  static const indigo = Color(0xFF5B5BD6);
+  static const indigoStrong = Color(0xFF3F3FA8);
+  static const indigoSoft = Color(0xFFE9E9FA);
 
-  // Compatibility names remain while feature widgets migrate to semantic
-  // roles. Product accents intentionally resolve to one indigo family.
+  // A restrained cool spectrum separates modes without turning every surface
+  // into a competing accent.
   static const coral = indigo;
   static const coralStrong = indigoStrong;
-  static const azure = indigo;
-  static const azureStrong = indigoStrong;
-  static const aqua = indigo;
-  static const aquaStrong = indigoStrong;
-  static const orchid = indigo;
+  static const azure = Color(0xFF287FC1);
+  static const azureStrong = Color(0xFF185A8D);
+  static const aqua = Color(0xFF178E88);
+  static const aquaStrong = Color(0xFF0E6864);
+  static const orchid = Color(0xFF725BB8);
   static const sun = Color(0xFFF0A202);
   static const sunStrong = Color(0xFF9A6200);
   static const leaf = Color(0xFF16A36A);
+
+  // Warm ramp reserved for the brand mark: the pinwheel stays colorful while
+  // the product UI keeps its cool functional accents.
+  static const brandAmber = Color(0xFFF3A33A);
+  static const brandEmber = Color(0xFFF0803C);
+  static const brandFlame = Color(0xFFED6A52);
+  static const brandRose = Color(0xFFD84E7E);
+  static const brandCoral = Color(0xFFE36448);
+  static const brandPlateLight = Color(0xFFF1F6F9);
+  static const brandPlateDark = Color(0xFF18212D);
+  static const brandPlateBorderLight = Color(0xFFC4D2DB);
+  static const brandPlateBorderDark = Color(0xFF354556);
+  static const brandHubLight = Color(0xFF132536);
+  static const brandHubDark = Color(0xFFF0FAFC);
 
   static const lightCanvas = Color(0xFFF6F7F9);
   static const lightSurface = Color(0xFFFFFFFF);
@@ -50,8 +64,9 @@ abstract final class CamelliaSpace {
 }
 
 abstract final class CamelliaRadius {
-  static const control = 6.0;
-  static const surface = 8.0;
+  static const control = 8.0;
+  static const surface = 12.0;
+  static const sheet = 16.0;
   static const status = 999.0;
 }
 
@@ -147,6 +162,7 @@ abstract final class CamelliaTheme {
       double size,
       FontWeight weight, {
       double height = 1.35,
+      double tracking = 0,
       Color? color,
     }) => TextStyle(
       fontFamily: font,
@@ -155,19 +171,21 @@ abstract final class CamelliaTheme {
       fontWeight: weight,
       height: height,
       color: color ?? text,
-      letterSpacing: 0,
+      letterSpacing: tracking,
     );
+    // Apple-inspired scale: bold-but-not-heavy titles with tightened tracking,
+    // regular body text with generous line height.
     final textTheme = TextTheme(
-      displaySmall: style(32, FontWeight.w800, height: 1.12),
-      headlineMedium: style(28, FontWeight.w800, height: 1.18),
-      headlineSmall: style(24, FontWeight.w700, height: 1.2),
-      titleLarge: style(20, FontWeight.w700, height: 1.24),
-      titleMedium: style(16, FontWeight.w700, height: 1.3),
-      titleSmall: style(14, FontWeight.w700),
+      displaySmall: style(32, FontWeight.w700, height: 1.12, tracking: -0.5),
+      headlineMedium: style(28, FontWeight.w700, height: 1.18, tracking: -0.4),
+      headlineSmall: style(24, FontWeight.w700, height: 1.2, tracking: -0.3),
+      titleLarge: style(20, FontWeight.w700, height: 1.24, tracking: -0.2),
+      titleMedium: style(16, FontWeight.w600, height: 1.3, tracking: -0.1),
+      titleSmall: style(14, FontWeight.w600),
       bodyLarge: style(16, FontWeight.w400, height: 1.45),
       bodyMedium: style(14, FontWeight.w400, height: 1.42),
       bodySmall: style(12, FontWeight.w400, height: 1.4, color: muted),
-      labelLarge: style(14, FontWeight.w700, height: 1.2),
+      labelLarge: style(14, FontWeight.w600, height: 1.2),
       labelMedium: style(12, FontWeight.w600, height: 1.2),
       labelSmall: style(11, FontWeight.w600, height: 1.2, color: muted),
     );
@@ -193,7 +211,7 @@ abstract final class CamelliaTheme {
       cardColor: surface,
       dividerColor: border,
       disabledColor: muted.withValues(alpha: 0.45),
-      focusColor: CamelliaColors.indigo.withValues(alpha: dark ? 0.28 : 0.18),
+      focusColor: CamelliaColors.azure.withValues(alpha: dark ? 0.28 : 0.18),
       hoverColor: primaryContainer.withValues(alpha: dark ? 0.72 : 0.64),
       highlightColor: primary.withValues(alpha: 0.10),
       splashColor: primary.withValues(alpha: 0.12),
@@ -241,7 +259,10 @@ abstract final class CamelliaTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(CamelliaRadius.control),
-          borderSide: BorderSide(color: CamelliaColors.indigo, width: 1.6),
+          borderSide: BorderSide(
+            color: dark ? const Color(0xFF5FA8DE) : CamelliaColors.azure,
+            width: 1.6,
+          ),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(CamelliaRadius.control),
@@ -365,7 +386,9 @@ abstract final class CamelliaTheme {
         showDragHandle: true,
         dragHandleColor: border,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(CamelliaRadius.sheet),
+          ),
         ),
       ),
       popupMenuTheme: PopupMenuThemeData(
@@ -608,6 +631,20 @@ class CamelliaSection extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
                 child: Row(
                   children: [
+                    if (accent != null)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: Container(
+                          width: 3.5,
+                          height: 18,
+                          decoration: BoxDecoration(
+                            color: accent,
+                            borderRadius: BorderRadius.circular(
+                              CamelliaRadius.status,
+                            ),
+                          ),
+                        ),
+                      ),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

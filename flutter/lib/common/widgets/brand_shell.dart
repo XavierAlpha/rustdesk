@@ -53,50 +53,59 @@ class _CamelliaBrandPainter extends CustomPainter {
     final side = math.min(size.width, size.height);
     final origin = Offset((size.width - side) / 2, (size.height - side) / 2);
     final dark = brightness == Brightness.dark;
-    final plate = dark ? const Color(0xFF24262D) : const Color(0xFF1B1D23);
+    final plate = dark
+        ? CamelliaColors.brandPlateDark
+        : CamelliaColors.brandPlateLight;
+    final plateBorder = dark
+        ? CamelliaColors.brandPlateBorderDark
+        : CamelliaColors.brandPlateBorderLight;
     final ink = monochrome
-        ? (dark ? Colors.white : const Color(0xFF171A21))
+        ? (dark ? Colors.white : CamelliaColors.lightText)
         : (withPlate ? const Color(0xFFF7F8FA) : plate);
     final easedProgress = Curves.easeOutCubic.transform(
       progress.clamp(0, 1).toDouble(),
     );
 
     if (withPlate) {
+      final plateRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(origin.dx, origin.dy, side, side),
+        Radius.circular(side * 0.24),
+      );
+      canvas.drawRRect(plateRect, Paint()..color = plate);
       canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(origin.dx, origin.dy, side, side),
-          Radius.circular(side * 0.24),
-        ),
+        plateRect.deflate(math.max(1, side * 0.025)),
         Paint()
-          ..color = plate
-          ..style = PaintingStyle.fill,
+          ..color = plateBorder
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = math.max(1, side * 0.025),
       );
     }
 
     final inset = withPlate ? side * 0.13 : 0.0;
     final radius = (side - inset * 2) / 2;
     final center = Offset(origin.dx + side / 2, origin.dy + side / 2);
-    final petal = _petalPath(radius);
-    const petalColors = [
-      Color(0xFF7378F2),
-      Color(0xFF5B94E8),
-      Color(0xFF43B8D1),
+    final blade = _bladePath(radius);
+    const bladeColors = [
+      CamelliaColors.brandAmber,
+      CamelliaColors.brandEmber,
+      CamelliaColors.brandFlame,
+      CamelliaColors.brandRose,
+      CamelliaColors.brandCoral,
     ];
 
-    for (var index = 0; index < 6; index++) {
+    for (var index = 0; index < bladeColors.length; index++) {
       canvas.save();
       canvas.translate(center.dx, center.dy);
       canvas.rotate(
-        index * math.pi / 3 +
-            (1 - easedProgress) * (index.isEven ? -0.18 : 0.18),
+        index * math.pi * 2 / bladeColors.length - (1 - easedProgress) * 0.42,
       );
       final scale = 0.78 + easedProgress * 0.22;
       canvas.scale(scale, scale);
       canvas.drawPath(
-        petal,
+        blade,
         Paint()
-          ..color = (monochrome ? ink : petalColors[index % 3]).withValues(
-            alpha: easedProgress,
+          ..color = (monochrome ? ink : bladeColors[index]).withValues(
+            alpha: easedProgress * (monochrome ? 1 : 0.94),
           )
           ..style = PaintingStyle.fill,
       );
@@ -115,30 +124,42 @@ class _CamelliaBrandPainter extends CustomPainter {
       Paint()
         ..color = monochrome
             ? plate.withValues(alpha: withPlate ? 1 : 0)
-            : const Color(0xFFF7F8FA),
+            : dark
+            ? CamelliaColors.brandHubDark
+            : CamelliaColors.brandHubLight,
     );
+    if (!monochrome) {
+      canvas.drawCircle(
+        center,
+        hubRadius * 1.12,
+        Paint()
+          ..color = bladeColors.first.withValues(alpha: 0.82 * easedProgress)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = math.max(1, radius * 0.025),
+      );
+    }
   }
 
-  Path _petalPath(double radius) {
+  Path _bladePath(double radius) {
     return Path()
-      ..moveTo(-radius * 0.12, -radius * 0.08)
+      ..moveTo(-radius * 0.10, -radius * 0.04)
       ..cubicTo(
-        -radius * 0.48,
-        -radius * 0.28,
-        -radius * 0.45,
-        -radius * 0.70,
-        0,
-        -radius * 0.96,
+        -radius * 0.36,
+        -radius * 0.18,
+        -radius * 0.30,
+        -radius * 0.66,
+        radius * 0.18,
+        -radius * 0.99,
       )
       ..cubicTo(
-        radius * 0.45,
-        -radius * 0.70,
-        radius * 0.48,
-        -radius * 0.28,
-        radius * 0.12,
-        -radius * 0.08,
+        radius * 0.36,
+        -radius * 0.68,
+        radius * 0.34,
+        -radius * 0.30,
+        radius * 0.10,
+        -radius * 0.01,
       )
-      ..quadraticBezierTo(0, radius * 0.02, -radius * 0.12, -radius * 0.08)
+      ..quadraticBezierTo(0, radius * 0.08, -radius * 0.10, -radius * 0.04)
       ..close();
   }
 

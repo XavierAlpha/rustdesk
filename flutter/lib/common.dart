@@ -174,32 +174,35 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
   final Color? toastText;
   final Color? divider;
 
+  // Values are derived from the Camellia palette so screens still on this
+  // legacy extension stay visually coherent with tokenized surfaces while
+  // they migrate to AppVisual.
   static final light = ColorThemeExtension(
-    border: Color(0xFFCCCCCC),
-    border2: Color(0xFFBBBBBB),
-    border3: Colors.black26,
-    highlight: Color(0xFFE5E5E5),
-    drag_indicator: Colors.grey[800],
+    border: CamelliaColors.lightBorder,
+    border2: const Color(0xFFC7CCD4),
+    border3: CamelliaColors.lightBorder.withValues(alpha: 0.7),
+    highlight: CamelliaColors.lightInset,
+    drag_indicator: CamelliaColors.lightMuted,
     shadow: Colors.black,
-    errorBannerBg: Color(0xFFFDEEEB),
-    me: Colors.green,
+    errorBannerBg: const Color(0xFFFDEEEB),
+    me: CamelliaColors.leaf,
     toastBg: Colors.black.withValues(alpha: 0.6),
     toastText: Colors.white,
-    divider: Colors.black38,
+    divider: CamelliaColors.lightBorder,
   );
 
   static final dark = ColorThemeExtension(
-    border: Color(0xFF555555),
-    border2: Color(0xFFE5E5E5),
-    border3: Colors.white24,
-    highlight: Color(0xFF3F3F3F),
-    drag_indicator: Colors.grey,
-    shadow: Colors.grey,
-    errorBannerBg: Color(0xFF470F2D),
-    me: Colors.greenAccent,
-    toastBg: Colors.white.withValues(alpha: 0.6),
-    toastText: Colors.black,
-    divider: Colors.white38,
+    border: CamelliaColors.darkBorder,
+    border2: const Color(0xFF4A5160),
+    border3: CamelliaColors.darkBorder.withValues(alpha: 0.7),
+    highlight: CamelliaColors.darkInset,
+    drag_indicator: CamelliaColors.darkMuted,
+    shadow: Colors.black,
+    errorBannerBg: const Color(0xFF470F2D),
+    me: const Color(0xFF68D6A7),
+    toastBg: Colors.black.withValues(alpha: 0.72),
+    toastText: Colors.white,
+    divider: CamelliaColors.darkBorder,
   );
 
   @override
@@ -310,10 +313,10 @@ class AppDesignTokens extends ThemeExtension<AppDesignTokens> {
     success: Color(0xFF087A55),
     warning: Color(0xFF9A6200),
     danger: Color(0xFFB3261E),
-    info: CamelliaColors.indigoStrong,
-    focusRing: CamelliaColors.indigo,
-    radiusSmall: 6,
-    radiusMedium: 8,
+    info: CamelliaColors.azureStrong,
+    focusRing: CamelliaColors.azure,
+    radiusSmall: 8,
+    radiusMedium: 12,
     controlHeight: 40,
     touchTarget: 48,
     shadow: Color(0x12182033),
@@ -332,10 +335,10 @@ class AppDesignTokens extends ThemeExtension<AppDesignTokens> {
     success: Color(0xFF68D6A7),
     warning: Color(0xFFFFC66D),
     danger: Color(0xFFFFB4AB),
-    info: Color(0xFFA9A5FF),
-    focusRing: Color(0xFFA9A5FF),
-    radiusSmall: 6,
-    radiusMedium: 8,
+    info: Color(0xFF7CB8E4),
+    focusRing: Color(0xFF5FA8DE),
+    radiusSmall: 8,
+    radiusMedium: 12,
     controlHeight: 40,
     touchTarget: 48,
     shadow: Color(0x52000000),
@@ -542,551 +545,6 @@ class MyTheme {
     }),
   );
 
-  static final ColorScheme _lightColorScheme =
-      ColorScheme.fromSeed(
-        seedColor: accent,
-        brightness: Brightness.light,
-      ).copyWith(
-        primary: accent,
-        primaryContainer: const Color(0xFFFFE3E4),
-        secondary: const Color(0xFF0E8F82),
-        tertiary: const Color(0xFFF3A712),
-        surface: const Color(0xFFFFFFFF),
-      );
-
-  static final ColorScheme _darkColorScheme =
-      ColorScheme.fromSeed(
-        seedColor: accent,
-        brightness: Brightness.dark,
-      ).copyWith(
-        primary: const Color(0xFFFF9A9D),
-        primaryContainer: const Color(0xFF4B2428),
-        secondary: const Color(0xFF58CFC0),
-        tertiary: const Color(0xFFFFC66A),
-        surface: AppDesignTokens.dark.surface,
-      );
-
-  static DialogThemeData _dialogTheme(
-    Color borderColor,
-    Color backgroundColor,
-  ) {
-    return DialogThemeData(
-      backgroundColor: backgroundColor,
-      elevation: 15,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppVisual.radius),
-        side: BorderSide(width: 1, color: borderColor),
-      ),
-    );
-  }
-
-  static TabBarThemeData _tabBarTheme(Color labelColor) {
-    return TabBarThemeData(labelColor: labelColor);
-  }
-
-  static NavigationBarThemeData _navigationBarTheme({
-    required Color indicatorColor,
-    required Color selectedColor,
-    required Color unselectedColor,
-    required Color labelColor,
-  }) {
-    return NavigationBarThemeData(
-      height: 66,
-      elevation: 0,
-      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-      backgroundColor: Colors.transparent,
-      surfaceTintColor: Colors.transparent,
-      indicatorColor: indicatorColor,
-      labelTextStyle: WidgetStateProperty.resolveWith((states) {
-        return TextStyle(
-          fontSize: 12,
-          fontWeight: states.contains(WidgetState.selected)
-              ? FontWeight.w700
-              : FontWeight.w500,
-          color: states.contains(WidgetState.selected)
-              ? labelColor
-              : unselectedColor,
-        );
-      }),
-      iconTheme: WidgetStateProperty.resolveWith((states) {
-        return IconThemeData(
-          color: states.contains(WidgetState.selected)
-              ? selectedColor
-              : unselectedColor,
-          size: states.contains(WidgetState.selected) ? 24 : 22,
-        );
-      }),
-    );
-  }
-
-  // Kept temporarily while feature pages migrate off legacy color helpers.
-  // ignore: unused_field
-  static final ThemeData _legacyLightTheme =
-      ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.light,
-        colorScheme: _lightColorScheme,
-        hoverColor: AppDesignTokens.light.accentContainer,
-        focusColor: AppDesignTokens.light.focusRing.withValues(alpha: 0.18),
-        scaffoldBackgroundColor: AppDesignTokens.light.page,
-        appBarTheme: AppBarTheme(
-          elevation: 0,
-          centerTitle: !(isDesktop || isWebDesktop),
-          backgroundColor: Color(0x00FFFFFF),
-          foregroundColor: Color(0xFF172033),
-          shadowColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-        ),
-        dialogTheme: _dialogTheme(
-          AppDesignTokens.light.border,
-          AppDesignTokens.light.surfaceElevated,
-        ),
-        scrollbarTheme: scrollbarTheme,
-        inputDecorationTheme: isDesktop
-            ? InputDecorationTheme(
-                fillColor: Color(0xFFF1F5FB),
-                filled: true,
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Color(0xFFDDE6F3)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: accent, width: 1.2),
-                ),
-              )
-            : null,
-        textTheme: const TextTheme(
-          headlineSmall: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF172033),
-          ),
-          titleLarge: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF172033),
-          ),
-          titleMedium: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF223047),
-          ),
-          titleSmall: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF223047),
-          ),
-          bodySmall: TextStyle(
-            fontSize: 12,
-            color: Color(0xFF627188),
-            height: 1.35,
-          ),
-          bodyMedium: TextStyle(
-            fontSize: 14,
-            color: Color(0xFF334158),
-            height: 1.4,
-          ),
-          bodyLarge: TextStyle(
-            fontSize: 16,
-            color: Color(0xFF223047),
-            height: 1.4,
-          ),
-          labelMedium: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF627188),
-          ),
-          labelLarge: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: MyTheme.accent,
-          ),
-        ),
-        cardColor: AppDesignTokens.light.surface,
-        cardTheme: CardThemeData(
-          elevation: 0,
-          color: AppDesignTokens.light.surface,
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: BorderSide(color: AppDesignTokens.light.border),
-          ),
-        ),
-        hintColor: Color(0xFF8A96AA),
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        tabBarTheme: _tabBarTheme(Colors.black87),
-        tooltipTheme: tooltipTheme(),
-        splashColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
-        highlightColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
-        splashFactory: (isDesktop || isWebDesktop)
-            ? NoSplash.splashFactory
-            : null,
-        textButtonTheme: (isDesktop || isWebDesktop)
-            ? TextButtonThemeData(
-                style: TextButton.styleFrom(
-                  splashFactory: NoSplash.splashFactory,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppVisual.radius),
-                  ),
-                ),
-              )
-            : mobileTextButtonTheme,
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: MyTheme.accent,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            minimumSize: const Size(0, 36),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8.0),
-            ),
-          ),
-        ),
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.black87,
-            side: BorderSide(color: border, width: 1),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8.0),
-            ),
-          ),
-        ),
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-            backgroundColor: accent,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            minimumSize: Size(0, AppDesignTokens.light.controlHeight),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        ),
-        iconButtonTheme: IconButtonThemeData(
-          style: IconButton.styleFrom(
-            foregroundColor: const Color(0xFF45536A),
-            hoverColor: const Color(0xFFEAF1FF),
-            highlightColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        ),
-        switchTheme: switchTheme(),
-        radioTheme: radioTheme(),
-        checkboxTheme: checkboxTheme,
-        listTileTheme: listTileTheme,
-        menuBarTheme: MenuBarThemeData(
-          style: MenuStyle(
-            backgroundColor: WidgetStatePropertyAll(
-              AppDesignTokens.light.surfaceElevated,
-            ),
-          ),
-        ),
-        bottomNavigationBarTheme: BottomNavigationBarThemeData(
-          backgroundColor: Color(0xFFFFFFFF),
-          selectedItemColor: accent,
-          unselectedItemColor: Color(0xFF8A96AA),
-          selectedLabelStyle: TextStyle(fontWeight: FontWeight.w600),
-          type: BottomNavigationBarType.fixed,
-          elevation: 10,
-        ),
-        navigationBarTheme: _navigationBarTheme(
-          indicatorColor: const Color(0x1F247BFF),
-          selectedColor: accent,
-          unselectedColor: const Color(0xFF7B879C),
-          labelColor: const Color(0xFF172033),
-        ),
-        navigationRailTheme: NavigationRailThemeData(
-          elevation: 0,
-          backgroundColor: AppDesignTokens.light.surface,
-          indicatorColor: AppDesignTokens.light.accentContainer,
-          selectedIconTheme: const IconThemeData(color: accent, size: 23),
-          unselectedIconTheme: const IconThemeData(
-            color: Color(0xFF627188),
-            size: 21,
-          ),
-          selectedLabelTextStyle: const TextStyle(
-            color: accent,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-          unselectedLabelTextStyle: const TextStyle(
-            color: Color(0xFF627188),
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        dividerTheme: DividerThemeData(
-          color: AppDesignTokens.light.border,
-          thickness: 1,
-          space: 1,
-        ),
-        progressIndicatorTheme: ProgressIndicatorThemeData(
-          color: accent,
-          linearTrackColor: AppDesignTokens.light.accentContainer,
-          circularTrackColor: AppDesignTokens.light.surfaceContainer,
-        ),
-        bottomSheetTheme: BottomSheetThemeData(
-          backgroundColor: AppDesignTokens.light.surfaceElevated,
-          modalBackgroundColor: AppDesignTokens.light.surfaceElevated,
-          surfaceTintColor: Colors.transparent,
-          showDragHandle: true,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
-          ),
-        ),
-        snackBarTheme: const SnackBarThemeData(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Color(0xFF223047),
-          contentTextStyle: TextStyle(color: Colors.white),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(8)),
-          ),
-        ),
-        popupMenuTheme: PopupMenuThemeData(
-          color: AppDesignTokens.light.surfaceElevated,
-          shape: RoundedRectangleBorder(
-            side: BorderSide(
-              color: (isDesktop || isWebDesktop)
-                  ? Color(0xFFECECEC)
-                  : Colors.transparent,
-            ),
-            borderRadius: BorderRadius.all(Radius.circular(8.0)),
-          ),
-        ),
-      ).copyWith(
-        extensions: <ThemeExtension<dynamic>>[
-          ColorThemeExtension.light,
-          TabbarTheme.light,
-          AppDesignTokens.light,
-        ],
-      );
-  // ignore: unused_field
-  static final ThemeData _legacyDarkTheme =
-      ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        colorScheme: _darkColorScheme,
-        hoverColor: AppDesignTokens.dark.accentContainer,
-        focusColor: AppDesignTokens.dark.focusRing.withValues(alpha: 0.22),
-        scaffoldBackgroundColor: AppDesignTokens.dark.page,
-        appBarTheme: AppBarTheme(
-          elevation: 0,
-          centerTitle: !(isDesktop || isWebDesktop),
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-        ),
-        dialogTheme: _dialogTheme(
-          AppDesignTokens.dark.border,
-          AppDesignTokens.dark.surfaceElevated,
-        ),
-        scrollbarTheme: scrollbarThemeDark,
-        inputDecorationTheme: (isDesktop || isWebDesktop)
-            ? InputDecorationTheme(
-                fillColor: Color(0xFF24252B),
-                filled: true,
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              )
-            : null,
-        textTheme: TextTheme(
-          headlineSmall: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-          titleLarge: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-          titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-          titleSmall: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-          bodySmall: TextStyle(
-            fontSize: 12,
-            color: AppDesignTokens.dark.muted,
-            height: 1.35,
-          ),
-          bodyMedium: TextStyle(fontSize: 14, height: 1.4),
-          bodyLarge: TextStyle(fontSize: 16, height: 1.4),
-          labelMedium: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppDesignTokens.dark.muted,
-          ),
-          labelLarge: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF7CB7FF),
-          ),
-        ),
-        cardColor: AppDesignTokens.dark.surface,
-        cardTheme: CardThemeData(
-          elevation: 0,
-          color: AppDesignTokens.dark.surface,
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: BorderSide(color: AppDesignTokens.dark.border),
-          ),
-        ),
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        tabBarTheme: _tabBarTheme(Colors.white70),
-        tooltipTheme: tooltipTheme(),
-        splashColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
-        highlightColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
-        splashFactory: (isDesktop || isWebDesktop)
-            ? NoSplash.splashFactory
-            : null,
-        textButtonTheme: (isDesktop || isWebDesktop)
-            ? TextButtonThemeData(
-                style: TextButton.styleFrom(
-                  splashFactory: NoSplash.splashFactory,
-                  disabledForegroundColor: Colors.white70,
-                  foregroundColor: Colors.white70,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppVisual.radius),
-                  ),
-                ),
-              )
-            : mobileTextButtonTheme,
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: MyTheme.accent,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            minimumSize: const Size(0, 36),
-            disabledForegroundColor: Colors.white70,
-            disabledBackgroundColor: Colors.white10,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8.0),
-            ),
-          ),
-        ),
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            backgroundColor: Color(0xFF24252B),
-            side: BorderSide(color: Colors.white12, width: 0.5),
-            disabledForegroundColor: Colors.white70,
-            foregroundColor: Colors.white70,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8.0),
-            ),
-          ),
-        ),
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF7CB7FF),
-            foregroundColor: const Color(0xFF101820),
-            elevation: 0,
-            minimumSize: Size(0, AppDesignTokens.dark.controlHeight),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        ),
-        iconButtonTheme: IconButtonThemeData(
-          style: IconButton.styleFrom(
-            foregroundColor: Colors.white70,
-            hoverColor: Colors.white10,
-            highlightColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        ),
-        switchTheme: switchTheme(),
-        radioTheme: radioTheme(),
-        checkboxTheme: checkboxTheme,
-        listTileTheme: listTileTheme,
-        menuBarTheme: MenuBarThemeData(
-          style: MenuStyle(
-            backgroundColor: WidgetStatePropertyAll(
-              AppDesignTokens.dark.surfaceElevated,
-            ),
-          ),
-        ),
-        bottomNavigationBarTheme: BottomNavigationBarThemeData(
-          selectedItemColor: accent,
-          unselectedItemColor: Color(0xFF8C94A6),
-          selectedLabelStyle: TextStyle(fontWeight: FontWeight.w600),
-          type: BottomNavigationBarType.fixed,
-          elevation: 10,
-        ),
-        navigationBarTheme: _navigationBarTheme(
-          indicatorColor: const Color(0x337CB7FF),
-          selectedColor: const Color(0xFF7CB7FF),
-          unselectedColor: const Color(0xFF8C94A6),
-          labelColor: Colors.white,
-        ),
-        navigationRailTheme: NavigationRailThemeData(
-          elevation: 0,
-          backgroundColor: AppDesignTokens.dark.surface,
-          indicatorColor: AppDesignTokens.dark.accentContainer,
-          selectedIconTheme: const IconThemeData(
-            color: Color(0xFF7CB7FF),
-            size: 23,
-          ),
-          unselectedIconTheme: IconThemeData(
-            color: AppDesignTokens.dark.muted,
-            size: 21,
-          ),
-          selectedLabelTextStyle: const TextStyle(
-            color: Color(0xFF7CB7FF),
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-          unselectedLabelTextStyle: TextStyle(
-            color: AppDesignTokens.dark.muted,
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        dividerTheme: DividerThemeData(
-          color: AppDesignTokens.dark.border,
-          thickness: 1,
-          space: 1,
-        ),
-        progressIndicatorTheme: ProgressIndicatorThemeData(
-          color: Color(0xFF7CB7FF),
-          linearTrackColor: AppDesignTokens.dark.accentContainer,
-          circularTrackColor: AppDesignTokens.dark.surfaceContainer,
-        ),
-        bottomSheetTheme: BottomSheetThemeData(
-          backgroundColor: AppDesignTokens.dark.surfaceElevated,
-          modalBackgroundColor: AppDesignTokens.dark.surfaceElevated,
-          surfaceTintColor: Colors.transparent,
-          showDragHandle: true,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
-          ),
-        ),
-        snackBarTheme: SnackBarThemeData(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppDesignTokens.dark.surfaceElevated,
-          contentTextStyle: TextStyle(color: Colors.white),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(8)),
-          ),
-        ),
-        popupMenuTheme: PopupMenuThemeData(
-          color: AppDesignTokens.dark.surfaceElevated,
-          shape: RoundedRectangleBorder(
-            side: BorderSide(color: Colors.white24),
-            borderRadius: BorderRadius.all(Radius.circular(8.0)),
-          ),
-        ),
-      ).copyWith(
-        extensions: <ThemeExtension<dynamic>>[
-          ColorThemeExtension.dark,
-          TabbarTheme.dark,
-          AppDesignTokens.dark,
-        ],
-      );
-
   static final ThemeData lightTheme = CamelliaTheme.build(
     brightness: Brightness.light,
     desktopDensity: isDesktop || isWebDesktop,
@@ -1170,19 +628,19 @@ enum AppTone { brand, secondary, info, success, warning, danger, neutral }
 class AppVisual {
   AppVisual._();
 
-  static const double radius = 8;
-  static const double compactRadius = 6;
+  static const double radius = CamelliaRadius.surface;
+  static const double compactRadius = CamelliaRadius.control;
   static const List<Color> connectGradient = [
-    CamelliaColors.indigo,
-    CamelliaColors.indigoStrong,
+    CamelliaColors.azure,
+    CamelliaColors.aqua,
   ];
   static const List<Color> identityGradient = [
     CamelliaColors.indigo,
-    CamelliaColors.indigoStrong,
+    CamelliaColors.azure,
   ];
   static const List<Color> securityGradient = [
-    CamelliaColors.indigo,
-    CamelliaColors.indigoStrong,
+    CamelliaColors.aqua,
+    CamelliaColors.azure,
   ];
   static const List<Color> settingsGradient = [
     CamelliaColors.indigo,
@@ -5117,7 +4575,7 @@ Widget buildVirtualWindowFrame(BuildContext context, Widget child) {
       decoration: BoxDecoration(
         color: isMainDesktopWindow
             ? Colors.transparent
-            : Theme.of(context).colorScheme.background,
+            : Theme.of(context).colorScheme.surface,
         border: Border.all(
           color: Theme.of(context).dividerColor,
           width: stateGlobal.windowBorderWidth.value,
