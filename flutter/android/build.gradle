@@ -1,3 +1,7 @@
+// Single source of truth for the Android API level the whole build compiles
+// against; plugin subprojects that lag behind are lifted to it below.
+ext.appCompileSdk = 37
+
 allprojects {
     repositories {
         google()
@@ -26,6 +30,18 @@ subprojects {
             project.android.compileOptions {
                 sourceCompatibility JavaVersion.VERSION_17
                 targetCompatibility JavaVersion.VERSION_17
+            }
+        }
+    }
+
+    // Plugins pinned to an older compileSdk than the androidx artifacts they
+    // pull in fail AAR metadata validation. Lift any that lag behind the app
+    // rather than pinning the whole dependency tree backwards; configuring it
+    // here keeps Flutter's shared pub cache untouched.
+    project.pluginManager.withPlugin('com.android.library') {
+        project.android {
+            if (compileSdk == null || compileSdk < rootProject.ext.appCompileSdk) {
+                compileSdk rootProject.ext.appCompileSdk
             }
         }
     }
