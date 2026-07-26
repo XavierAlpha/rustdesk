@@ -321,16 +321,26 @@ impl VpxEncoder {
         (bitrate * ratio) as u32
     }
 
+    /// Maps a bitrate ratio onto the quantizer window the encoder may use.
+    ///
+    /// The quantizer, not the bitrate, is what ultimately decides how much
+    /// detail survives: a generous target buys nothing if the encoder is still
+    /// forbidden from spending it. The window therefore has to open as far as
+    /// the ratio the rate controller can actually reach - the ratio is the
+    /// quality preset scaled by frame rate, so it now extends well past 1.0.
+    ///
+    /// `q_max` bottoming out at 37 used to cap achievable quality no matter how
+    /// much bandwidth was available; the ceiling now reaches down to a
+    /// visually-lossless quantizer for screen content.
     #[inline]
     fn calc_q_values(ratio: f32) -> (u32, u32) {
-        let b = (ratio * 100.0) as u32;
-        let b = std::cmp::min(b, 200);
+        const RATIO_SATURATION: f32 = 4.0;
+        let t = (ratio / RATIO_SATURATION).clamp(0.0, 1.0);
+
         let q_min1 = 36;
         let q_min2 = 0;
         let q_max1 = 56;
-        let q_max2 = 37;
-
-        let t = b as f32 / 200.0;
+        let q_max2 = 20;
 
         let mut q_min: u32 = ((1.0 - t) * q_min1 as f32 + t * q_min2 as f32).round() as u32;
         let mut q_max = ((1.0 - t) * q_max1 as f32 + t * q_max2 as f32).round() as u32;

@@ -946,10 +946,12 @@ fn setup_encoder(
     bool,
     Arc<Mutex<Option<Recorder>>>,
 )> {
+    let fps = VIDEO_QOS.lock().unwrap().fps();
     let encoder_cfg = get_encoder_config(
         &c,
         name.to_string(),
         quality,
+        fps,
         client_record || record_incoming,
         last_portable_service_running,
         source,
@@ -966,6 +968,7 @@ fn get_encoder_config(
     c: &CapturerInfo,
     _name: String,
     quality: f32,
+    _fps: u32,
     record: bool,
     _portable_service: bool,
     _source: VideoSource,
@@ -989,6 +992,7 @@ fn get_encoder_config(
                     width: c.width,
                     height: c.height,
                     quality,
+                    fps: _fps as i32,
                     feature,
                     keyframe_interval,
                 });
@@ -1001,6 +1005,7 @@ fn get_encoder_config(
                     width: c.width,
                     height: c.height,
                     quality,
+                    fps: _fps as i32,
                     keyframe_interval,
                 });
             }

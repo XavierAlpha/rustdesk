@@ -1,5 +1,5 @@
 use super::*;
-use scrap::codec::{Quality, BR_BALANCED, BR_BEST, BR_SPEED};
+use scrap::codec::{fps_bitrate_scale, Quality, BR_BALANCED, BR_BEST, BR_SPEED};
 use std::{
     collections::VecDeque,
     time::{Duration, Instant},
@@ -160,7 +160,11 @@ impl VideoQoS {
         if self.ratio < BR_MIN_HIGH_RESOLUTION || self.ratio > BR_MAX {
             self.ratio = BR_BALANCED;
         }
-        self.ratio
+        // The control loop above reasons in quality space, independent of frame
+        // rate. Detail per frame is what the viewer actually sees, so the target
+        // handed to the encoder has to follow the frame rate as well; otherwise
+        // raising fps quietly divides the same bitrate across more frames.
+        self.ratio * fps_bitrate_scale(self.fps)
     }
 
     // Check if any user is in recording mode

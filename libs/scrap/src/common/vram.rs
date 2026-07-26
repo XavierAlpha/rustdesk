@@ -40,6 +40,8 @@ pub struct VRamEncoderConfig {
     pub width: usize,
     pub height: usize,
     pub quality: f32,
+    /// Frame rate the session actually runs at; see `HwRamEncoderConfig::fps`.
+    pub fps: i32,
     pub feature: FeatureContext,
     pub keyframe_interval: Option<usize>,
 }
@@ -74,7 +76,7 @@ impl EncoderApi for VRamEncoder {
                         width: config.width as _,
                         height: config.height as _,
                         kbitrate: bitrate as _,
-                        framerate: 30,
+                        framerate: if config.fps > 0 { config.fps } else { 30 },
                         gop,
                     },
                 };

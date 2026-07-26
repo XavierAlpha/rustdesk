@@ -890,9 +890,42 @@ pub fn allow_d3d_render() -> bool {
     option2bool(OPTION, &hbb_common::config::LocalConfig::get_option(OPTION))
 }
 
-pub const BR_BEST: f32 = 1.5;
-pub const BR_BALANCED: f32 = 0.67;
-pub const BR_SPEED: f32 = 0.5;
+/// Quality ratios applied on top of [`base_bitrate`].
+///
+/// The baseline is a modern desktop: a high-DPI display showing mostly static
+/// text and UI, driven over a link that comfortably carries several Mbit/s.
+/// Screen content is far less forgiving than camera video at low bitrates -
+/// sharp glyph edges are exactly what a transform codec spends bits on - so
+/// the ratios are set from what keeps text crisp, not from what keeps a video
+/// watchable.
+///
+/// * `BR_BEST` targets visually lossless text at native resolution.
+/// * `BR_BALANCED` is the default: crisp text, occasional softening while a
+///   large region redraws.
+/// * `BR_SPEED` favours latency and reach, accepting soft text during motion.
+pub const BR_BEST: f32 = 2.2;
+pub const BR_BALANCED: f32 = 1.0;
+pub const BR_SPEED: f32 = 0.6;
+
+/// Frame rate the resolution presets in [`base_bitrate`] are calibrated for.
+pub const REFERENCE_FPS: u32 = 30;
+
+/// Scales a bitrate calibrated at [`REFERENCE_FPS`] to the frame rate actually
+/// in use.
+///
+/// Bits per frame - not bits per second - decide how much detail survives
+/// encoding, so a target computed only from resolution silently starves every
+/// frame as soon as the session speeds up: at 120 fps each frame would receive
+/// a quarter of the bits it got at 30 fps. Doubling the frame rate does not,
+/// however, need double the bandwidth, because consecutive frames are more
+/// alike the closer together they are sampled and inter prediction turns that
+/// similarity into savings. The square-root curve follows that observation and
+/// is clamped so the two extremes stay sane: very low frame rates keep enough
+/// bitrate to stay sharp, and very high ones do not run away with bandwidth.
+pub fn fps_bitrate_scale(fps: u32) -> f32 {
+    let fps = fps.clamp(1, 240) as f32;
+    (fps / REFERENCE_FPS as f32).sqrt().clamp(0.6, 2.0)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Quality {
@@ -926,21 +959,27 @@ impl Quality {
     }
 }
 
+/// Reference bitrate in kbps for a resolution at [`REFERENCE_FPS`], ratio 1.0.
+///
+/// Calibrated for desktop screen content, where legible text is the binding
+/// constraint. The curve is deliberately sublinear in pixel count: quadrupling
+/// the pixels does not quadruple the entropy of a screen that is mostly flat
+/// background, so the per-pixel allowance tapers as resolution grows.
 pub fn base_bitrate(width: u32, height: u32) -> u32 {
     const RESOLUTION_PRESETS: &[(u32, u32, u32)] = &[
-        (640, 480, 400),     // VGA, 307k pixels
-        (800, 600, 500),     // SVGA, 480k pixels
-        (1024, 768, 800),    // XGA, 786k pixels
-        (1280, 720, 1000),   // 720p, 921k pixels
-        (1366, 768, 1100),   // HD, 1049k pixels
-        (1440, 900, 1300),   // WXGA+, 1296k pixels
-        (1600, 900, 1500),   // HD+, 1440k pixels
-        (1920, 1080, 2073),  // 1080p, 2073k pixels
-        (2048, 1080, 2200),  // 2K DCI, 2211k pixels
-        (2560, 1440, 3000),  // 2K QHD, 3686k pixels
-        (3440, 1440, 4000),  // UWQHD, 4953k pixels
-        (3840, 2160, 5000),  // 4K UHD, 8294k pixels
-        (7680, 4320, 12000), // 8K UHD, 33177k pixels
+        (640, 480, 600),     // VGA, 307k pixels
+        (800, 600, 800),     // SVGA, 480k pixels
+        (1024, 768, 1100),   // XGA, 786k pixels
+        (1280, 720, 1400),   // 720p, 921k pixels
+        (1366, 768, 1500),   // HD, 1049k pixels
+        (1440, 900, 1800),   // WXGA+, 1296k pixels
+        (1600, 900, 2000),   // HD+, 1440k pixels
+        (1920, 1080, 2800),  // 1080p, 2073k pixels
+        (2048, 1080, 3000),  // 2K DCI, 2211k pixels
+        (2560, 1440, 4200),  // 2K QHD, 3686k pixels
+        (3440, 1440, 5200),  // UWQHD, 4953k pixels
+        (3840, 2160, 7000),  // 4K UHD, 8294k pixels
+        (7680, 4320, 16000), // 8K UHD, 33177k pixels
     ];
     let pixels = width * height;
 
@@ -1153,4 +1192,82 @@ pub fn test_av1() {
             );
         });
     });
+}
+
+#[cfg(test)]
+mod bitrate_tests {
+    use super::*;
+
+    #[test]
+    fn quality_presets_are_ordered_and_positive() {
+        assert!(BR_SPEED < BR_BALANCED);
+        assert!(BR_BALANCED < BR_BEST);
+        assert!(BR_SPEED > 0.0);
+        for quality in [Quality::Best, Quality::Balanced, Quality::Low] {
+            assert!(quality.ratio() > 0.0);
+        }
+        assert_eq!(Quality::Custom(0.75).ratio(), 0.75);
+    }
+
+    #[test]
+    fn base_bitrate_grows_with_resolution_but_not_linearly() {
+        let hd = base_bitrate(1280, 720);
+        let fhd = base_bitrate(1920, 1080);
+        let uhd = base_bitrate(3840, 2160);
+        assert!(hd < fhd && fhd < uhd);
+
+        // Four times the pixels of 1080p must not cost four times the bitrate:
+        // a larger desktop is mostly more flat background.
+        assert!(uhd < fhd * 4);
+        // ... but it must still be a clear step up.
+        assert!(uhd > fhd * 2);
+    }
+
+    #[test]
+    fn base_bitrate_keeps_text_legible_at_common_resolutions() {
+        // Regression guard for the calibration: screen content needs a few
+        // Mbit/s at 1080p before glyph edges start smearing.
+        assert!(base_bitrate(1920, 1080) >= 2500);
+        assert!(base_bitrate(2560, 1440) >= 3800);
+        assert!(base_bitrate(3840, 2160) >= 6000);
+    }
+
+    #[test]
+    fn fps_scale_tracks_frame_rate_sublinearly() {
+        assert_eq!(fps_bitrate_scale(REFERENCE_FPS), 1.0);
+
+        let f60 = fps_bitrate_scale(60);
+        let f120 = fps_bitrate_scale(120);
+        // Faster sessions get more bandwidth ...
+        assert!(f60 > 1.0 && f120 > f60);
+        // ... but less than proportionally: neighbouring frames are similar,
+        // so inter prediction absorbs part of the increase.
+        assert!(f60 < 2.0 && f120 < 4.0);
+    }
+
+    #[test]
+    fn fps_scale_is_bounded_at_both_extremes() {
+        // A crawling session must not collapse to an unreadable bitrate.
+        assert_eq!(fps_bitrate_scale(1), 0.6);
+        assert_eq!(fps_bitrate_scale(0), 0.6);
+        // A very fast one must not run away with bandwidth.
+        assert_eq!(fps_bitrate_scale(240), 2.0);
+        assert_eq!(fps_bitrate_scale(u32::MAX), 2.0);
+    }
+
+    #[test]
+    fn per_frame_budget_no_longer_collapses_at_high_fps() {
+        // The defect this model fixes: with a frame-rate-independent target,
+        // bits per frame fell as 1/fps. Now a 4x faster session keeps a usable
+        // share of the per-frame budget instead of a quarter of it.
+        let bitrate_at = |fps: u32| base_bitrate(1920, 1080) as f32 * fps_bitrate_scale(fps);
+        let per_frame = |fps: u32| bitrate_at(fps) / fps as f32;
+
+        let ratio = per_frame(120) / per_frame(30);
+        assert!(ratio > 0.45, "per-frame budget fell too far: {ratio}");
+        assert!(
+            ratio < 1.0,
+            "high fps should still cost some detail: {ratio}"
+        );
+    }
 }

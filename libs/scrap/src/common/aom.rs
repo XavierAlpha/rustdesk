@@ -374,16 +374,18 @@ impl AomEncoder {
         (bitrate * ratio) as u32
     }
 
+    /// See `VpxEncoder::calc_q_values`: the quantizer window has to keep opening
+    /// across the whole ratio range the rate controller can reach, otherwise the
+    /// extra bitrate a fast or high-quality session is granted cannot be spent.
     #[inline]
     fn calc_q_values(ratio: f32) -> (u32, u32) {
-        let b = (ratio * 100.0) as u32;
-        let b = std::cmp::min(b, 200);
+        const RATIO_SATURATION: f32 = 4.0;
+        let t = (ratio / RATIO_SATURATION).clamp(0.0, 1.0);
+
         let q_min1 = 24;
         let q_min2 = 5;
         let q_max1 = 45;
-        let q_max2 = 25;
-
-        let t = b as f32 / 200.0;
+        let q_max2 = 16;
 
         let mut q_min: u32 = ((1.0 - t) * q_min1 as f32 + t * q_min2 as f32).round() as u32;
         let mut q_max = ((1.0 - t) * q_max1 as f32 + t * q_max2 as f32).round() as u32;
