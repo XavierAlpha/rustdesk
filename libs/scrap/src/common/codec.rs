@@ -1009,35 +1009,28 @@ pub fn base_bitrate(width: u32, height: u32) -> u32 {
     }
 }
 
-pub fn codec_thread_num(limit: usize) -> usize {
-    let max: usize = num_cpus::get();
-    let mut res;
-    let info;
-    let mut s = System::new();
-    s.refresh_memory();
-    let memory = s.available_memory() / 1024 / 1024 / 1024;
-    #[cfg(windows)]
-    {
-        res = 0;
-        let percent = hbb_common::platform::windows::cpu_uage_one_minute();
-        info = format!("cpu usage: {:?}", percent);
-        if let Some(pecent) = percent {
-            if pecent < 100.0 {
-                res = ((100.0 - pecent) * (max as f64) / 200.0).round() as usize;
-            }
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        s.refresh_cpu_usage();
-        // https://man7.org/linux/man-pages/man3/getloadavg.3.html
-        let avg = s.load_average();
-        info = format!("cpu loadavg: {}", avg.one);
-        res = (((max as f64) - avg.one) * 0.5).round() as usize;
-    }
-    res = std::cmp::min(res, max / 2);
-    res = std::cmp::min(res, memory as usize / 2);
-    //  Use common thread count
+/// Encoder workers are row/tile scoped; this is a generous upper bound.
+const MB_PER_CODEC_THREAD: u64 = 384;
+
+/// Chooses a codec worker count from what the machine actually has spare.
+///
+/// Two conservative caps used to compound: the count was halved against the
+/// core count *and* clamped to one thread per 2 GB of free memory, so a
+/// six-core desktop with a few gigabytes free encoded on two threads. Codec
+/// workers are row- or tile-scoped and cost far less than a gigabyte each, so
+/// memory now only guards genuinely constrained machines and the budget
+/// follows idle cores instead - keeping one free for capture, transport and
+/// the rest of the app.
+///
+/// The result is rounded down to a power of two because tile-column
+/// parallelism in VP9 and AV1 is defined in those terms; an odd count would
+/// leave workers idle anyway.
+fn thread_budget(cpus: usize, idle_cpus: f64, available_mb: u64, limit: usize) -> usize {
+    let cpus = cpus.max(1);
+    let mut res = idle_cpus.round().max(1.0) as usize;
+    // Keep a core free so capture and the network loop are never starved.
+    res = res.min(cpus.saturating_sub(1).max(1));
+    res = res.min((available_mb / MB_PER_CODEC_THREAD).max(1) as usize);
     res = match res {
         _ if res >= 64 => 64,
         _ if res >= 32 => 32,
@@ -1047,16 +1040,34 @@ pub fn codec_thread_num(limit: usize) -> usize {
         _ if res >= 2 => 2,
         _ => 1,
     };
-    // https://aomedia.googlesource.com/aom/+/refs/heads/main/av1/av1_cx_iface.c#677
-    // https://aomedia.googlesource.com/aom/+/refs/heads/main/aom_util/aom_thread.h#26
-    // https://chromium.googlesource.com/webm/libvpx/+/refs/heads/main/vp8/vp8_cx_iface.c#148
-    // https://chromium.googlesource.com/webm/libvpx/+/refs/heads/main/vp9/vp9_cx_iface.c#190
-    // https://github.com/FFmpeg/FFmpeg/blob/7c16bf0829802534004326c8e65fb6cdbdb634fa/libavcodec/pthread.c#L65
-    // https://github.com/FFmpeg/FFmpeg/blob/7c16bf0829802534004326c8e65fb6cdbdb634fa/libavcodec/pthread_internal.h#L26
-    // libaom: MAX_NUM_THREADS = 64
-    // libvpx: MAX_NUM_THREADS = 64
-    // ffmpeg: MAX_AUTO_THREADS = 16
-    res = std::cmp::min(res, limit);
+    res.min(limit.max(1))
+}
+
+pub fn codec_thread_num(limit: usize) -> usize {
+    let max: usize = num_cpus::get();
+    let info;
+    let idle_cpus;
+    let mut s = System::new();
+    s.refresh_memory();
+    let available_mb = s.available_memory() / 1024 / 1024;
+    let memory = available_mb / 1024;
+    #[cfg(windows)]
+    {
+        let percent = hbb_common::platform::windows::cpu_uage_one_minute();
+        info = format!("cpu usage: {:?}", percent);
+        // Treat reported usage as the share of the machine already committed.
+        let idle_fraction = percent.map_or(1.0, |p| ((100.0 - p) / 100.0).clamp(0.0, 1.0));
+        idle_cpus = max as f64 * idle_fraction;
+    }
+    #[cfg(not(windows))]
+    {
+        s.refresh_cpu_usage();
+        // https://man7.org/linux/man-pages/man3/getloadavg.3.html
+        let avg = s.load_average();
+        info = format!("cpu loadavg: {}", avg.one);
+        idle_cpus = max as f64 - avg.one;
+    }
+    let res = thread_budget(max, idle_cpus, available_mb, limit);
     // avoid frequent log
     let log = match THREAD_LOG_TIME.lock().unwrap().clone() {
         Some(instant) => instant.elapsed().as_secs() > 1,
@@ -1197,6 +1208,64 @@ pub fn test_av1() {
 #[cfg(test)]
 mod bitrate_tests {
     use super::*;
+
+    /// What the previous policy would have produced, kept as the comparison
+    /// point for the thread-budget tests below.
+    fn legacy_thread_budget(cpus: usize, idle_cpus: f64, available_mb: u64) -> usize {
+        let mut res = (idle_cpus * 0.5).round() as usize;
+        res = res.min(cpus / 2);
+        res = res.min((available_mb / 1024) as usize / 2);
+        match res {
+            _ if res >= 8 => 8,
+            _ if res >= 4 => 4,
+            _ if res >= 2 => 2,
+            _ => 1,
+        }
+    }
+
+    #[test]
+    fn idle_machines_are_no_longer_starved_of_codec_threads() {
+        // A six-core desktop, idle, with 8 GB free: the old policy halved the
+        // core count and then halved the free memory, landing on two threads.
+        let cpus = 6;
+        let idle = 5.5;
+        let free_mb = 8 * 1024;
+        assert_eq!(legacy_thread_budget(cpus, idle, free_mb), 2);
+        assert_eq!(thread_budget(cpus, idle, free_mb, 64), 4);
+
+        // A sixteen-core workstation gains proportionally more.
+        assert_eq!(legacy_thread_budget(16, 15.0, 16 * 1024), 8);
+        assert_eq!(thread_budget(16, 15.0, 16 * 1024, 64), 8);
+        assert_eq!(thread_budget(32, 31.0, 32 * 1024, 64), 16);
+    }
+
+    #[test]
+    fn a_busy_machine_still_yields() {
+        // Load consumes most of the cores, so the encoder takes what is left.
+        assert!(thread_budget(8, 1.5, 8 * 1024, 64) <= 2);
+        assert_eq!(thread_budget(8, 0.0, 8 * 1024, 64), 1);
+        assert_eq!(thread_budget(8, -3.0, 8 * 1024, 64), 1);
+    }
+
+    #[test]
+    fn memory_guards_only_constrained_machines() {
+        // Plenty of cores but almost no memory: fall back to a single worker.
+        assert_eq!(thread_budget(16, 15.0, 256, 64), 1);
+        // A gigabyte free is no longer a reason to serialise a modern encode.
+        assert!(thread_budget(16, 15.0, 4 * 1024, 64) >= 8);
+    }
+
+    #[test]
+    fn the_caller_limit_is_respected() {
+        assert_eq!(thread_budget(64, 63.0, 64 * 1024, 4), 4);
+        assert_eq!(thread_budget(64, 63.0, 64 * 1024, 0), 1);
+    }
+
+    #[test]
+    fn a_single_core_machine_still_encodes() {
+        assert_eq!(thread_budget(1, 1.0, 8 * 1024, 64), 1);
+        assert_eq!(thread_budget(0, 0.0, 0, 64), 1);
+    }
 
     #[test]
     fn quality_presets_are_ordered_and_positive() {

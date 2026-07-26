@@ -41,6 +41,8 @@ pub mod convert;
 pub mod hwcodec;
 #[cfg(feature = "mediacodec")]
 pub mod mediacodec;
+#[cfg(test)]
+mod quality_harness;
 pub mod vpxcodec;
 #[cfg(feature = "vram")]
 pub mod vram;
