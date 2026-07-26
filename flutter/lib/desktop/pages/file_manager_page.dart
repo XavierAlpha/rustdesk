@@ -1298,7 +1298,7 @@ class _FileManagerViewState extends State<FileManagerView> {
                                                         : Theme.of(context)
                                                               .iconTheme
                                                               .color
-                                                              ?.withOpacity(
+                                                              ?.withValues(alpha: 
                                                                 0.7,
                                                               ),
                                                   ).paddingAll(4)
@@ -1713,7 +1713,7 @@ class _FileManagerViewState extends State<FileManagerView> {
                                   fit: BoxFit.scaleDown,
                                   color: Theme.of(
                                     context,
-                                  ).iconTheme.color?.withOpacity(0.7),
+                                  ).iconTheme.color?.withValues(alpha: 0.7),
                                 ),
                                 SizedBox(width: 10),
                                 Text(entry.name, style: style),
@@ -1852,7 +1852,7 @@ class _FileManagerViewState extends State<FileManagerView> {
 }
 
 Widget buildWindowsThisPC(BuildContext context, [TextStyle? textStyle]) {
-  final color = Theme.of(context).iconTheme.color?.withOpacity(0.7);
+  final color = Theme.of(context).iconTheme.color?.withValues(alpha: 0.7);
   return Row(
     children: [
       Icon(Icons.computer, size: 20, color: color),

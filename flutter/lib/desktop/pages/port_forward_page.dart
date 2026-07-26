@@ -213,7 +213,7 @@ class _PortForwardPageState extends State<PortForwardPage>
     return Container(
       height: _kRowHeight,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.background,
+        color: Theme.of(context).colorScheme.surface,
       ),
       child: Row(
         children: [
@@ -298,7 +298,7 @@ class _PortForwardPageState extends State<PortForwardPage>
             ? MyTheme.currentThemeMode() == ThemeMode.dark
                   ? const Color(0xFF202020)
                   : const Color(0xFFF4F5F6)
-            : Theme.of(context).colorScheme.background,
+            : Theme.of(context).colorScheme.surface,
       ),
       child: Row(
         children: [
@@ -370,7 +370,7 @@ class _PortForwardPageState extends State<PortForwardPage>
             return Container(
               height: _kRowHeight,
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.background,
+                color: Theme.of(context).colorScheme.surface,
               ),
               child: Row(
                 children: [

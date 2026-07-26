@@ -161,7 +161,7 @@ class _PeerCardState extends State<_PeerCard>
         : '${peer.username}${peer.username.isNotEmpty && peer.hostname.isNotEmpty ? '@' : ''}${peer.hostname}';
     final greyStyle = TextStyle(
       fontSize: 11,
-      color: Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.6),
+      color: Theme.of(context).textTheme.titleLarge?.color?.withValues(alpha: 0.6),
     );
     final showNote = _showNote(peer);
 
@@ -305,7 +305,8 @@ class _PeerCardState extends State<_PeerCard>
             () => deco == null
                 ? makeChild(stateGlobal.isPortrait.isTrue, peer)
                 : Container(
-                    foregroundDecoration: deco.value,
+                    decoration: deco.value,
+                    clipBehavior: Clip.antiAlias,
                     child: makeChild(stateGlobal.isPortrait.isTrue, peer),
                   ),
           ),
@@ -343,7 +344,7 @@ class _PeerCardState extends State<_PeerCard>
       // The simple demo does not have this issue.
       child: Obx(
         () => Container(
-          foregroundDecoration: deco.value,
+          decoration: deco.value,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(_cardRadius - _borderWidth),
             child: Column(
@@ -415,7 +416,7 @@ class _PeerCardState extends State<_PeerCard>
                   ),
                 ),
                 Container(
-                  color: Theme.of(context).colorScheme.background,
+                  color: Theme.of(context).colorScheme.surface,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -1566,9 +1567,14 @@ Widget getOnline(double rightPadding, bool online) {
     waitDuration: const Duration(seconds: 1),
     child: Padding(
       padding: EdgeInsets.fromLTRB(0, 4, rightPadding, 4),
-      child: CircleAvatar(
-        radius: 3,
-        backgroundColor: online ? Colors.green : kColorWarn,
+      child: Builder(
+        builder: (context) => CircleAvatar(
+          radius: 3,
+          backgroundColor: AppVisual.tone(
+            context,
+            online ? AppTone.success : AppTone.warning,
+          ),
+        ),
       ),
     ),
   );
@@ -1585,17 +1591,17 @@ Widget build_more(BuildContext context, {bool invert = false}) {
         radius: 14,
         backgroundColor: hover.value
             ? (invert
-                  ? Theme.of(context).colorScheme.background
+                  ? Theme.of(context).colorScheme.surface
                   : Theme.of(context).scaffoldBackgroundColor)
             : (invert
                   ? Theme.of(context).scaffoldBackgroundColor
-                  : Theme.of(context).colorScheme.background),
+                  : Theme.of(context).colorScheme.surface),
         child: Icon(
           Icons.more_vert,
           size: 18,
           color: hover.value
               ? Theme.of(context).textTheme.titleLarge?.color
-              : Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.5),
+              : Theme.of(context).textTheme.titleLarge?.color?.withValues(alpha: 0.5),
         ),
       ),
     ),

@@ -38,7 +38,6 @@ const double _kContentHSubMargin = _kContentHMargin + 33;
 const double _kCheckBoxLeftMargin = 10;
 const double _kRadioLeftMargin = 10;
 const double _kListViewBottomMargin = 15;
-const double _kTitleFontSize = 20;
 const double _kContentFontSize = 15;
 const String _kSettingPageControllerTag = 'settingPageController';
 const String _kSettingPageTabKeyTag = 'settingPageTabKey';
@@ -289,7 +288,8 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
               block: videoConnBlock,
             ),
           ),
-          if (videoConnBlock) Container(color: Colors.black.withOpacity(0.5)),
+          if (videoConnBlock)
+            Container(color: Colors.black.withValues(alpha: 0.5)),
         ],
       );
     });
@@ -1972,7 +1972,7 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
                         size: 14,
                         color: Theme.of(
                           context,
-                        ).textTheme.titleLarge?.color?.withOpacity(0.7),
+                        ).textTheme.titleLarge?.color?.withValues(alpha: 0.7),
                       ),
                     ],
                   ),
@@ -1985,7 +1985,7 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
             );
 
       return ListTile(
-        leading: Icon(icon, color: CamelliaColors.orchid),
+        leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
         title: titleWidget,
         enabled: !locked,
         onTap: onTap,
@@ -2707,9 +2707,9 @@ class __PrinterState extends State<_Printer> {
                     alignment: Alignment.topLeft,
                     child: Text(
                       failedMsg.value,
-                      style: DefaultTextStyle.of(
-                        context,
-                      ).style.copyWith(color: Colors.red),
+                      style: DefaultTextStyle.of(context).style.copyWith(
+                        color: AppVisual.tone(context, AppTone.danger),
+                      ),
                     ).marginOnly(bottom: 10.0),
                   ),
           ),
@@ -2933,35 +2933,21 @@ Widget _Card({
   required List<Widget> children,
   List<Widget>? title_suffix,
 }) {
-  const accent = CamelliaColors.indigo;
   return Row(
     children: [
       Flexible(
         child: SizedBox(
           width: _kCardFixedWidth,
           child: CamelliaSection(
-            accent: accent,
+            accent: CamelliaColors.indigo,
+            title: translate(title),
+            trailing: title_suffix == null
+                ? null
+                : Row(mainAxisSize: MainAxisSize.min, children: title_suffix),
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        translate(title),
-                        textAlign: TextAlign.start,
-                        style: const TextStyle(
-                          fontSize: _kTitleFontSize,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    ...?title_suffix,
-                  ],
-                ).marginOnly(top: 14, bottom: 10),
-                ...children.map((e) => e.marginOnly(top: 4)),
-              ],
+              children: [...children.map((e) => e.marginOnly(top: 4))],
             ),
           ).marginOnly(left: _kCardLeftMargin, top: 15),
         ),
@@ -3205,7 +3191,7 @@ class _WaylandCardState extends State<WaylandCard> {
       tip: 'clear_Wayland_screen_selection_tip',
       style: ButtonStyle(
         backgroundColor: MaterialStateProperty.all<Color>(
-          Theme.of(context).colorScheme.error.withOpacity(0.75),
+          Theme.of(context).colorScheme.error.withValues(alpha: 0.75),
         ),
       ),
     );
@@ -3243,9 +3229,9 @@ class _WaylandCardState extends State<WaylandCard> {
                   alignment: Alignment.topLeft,
                   child: Text(
                     _clearShortcutsInhibitorFailedMsg.value,
-                    style: DefaultTextStyle.of(
-                      context,
-                    ).style.copyWith(color: Colors.red),
+                    style: DefaultTextStyle.of(context).style.copyWith(
+                      color: AppVisual.tone(context, AppTone.danger),
+                    ),
                   ).marginOnly(bottom: 10.0),
                 ),
         ),
@@ -3255,7 +3241,7 @@ class _WaylandCardState extends State<WaylandCard> {
           tip: 'clear-shortcuts-inhibitor-permission-tip',
           style: ButtonStyle(
             backgroundColor: MaterialStateProperty.all<Color>(
-              Theme.of(context).colorScheme.error.withOpacity(0.75),
+              Theme.of(context).colorScheme.error.withValues(alpha: 0.75),
             ),
           ),
         ),
@@ -3514,7 +3500,7 @@ void changeSocks5Proxy() async {
                               size: 16,
                               color: Theme.of(
                                 context,
-                              ).textTheme.titleLarge?.color?.withOpacity(0.5),
+                              ).textTheme.titleLarge?.color?.withValues(alpha: 0.5),
                             ),
                           ),
                         ],

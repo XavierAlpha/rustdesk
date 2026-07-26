@@ -135,7 +135,8 @@ void changeIdDialog() {
                 labelText: translate('Your new ID'),
                 errorText: msg.isEmpty ? null : translate(msg),
                 suffixText: '${rxId.value.length}/16',
-                suffixStyle: const TextStyle(fontSize: 12, color: Colors.grey)),
+                suffixStyle: TextStyle(
+                    fontSize: 12, color: AppVisual.subduedText(context))),
             inputFormatters: [
               LengthLimitingTextInputFormatter(16),
               // FilteringTextInputFormatter(RegExp(r"[a-zA-z][a-zA-z0-9\_]*"), allow: true)
@@ -950,10 +951,10 @@ _connectDialog(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: colorScheme.primary.withOpacity(0.08),
+              color: colorScheme.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: colorScheme.primary.withOpacity(0.18),
+                color: colorScheme.primary.withValues(alpha: 0.18),
               ),
             ),
             child: Text(
@@ -1095,7 +1096,7 @@ _connectDialog(
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: MyTheme.accent.withOpacity(0.12),
+                  color: MyTheme.accent.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Icon(Icons.password_rounded, color: MyTheme.accent),
@@ -1244,26 +1245,26 @@ void showRequestElevationDialog(
     ),
   );
 
-  Widget UacNote = Container(
-    padding: EdgeInsets.fromLTRB(10, 8, 8, 8),
-    decoration: BoxDecoration(
-      color: MyTheme.currentThemeMode() == ThemeMode.dark
-          ? Color.fromARGB(135, 87, 87, 90)
-          : Colors.grey[100],
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: Colors.grey),
-    ),
-    child: Row(
-      children: [
-        Icon(Icons.info_outline_rounded, size: 20).marginOnly(right: 10),
-        Expanded(
-          child: Text(
-            translate('still_click_uac_tip'),
-            style: TextStyle(
-                fontSize: fontSizeNote, fontWeight: FontWeight.normal),
-          ),
-        )
-      ],
+  Widget UacNote = Builder(
+    builder: (context) => Container(
+      padding: EdgeInsets.fromLTRB(10, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: AppVisual.inset(context),
+        borderRadius: BorderRadius.circular(AppVisual.compactRadius),
+        border: Border.all(color: AppVisual.border(context)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline_rounded, size: 20).marginOnly(right: 10),
+          Expanded(
+            child: Text(
+              translate('still_click_uac_tip'),
+              style: TextStyle(
+                  fontSize: fontSizeNote, fontWeight: FontWeight.normal),
+            ),
+          )
+        ],
+      ),
     ),
   );
 
@@ -1420,7 +1421,8 @@ void showRestartRemoteDevice(PeerInfo pi, String id, SessionID sessionId,
   final res = await dialogManager
       .show<bool>((setState, close, context) => CustomAlertDialog(
             title: Row(children: [
-              Icon(Icons.warning_rounded, color: Colors.redAccent, size: 28),
+              Icon(Icons.warning_rounded,
+                  color: AppVisual.tone(context, AppTone.danger), size: 28),
               Flexible(
                   child: Text(translate("Restart remote device"))
                       .paddingOnly(left: 10)),
@@ -2034,7 +2036,7 @@ void deleteConfirmDialog(Function onSubmit, String title) async {
           children: [
             Icon(
               Icons.delete_rounded,
-              color: Colors.red,
+              color: AppVisual.tone(context, AppTone.danger),
             ),
             Expanded(
               child: Text(title, overflow: TextOverflow.ellipsis).paddingOnly(
@@ -2276,7 +2278,9 @@ void changeBot({Function()? callback}) async {
               .marginOnly(bottom: 12),
           Row(children: [Expanded(child: codeField)]),
           if (errorText != '')
-            Text(errorText, style: TextStyle(color: Colors.red))
+            Text(errorText,
+                    style: TextStyle(
+                        color: AppVisual.tone(context, AppTone.danger)))
                 .marginOnly(top: 12),
         ],
       ),
@@ -2664,7 +2668,8 @@ void setSharedAbPasswordDialog(String abName, Peer peer) {
             icon: Icon(Icons.delete_outline_rounded),
             onPressed: () => change(''),
             buttonStyle: ButtonStyle(
-                backgroundColor: MaterialStatePropertyAll(Colors.red)),
+                backgroundColor: WidgetStatePropertyAll(
+                    AppVisual.tone(context, AppTone.danger))),
           ),
         Obx(() => dialogButton(
               "OK",

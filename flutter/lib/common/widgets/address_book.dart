@@ -9,7 +9,6 @@ import 'package:flutter_hbb/common/hbbs/hbbs.dart';
 import 'package:flutter_hbb/common/widgets/peer_card.dart';
 import 'package:flutter_hbb/common/widgets/peers_view.dart';
 import 'package:flutter_hbb/common/widgets/adaptive_layout.dart';
-import 'package:flutter_hbb/common/widgets/brand_shell.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/widgets/popup_menu.dart';
 import 'package:flutter_hbb/models/ab_model.dart';
@@ -107,8 +106,8 @@ class _AddressBookState extends State<AddressBook> {
             close: () => gFFI.abModel.currentAbPushError.value = '',
           ),
           Expanded(
-            child: Obx(
-              () => stateGlobal.isPortrait.isTrue
+            child: LayoutBuilder(
+              builder: (context, constraints) => constraints.maxWidth < 720
                   ? _buildAddressBookPortrait()
                   : _buildAddressBookLandscape(),
             ),
@@ -132,39 +131,23 @@ class _AddressBookState extends State<AddressBook> {
                 ),
               ),
             ),
-            child: Container(
-              width: 220,
-              height: double.infinity,
+            child: SizedBox(
+              width: 210,
               child: Column(
                 children: [
                   _buildAbDropdown(),
-                  _buildTagHeader().marginOnly(left: 8.0, right: 0),
-                  Expanded(
-                    child: Container(
-                      width: double.infinity,
-                      height: double.infinity,
-                      child: _buildTags(),
-                    ),
+                  _buildTagHeader().marginOnly(left: 12, right: 4),
+                  Expanded(child: SizedBox.expand(child: _buildTags())),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 8, 10),
+                    child: _buildAbPermission(),
                   ),
-                  _buildAbPermission(),
                 ],
               ),
             ),
           ),
         ),
         _buildPeersViews(),
-        Container(
-          width: 268,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            border: Border(
-              left: BorderSide(
-                color: Theme.of(context).colorScheme.outlineVariant,
-              ),
-            ),
-          ),
-          child: _buildAccountOverview(),
-        ),
       ],
     );
   }
@@ -173,132 +156,23 @@ class _AddressBookState extends State<AddressBook> {
     const padding = 8.0;
     return Column(
       children: [
-        _buildAccountOverview(compact: true),
-        const Divider(height: 1),
         Offstage(
           offstage: hideAbTagsPanel.value,
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.background,
-              ),
-            ),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(padding, 0, padding, padding),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildAbDropdown(),
-                  _buildTagHeader().marginOnly(left: 8.0, right: 0),
-                  Container(width: double.infinity, child: _buildTags()),
-                ],
-              ),
-            ),
-          ).marginOnly(bottom: 12.0),
-        ),
-        _buildPeersViews(),
-      ],
-    );
-  }
-
-  Widget _buildAccountOverview({bool compact = false}) {
-    return Obx(() {
-      final user = gFFI.userModel;
-      final state = user.accountState.value;
-      final permission = gFFI.abModel.current.isPersonal()
-          ? translate('Personal')
-          : ShareRule.desc(
-              gFFI.abModel.current.sharedProfile()?.rule ??
-                  ShareRule.read.value,
-            );
-      final owner = gFFI.abModel.current.sharedProfile()?.owner;
-      final statusColor = switch (state) {
-        UserAccountState.ready => AppVisual.tone(context, AppTone.success),
-        UserAccountState.offline => AppVisual.tone(context, AppTone.warning),
-        UserAccountState.error => AppVisual.tone(context, AppTone.danger),
-        _ => Theme.of(context).colorScheme.primary,
-      };
-      final content = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          CamelliaAccountButton(
-            label: user.displayNameOrUserName,
-            detail: user.email.value.trim().isNotEmpty
-                ? user.email.value.trim()
-                : '@${user.userName.value}',
-            avatarUrl: user.avatar.value,
-            statusColor: statusColor,
-            statusIcon: state == UserAccountState.offline
-                ? Icons.cloud_off_rounded
-                : Icons.check_circle_rounded,
-            onPressed: null,
-          ),
-          if (!compact) ...[
-            const SizedBox(height: 24),
-            Text(
-              translate('Address book details'),
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 12),
-            _inspectorRow(
-              Icons.menu_book_outlined,
-              translate('Address book'),
-              gFFI.abModel.translatedName(gFFI.abModel.currentName.value),
-            ),
-            _inspectorRow(
-              Icons.shield_outlined,
-              translate('Permission'),
-              translate(permission),
-            ),
-            if (owner != null)
-              _inspectorRow(
-                Icons.person_outline_rounded,
-                translate('Owner'),
-                owner,
-              ),
-            _inspectorRow(
-              Icons.sync_rounded,
-              translate('Sync'),
-              state == UserAccountState.offline
-                  ? translate('Offline')
-                  : translate('Connected'),
-            ),
-          ],
-        ],
-      );
-      return SingleChildScrollView(
-        padding: EdgeInsets.all(compact ? 12 : 16),
-        child: content,
-      );
-    });
-  }
-
-  Widget _inspectorRow(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 10),
-          Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(padding, 0, padding, padding),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(label, style: Theme.of(context).textTheme.labelSmall),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
+                _buildAbDropdown(),
+                _buildTagHeader().marginOnly(left: 8.0, right: 0),
+                SizedBox(width: double.infinity, child: _buildTags()),
               ],
             ),
           ),
-        ],
-      ),
+        ),
+        Divider(height: 1, color: AppVisual.border(context)),
+        _buildPeersViews(),
+      ],
     );
   }
 
@@ -410,7 +284,7 @@ class _AddressBookState extends State<AddressBook> {
       ),
       underline: Container(
         height: 0.7,
-        color: Theme.of(context).dividerColor.withOpacity(0.1),
+        color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
       ),
       menuItemStyleData: const MenuItemStyleData(),
       dropdownSeparator: contains && items.length > 1
@@ -949,7 +823,7 @@ class AddressBookTag extends StatelessWidget {
           decoration: BoxDecoration(
             color: tags.contains(name)
                 ? gFFI.abModel.getCurrentAbTagColor(name)
-                : Theme.of(context).colorScheme.background,
+                : Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(4),
           ),
           margin: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),

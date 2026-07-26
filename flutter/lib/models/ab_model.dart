@@ -1087,7 +1087,15 @@ class Ab extends BaseAb {
             final data = json['data'];
             if (data is List) {
               for (final profile in data) {
+                if (profile is! Map<String, dynamic>) {
+                  debugPrint('Ignoring invalid address book peer payload');
+                  continue;
+                }
                 final u = Peer.fromJson(profile);
+                if (u.id.trim().isEmpty) {
+                  debugPrint('Ignoring address book peer without an id');
+                  continue;
+                }
                 int index = tmpPeers.indexWhere((e) => e.id == u.id);
                 if (index < 0) {
                   tmpPeers.add(u);

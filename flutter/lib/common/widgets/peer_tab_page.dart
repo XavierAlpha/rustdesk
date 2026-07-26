@@ -110,7 +110,7 @@ class _PeerTabPageState extends State<PeerTabPage>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Obx(() => SizedBox(
-              height: 32,
+              height: 42,
               child: Container(
                 padding: stateGlobal.isPortrait.isTrue
                     ? EdgeInsets.symmetric(horizontal: 2)
@@ -136,53 +136,48 @@ class _PeerTabPageState extends State<PeerTabPage>
 
   Widget _createSwitchBar(BuildContext context) {
     final model = Provider.of<PeerTabModel>(context);
-    var counter = -1;
-    return ReorderableListView(
-        buildDefaultDragHandles: false,
-        onReorder: model.reorder,
-        scrollDirection: Axis.horizontal,
-        physics: NeverScrollableScrollPhysics(),
-        children: model.visibleEnabledOrderedIndexs.map((t) {
-          final selected = model.currentTab == t;
-          final color = selected
-              ? MyTheme.tabbar(context).selectedTextColor
-              : MyTheme.tabbar(context).unSelectedTextColor
-            ?..withOpacity(0.5);
-          final hover = false.obs;
-          final deco = BoxDecoration(
-              color: Theme.of(context).colorScheme.background,
-              borderRadius: BorderRadius.circular(6));
-          final decoBorder = BoxDecoration(
-              border: Border(
-            bottom: BorderSide(width: 2, color: color!),
-          ));
-          counter += 1;
-          return ReorderableDragStartListener(
-              key: ValueKey(t),
-              index: counter,
-              child: Obx(() => Tooltip(
-                    preferBelow: false,
-                    message: model.tabTooltip(t),
-                    onTriggered: isMobile ? mobileShowTabVisibilityMenu : null,
-                    child: InkWell(
-                      child: Container(
-                        decoration: (hover.value
-                            ? (selected ? decoBorder : deco)
-                            : (selected ? decoBorder : null)),
-                        child: Icon(model.tabIcon(t), color: color)
-                            .paddingSymmetric(horizontal: 4),
-                      ).paddingSymmetric(horizontal: 4),
-                      onTap: isOptionFixed(kOptionPeerTabIndex)
-                          ? null
-                          : () async {
-                              await handleTabSelection(t);
-                              await bind.setLocalFlutterOption(
-                                  k: kOptionPeerTabIndex, v: t.toString());
-                            },
-                      onHover: (value) => hover.value = value,
-                    ),
-                  )));
-        }).toList());
+    return LayoutBuilder(builder: (context, constraints) {
+      final showLabels = constraints.maxWidth >= 620;
+      final tabs = model.visibleEnabledOrderedIndexs;
+      if (tabs.isEmpty) return const SizedBox.shrink();
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SegmentedButton<int>(
+            showSelectedIcon: false,
+            segments: [
+              for (final tab in tabs)
+                ButtonSegment<int>(
+                  value: tab,
+                  icon: Icon(model.tabIcon(tab), size: 17),
+                  label: showLabels
+                      ? Text(
+                          model.tabTooltip(tab),
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      : null,
+                  tooltip: model.tabTooltip(tab),
+                ),
+            ],
+            selected: {
+              tabs.contains(model.currentTab) ? model.currentTab : tabs.first,
+            },
+            onSelectionChanged: isOptionFixed(kOptionPeerTabIndex)
+                ? null
+                : (selection) async {
+                    if (selection.isEmpty) return;
+                    final tab = selection.first;
+                    await handleTabSelection(tab);
+                    await bind.setLocalFlutterOption(
+                      k: kOptionPeerTabIndex,
+                      v: tab.toString(),
+                    );
+                  },
+          ),
+        ),
+      );
+    });
   }
 
   Widget _createPeersView() {
@@ -697,7 +692,7 @@ class _PeerSearchBarState extends State<PeerSearchBar> {
     return Obx(() => Container(
           width: stateGlobal.isPortrait.isTrue ? 120 : 140,
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.background,
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(6),
           ),
           child: Row(
@@ -723,7 +718,7 @@ class _PeerSearchBarState extends State<PeerSearchBar> {
                             .textTheme
                             .titleLarge
                             ?.color
-                            ?.withOpacity(0.5),
+                            ?.withValues(alpha: 0.5),
                         cursorHeight: 18,
                         cursorWidth: 1,
                         style: const TextStyle(fontSize: 14),
@@ -966,7 +961,7 @@ class RefreshWidgetState extends State<RefreshWidget> {
   @override
   Widget build(BuildContext context) {
     final deco = BoxDecoration(
-      color: Theme.of(context).colorScheme.background,
+      color: Theme.of(context).colorScheme.surface,
       borderRadius: BorderRadius.circular(6),
     );
     return AnimatedRotation(
@@ -1008,7 +1003,7 @@ Widget _hoverAction(
     EdgeInsetsGeometry padding = const EdgeInsets.all(4.0)}) {
   final hover = false.obs;
   final deco = BoxDecoration(
-    color: Theme.of(context).colorScheme.background,
+    color: Theme.of(context).colorScheme.surface,
     borderRadius: BorderRadius.circular(6),
   );
   return Tooltip(

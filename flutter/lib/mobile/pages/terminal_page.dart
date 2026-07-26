@@ -366,7 +366,7 @@ class _TerminalPageState extends State<TerminalPage>
         child: Padding(
           padding: const EdgeInsets.only(top: 8, right: 8),
           child: Material(
-            color: Colors.black.withOpacity(0.35),
+            color: Colors.black.withValues(alpha: 0.35),
             borderRadius: BorderRadius.circular(10),
             child: InkWell(
               borderRadius: BorderRadius.circular(10),
@@ -398,7 +398,7 @@ class _TerminalPageState extends State<TerminalPage>
             width: 44, // iOS standard tap target size
             height: 44,
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.5), // Half transparency
+              color: Colors.black.withValues(alpha: 0.5), // Half transparency
               shape: BoxShape.circle,
             ),
             child: Material(

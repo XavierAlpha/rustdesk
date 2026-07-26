@@ -141,12 +141,12 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
   Color _statusColor() {
     if (_svcStopped.value ||
         stateGlobal.svcStatus.value == SvcStatus.connecting) {
-      return kColorWarn;
+      return AppVisual.tone(context, AppTone.warning);
     }
     if (stateGlobal.svcStatus.value == SvcStatus.ready) {
-      return const Color(0xFF22C7A9);
+      return AppVisual.tone(context, AppTone.success);
     }
-    return const Color(0xFFE04F5F);
+    return AppVisual.tone(context, AppTone.danger);
   }
 
   String _connStatusText() {
@@ -182,7 +182,9 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
 
 /// Connection page for connecting to a remote peer.
 class ConnectionPage extends StatefulWidget {
-  const ConnectionPage({Key? key}) : super(key: key);
+  const ConnectionPage({Key? key, this.showDevices = true}) : super(key: key);
+
+  final bool showDevices;
 
   @override
   State<ConnectionPage> createState() => _ConnectionPageState();
@@ -300,7 +302,7 @@ class _ConnectionPageState extends State<ConnectionPage>
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 720;
-        final split = constraints.maxWidth >= 860;
+        final split = widget.showDevices && constraints.maxWidth >= 860;
         final padding = compact ? 14.0 : 24.0;
         final pageHeader = CamelliaPageHeader(
           title: translate('Connect'),
@@ -329,7 +331,27 @@ class _ConnectionPageState extends State<ConnectionPage>
               Expanded(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(padding, padding, padding, 0),
-                  child: split
+                  child: !widget.showDevices
+                      ? Align(
+                          alignment: Alignment.topCenter,
+                          child: SingleChildScrollView(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 680),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  pageHeader,
+                                  const SizedBox(height: 18),
+                                  _buildRemoteIDTextField(
+                                    context,
+                                    maxWidth: 680,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        )
+                      : split
                       ? Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [

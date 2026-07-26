@@ -68,8 +68,25 @@ Widget _withReducedMotion(Widget child) {
 void main() {
   test('layout breakpoints classify compact, medium and expanded widths', () {
     expect(AppLayout.forWidth(390), AppLayoutSize.compact);
-    expect(AppLayout.forWidth(768), AppLayoutSize.medium);
-    expect(AppLayout.forWidth(1440), AppLayoutSize.expanded);
+    expect(AppLayout.forWidth(719), AppLayoutSize.compact);
+    expect(AppLayout.forWidth(720), AppLayoutSize.medium);
+    expect(AppLayout.forWidth(1199), AppLayoutSize.medium);
+    expect(AppLayout.forWidth(1200), AppLayoutSize.expanded);
+  });
+
+  test('reference screenshot widths use the intended layout class', () {
+    final expected = {
+      1912.0: AppLayoutSize.expanded,
+      1355.0: AppLayoutSize.expanded,
+      1822.0: AppLayoutSize.expanded,
+      522.0: AppLayoutSize.compact,
+      577.0: AppLayoutSize.compact,
+      592.0: AppLayoutSize.compact,
+      1487.0: AppLayoutSize.expanded,
+    };
+    for (final entry in expected.entries) {
+      expect(AppLayout.forWidth(entry.key), entry.value);
+    }
   });
 
   testWidgets('navigation changes shape with available width', (tester) async {

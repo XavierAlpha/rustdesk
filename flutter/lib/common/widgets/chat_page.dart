@@ -150,7 +150,7 @@ class _ChatInput extends StatelessWidget {
           isDense: true,
           hintText: translate('Write a message'),
           filled: true,
-          fillColor: Theme.of(context).colorScheme.background,
+          fillColor: Theme.of(context).colorScheme.surface,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           border: OutlineInputBorder(

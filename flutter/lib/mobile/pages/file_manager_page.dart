@@ -527,7 +527,7 @@ class _FileManagerViewState extends State<FileManagerView> {
                               fit: BoxFit.scaleDown,
                               color: Theme.of(
                                 context,
-                              ).iconTheme.color?.withOpacity(0.7),
+                              ).iconTheme.color?.withValues(alpha: 0.7),
                             ),
                           )
                         : Icon(

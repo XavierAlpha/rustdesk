@@ -311,7 +311,7 @@ class _WebClientSettingsPageState extends State<WebClientSettingsPage> {
       trailing: SizedBox(
         width: 220,
         child: DropdownButtonFormField<String>(
-          value: value,
+          initialValue: value,
           items: items,
           isDense: true,
           onChanged: onChanged,

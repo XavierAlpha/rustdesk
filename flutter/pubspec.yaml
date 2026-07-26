@@ -63,7 +63,6 @@ dependencies:
       ref: eb3964990cf19629c89ff8cb4a37640c7b3d5601
   get: ^4.6.5
   visibility_detector: ^0.4.0+2
-  contextmenu: ^3.0.0
   desktop_drop: ^0.7.1
   scroll_pos: ^0.5.0
   debounce_throttle: ^2.0.0
@@ -78,9 +77,8 @@ dependencies:
   path: ^1.8.1
   auto_size_text: ^3.0.0
   bot_toast: ^4.0.3
-  win32: any
+  win32: ">=2.1.3 <6.0.0"
   password_strength: ^0.2.0
-  flutter_launcher_icons: ^0.14.4
   flutter_keyboard_visibility: ^6.0.0
   cupertino_icons: ^1.0.8
   texture_rgba_renderer:
@@ -105,12 +103,11 @@ dependencies:
   qr_flutter: ^4.1.0
   extended_text: ^15.0.2
   xterm: ^4.0.0
-  sqflite: ^2.2.0
-  google_fonts: ^8.1.0
   vector_math: ^2.1.4
+  web: ^1.1.1
 
 dev_dependencies:
-  icons_launcher: ^3.1.0
+  flutter_launcher_icons: ^0.14.4
   flutter_test:
     sdk: flutter
   build_runner: ^2.15.1

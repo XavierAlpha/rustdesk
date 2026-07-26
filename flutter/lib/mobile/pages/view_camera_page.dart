@@ -642,7 +642,7 @@ void showOptions(
     // - dark theme: 0xff212121 (the canvas color?)
     final numBgSelected = Theme.of(
       context,
-    ).colorScheme.primary.withOpacity(0.6);
+    ).colorScheme.primary.withValues(alpha: 0.6);
     for (var i = 0; i < pi.displays.length; ++i) {
       children.add(
         InkWell(
