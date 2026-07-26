@@ -10,6 +10,13 @@ rootProject.buildDir = '../build'
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 
+    // Flutter temporarily disables AGP's built-in Kotlin while the application
+    // still uses KGP. file_picker 11 expects built-in Kotlin on AGP 9, so its
+    // Kotlin sources otherwise never become part of the Android library.
+    if (project.name == 'file_picker') {
+        project.pluginManager.apply('org.jetbrains.kotlin.android')
+    }
+
     // The maintained RustDesk fork of uni_links predates AGP's namespace
     // requirement. Configure it from the consuming project so builds remain
     // reproducible without modifying Flutter's shared pub cache.
