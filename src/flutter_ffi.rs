@@ -1165,20 +1165,16 @@ pub fn main_get_api_server() -> String {
     get_api_server()
 }
 
+/// Registers this device against the configured API server.
+///
+/// `deploy_device` already handles every platform - desktop reads and rewrites
+/// the id over IPC - so there is no reason to restrict enrolment to phones.
 pub fn main_deploy_device(token: String, id: String) -> String {
-    #[cfg(target_os = "android")]
-    {
-        let new_id = match id.trim() {
-            "" => None,
-            id => Some(id.to_owned()),
-        };
-        ui_interface::deploy_device(token, new_id).message()
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        let _ = (token, id);
-        "Deployment is not supported on this platform.".to_owned()
-    }
+    let new_id = match id.trim() {
+        "" => None,
+        id => Some(id.to_owned()),
+    };
+    ui_interface::deploy_device(token, new_id).message()
 }
 
 #[frb(sync)]

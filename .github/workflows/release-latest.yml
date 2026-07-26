@@ -402,9 +402,9 @@ jobs:
           bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
           if [[ "${{ env.DEPENDENCY_MODE }}" == "latest" ]]; then "$VCPKG_ROOT/vcpkg" x-update-baseline; fi
           "$VCPKG_ROOT/vcpkg" install --triplet arm64-osx --x-install-root="$VCPKG_ROOT/installed"
-          cargo build --release --target aarch64-apple-darwin --lib --features flutter,hwcodec,screencapturekit
+          cargo build --release --target aarch64-apple-darwin --lib --features flutter,hwcodec,screencapturekit,unix-file-copy-paste
           "$VCPKG_ROOT/vcpkg" install --triplet x64-osx --x-install-root="$VCPKG_ROOT/installed"
-          cargo build --release --target x86_64-apple-darwin --lib --features flutter,hwcodec,screencapturekit
+          cargo build --release --target x86_64-apple-darwin --lib --features flutter,hwcodec,screencapturekit,unix-file-copy-paste
           mkdir -p target/release
           lipo -create \
             target/aarch64-apple-darwin/release/liblibrustdesk.dylib \

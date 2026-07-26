@@ -2213,23 +2213,18 @@ impl LoginConfigHandler {
             msg.image_quality = q.into();
         } else if q == "custom" {
             let config = self.load_config();
-            let allow_more = !crate::using_public_server() || self.direct == Some(true);
+            // Quality and frame rate are the user's to choose on every route,
+            // including the shared rendezvous servers. The QoS controller is
+            // what keeps a session within what the link can carry.
             let quality = if config.custom_image_quality.is_empty() {
                 50
             } else {
-                let mut quality = config.custom_image_quality[0];
-                if !allow_more && quality > 100 {
-                    quality = 50;
-                }
-                quality
+                config.custom_image_quality[0]
             };
             msg.custom_image_quality = quality << 8;
             #[cfg(feature = "flutter")]
             if let Some(custom_fps) = self.options.get("custom-fps") {
-                let mut custom_fps = custom_fps.parse().unwrap_or(30);
-                if !allow_more && custom_fps > 30 {
-                    custom_fps = 30;
-                }
+                let custom_fps = custom_fps.parse().unwrap_or(30);
                 msg.custom_fps = custom_fps;
                 *self.custom_fps.lock().unwrap() = Some(custom_fps as _);
             }

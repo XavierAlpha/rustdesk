@@ -279,7 +279,7 @@ fn heartbeat_url() -> String {
         Config::get_option("api-server"),
         Config::get_option("custom-rendezvous-server"),
     );
-    if url.is_empty() || crate::is_public(&url) {
+    if url.is_empty() {
         return "".to_owned();
     }
     format!("{}/api/heartbeat", url)

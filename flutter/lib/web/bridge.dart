@@ -2021,8 +2021,9 @@ class RustdeskImpl {
   }
 
   bool isCustomClient({dynamic hint}) {
-    // is_custom_client() checks if app name is not "RustDesk"
-    return mainGetAppNameSync(hint: hint) != "RustDesk";
+    // Mirrors is_custom_client(): rebranding alone does not make this an
+    // OEM-restricted build, so no product feature is hidden.
+    return false;
   }
 
   bool isDisableSettings({dynamic hint}) {

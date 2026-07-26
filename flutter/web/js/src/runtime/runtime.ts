@@ -3131,18 +3131,10 @@ export class WebRuntime {
     });
   }
 
+  // Quality and frame-rate controls are offered on every route, matching the
+  // native client; the QoS controller is what keeps a session within budget.
   private isUsingPublicServer(): boolean {
-    const apiServer = this.resolveApiServer();
-    if (!apiServer) {
-      return this.config.isPublicServer;
-    }
-    try {
-      const host = new URL(this.normalizeApiServer(apiServer)).hostname.toLowerCase();
-      return host === 'camellia.aimmv.com' || host.endsWith('.camellia.aimmv.com');
-    } catch {
-      const value = apiServer.toLowerCase();
-      return value.includes('camellia.aimmv.com');
-    }
+    return false;
   }
 
   private normalizeApiServer(endpoint: string): string {

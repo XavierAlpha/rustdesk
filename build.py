@@ -51,7 +51,7 @@ def build_windows(args):
 
 
 def build_macos(args):
-    build_rust("flutter,hwcodec,screencapturekit")
+    build_rust("flutter,hwcodec,screencapturekit,unix-file-copy-paste")
     build_flutter("macos", [])
 
 

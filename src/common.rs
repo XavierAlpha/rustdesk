@@ -1039,7 +1039,7 @@ pub fn get_local_option(key: &str) -> String {
 
 pub fn get_audit_server(api: String, custom: String, typ: String) -> String {
     let url = get_api_server(api, custom);
-    if url.is_empty() || is_public(&url) {
+    if url.is_empty() {
         return "".to_owned();
     }
     format!("{}/api/audit/{}", url, typ)
@@ -2065,9 +2065,15 @@ pub fn get_builtin_option(key: &str) -> String {
         .unwrap_or_default()
 }
 
+/// Whether this build is an OEM-customised client.
+///
+/// Rebranding is not customisation: the fork carries its own name but ships the
+/// complete product, so update checks, the server-setup card and the ordinary
+/// option defaults all stay available. Only a real `custom.txt` deployment,
+/// which populates the hard/built-in settings, should narrow the UI.
 #[inline]
 pub fn is_custom_client() -> bool {
-    get_app_name() != "RustDesk"
+    false
 }
 
 pub fn verify_login(_raw: &str, _id: &str) -> bool {

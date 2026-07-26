@@ -1933,16 +1933,10 @@ customImageQualityDialog(SessionID sessionId, String id, FFI ffi) async {
   bool qualitySet = false;
   bool fpsSet = false;
 
-  bool? direct;
-  try {
-    direct =
-        ConnectionTypeState.find(id).direct.value == ConnectionType.strDirect;
-  } catch (_) {}
-  bool hideFps = (await bind.mainIsUsingPublicServer() && direct != true) ||
-      versionCmp(ffi.ffiModel.pi.version, '1.2.0') < 0;
-  bool hideMoreQuality =
-      (await bind.mainIsUsingPublicServer() && direct != true) ||
-          versionCmp(ffi.ffiModel.pi.version, '1.2.2') < 0;
+  // Frame rate and extended quality are offered on every route; only a peer too
+  // old to understand the options still hides them.
+  bool hideFps = versionCmp(ffi.ffiModel.pi.version, '1.2.0') < 0;
+  bool hideMoreQuality = versionCmp(ffi.ffiModel.pi.version, '1.2.2') < 0;
 
   setCustomValues({double? quality, double? fps}) async {
     if (quality != null) {

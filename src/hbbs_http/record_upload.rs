@@ -1,6 +1,6 @@
 use crate::hbbs_http::create_http_client_with_url;
 use bytes::Bytes;
-use hbb_common::{bail, config::Config, lazy_static, log, ResultType};
+use hbb_common::{bail, config::Config, log, ResultType};
 use reqwest::blocking::{Body, Client};
 use scrap::record::RecordState;
 use serde::Serialize;
@@ -8,7 +8,7 @@ use serde_json::Map;
 use std::{
     fs::File,
     io::{prelude::*, SeekFrom},
-    sync::{mpsc::Receiver, Arc, Mutex},
+    sync::mpsc::Receiver,
     time::{Duration, Instant},
 };
 
@@ -16,12 +16,13 @@ const MAX_HEADER_LEN: usize = 1024;
 const SHOULD_SEND_TIME: Duration = Duration::from_secs(1);
 const SHOULD_SEND_SIZE: u64 = 1024 * 1024;
 
-lazy_static::lazy_static! {
-    static ref ENABLE: Arc<Mutex<bool>> = Default::default();
-}
-
+/// Whether finished recordings are uploaded to the configured API server.
+///
+/// The upload endpoint is part of the API server this fork ships, so the
+/// feature is available whenever a session actually records; there is no
+/// separate entitlement to check.
 pub fn is_enable() -> bool {
-    ENABLE.lock().unwrap().clone()
+    true
 }
 
 pub fn run(rx: Receiver<RecordState>) {
