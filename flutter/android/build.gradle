@@ -13,8 +13,21 @@ subprojects {
     // Flutter temporarily disables AGP's built-in Kotlin while the application
     // still uses KGP. file_picker 11 expects built-in Kotlin on AGP 9, so its
     // Kotlin sources otherwise never become part of the Android library.
+    // The plugin defaults to the JDK running Gradle, which Gradle then rejects
+    // for disagreeing with AGP's Java 17, so pin both to the app's target.
     if (project.name == 'file_picker') {
         project.pluginManager.apply('org.jetbrains.kotlin.android')
+        project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+            compilerOptions {
+                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            }
+        }
+        project.pluginManager.withPlugin('com.android.library') {
+            project.android.compileOptions {
+                sourceCompatibility JavaVersion.VERSION_17
+                targetCompatibility JavaVersion.VERSION_17
+            }
+        }
     }
 
     // The maintained RustDesk fork of uni_links predates AGP's namespace
