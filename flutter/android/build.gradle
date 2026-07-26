@@ -38,10 +38,15 @@ subprojects {
     // pull in fail AAR metadata validation. Lift any that lag behind the app
     // rather than pinning the whole dependency tree backwards; configuring it
     // here keeps Flutter's shared pub cache untouched.
-    project.pluginManager.withPlugin('com.android.library') {
-        project.android {
-            if (compileSdk == null || compileSdk < rootProject.ext.appCompileSdk) {
-                compileSdk rootProject.ext.appCompileSdk
+    //
+    // This has to run in afterEvaluate: the plugin's own build.gradle sets
+    // compileSdk while it is being evaluated, which is after the withPlugin
+    // callback fires, so assigning any earlier is simply overwritten.
+    project.afterEvaluate {
+        if (project.plugins.hasPlugin('com.android.library')) {
+            def target = rootProject.ext.appCompileSdk
+            if (project.android.compileSdk == null || project.android.compileSdk < target) {
+                project.android.compileSdk = target
             }
         }
     }
