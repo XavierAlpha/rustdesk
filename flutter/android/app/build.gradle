@@ -116,7 +116,13 @@ android {
 
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            // Sign for real when a keystore is configured. Without one - CI
+            // build checks, and anyone building from a clean clone - fall back
+            // to the debug key so packaging still produces an installable APK
+            // instead of failing on a missing storeFile.
+            signingConfig keystoreProperties['storeFile']
+                ? signingConfigs.release
+                : signingConfigs.debug
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules'
         }
     }
