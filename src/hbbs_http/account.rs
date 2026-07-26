@@ -147,14 +147,15 @@ impl OidcSession {
     }
 
     fn ensure_client(api_server: &str) {
-        let mut write_guard = OIDC_SESSION.write().unwrap();
-        if write_guard.warmed_api_server.as_deref() == Some(api_server) {
+        // The probe below is a blocking network round-trip, so it must not run
+        // while the session lock is held; warming twice is harmless.
+        if OIDC_SESSION.read().unwrap().warmed_api_server.as_deref() == Some(api_server) {
             return;
         }
         // This URL is used to detect the appropriate TLS implementation for the server.
         let login_option_url = format!("{}/api/login-options", api_server);
         let _ = create_http_client_with_url(&login_option_url);
-        write_guard.warmed_api_server = Some(api_server.to_owned());
+        OIDC_SESSION.write().unwrap().warmed_api_server = Some(api_server.to_owned());
     }
 
     fn auth(

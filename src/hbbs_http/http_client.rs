@@ -85,17 +85,9 @@ macro_rules! configure_http_client {
     }};
 }
 
-pub fn create_http_client() -> SyncClient {
-    create_http_client_with_tls(TlsType::Rustls)
-}
-
 fn create_http_client_with_tls(tls_type: TlsType) -> SyncClient {
     let builder = SyncClient::builder();
     configure_http_client!(builder, tls_type, SyncClient)
-}
-
-pub fn create_http_client_async() -> AsyncClient {
-    create_http_client_async_with_tls(TlsType::Rustls)
 }
 
 pub fn create_http_client_async_with_tls(tls_type: TlsType) -> AsyncClient {

@@ -51,6 +51,8 @@ fn make_tray() -> hbb_common::ResultType<()> {
     let icon = tray_icon::Icon::from_rgba(icon_rgba, icon_width, icon_height)
         .context("Failed to open icon")?;
 
+    // `event_loop` only needs `mut` for the macOS activation-policy call below.
+    #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
     let mut event_loop = EventLoopBuilder::new().build();
 
     let tray_menu = Menu::new();
@@ -90,7 +92,7 @@ fn make_tray() -> hbb_common::ResultType<()> {
             )
         }
     };
-    let mut _tray_icon: Arc<Mutex<Option<TrayIcon>>> = Default::default();
+    let _tray_icon: Arc<Mutex<Option<TrayIcon>>> = Default::default();
 
     let menu_channel = MenuEvent::receiver();
     let tray_channel = TrayEvent::receiver();
@@ -98,10 +100,6 @@ fn make_tray() -> hbb_common::ResultType<()> {
     let (ipc_sender, ipc_receiver) = std::sync::mpsc::channel::<Data>();
 
     let open_func = move || {
-        if cfg!(not(feature = "flutter")) {
-            crate::run_me::<&str>(vec![]).ok();
-            return;
-        }
         #[cfg(target_os = "macos")]
         crate::platform::macos::handle_application_should_open_untitled_file();
         #[cfg(target_os = "windows")]
@@ -149,6 +147,11 @@ fn make_tray() -> hbb_common::ResultType<()> {
             }
             // We create the icon once the event loop is actually running
             // to prevent issues like https://github.com/tauri-apps/tray-icon/issues/90
+            // `builder` is only reassigned in the macOS/Windows-gated blocks below.
+            #[cfg_attr(
+                not(any(target_os = "macos", target_os = "windows")),
+                allow(unused_mut)
+            )]
             let mut builder = TrayIconBuilder::new()
                 .with_menu(Box::new(tray_menu.clone()))
                 .with_tooltip(tooltip(0))
@@ -165,7 +168,7 @@ fn make_tray() -> hbb_common::ResultType<()> {
             }
             let tray = builder.build();
             match tray {
-                Ok(tray) => _tray_icon = Arc::new(Mutex::new(Some(tray))),
+                Ok(tray) => *_tray_icon.lock().unwrap() = Some(tray),
                 Err(err) => {
                     log::error!("Failed to create tray icon: {}", err);
                 }

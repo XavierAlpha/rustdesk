@@ -8,10 +8,6 @@ use crate::{
 };
 use async_trait::async_trait;
 use bytes::Bytes;
-#[cfg(all(target_os = "windows", not(feature = "flutter")))]
-use hbb_common::config::keys;
-#[cfg(not(feature = "flutter"))]
-use hbb_common::fs;
 use hbb_common::{
     allow_err,
     config::{Config, LocalConfig, PeerConfig},
@@ -180,15 +176,6 @@ impl SessionPermissionConfig {
             && *self.server_keyboard_enabled.read().unwrap()
             && !self.lc.read().unwrap().disable_clipboard.v
             && !self.lc.read().unwrap().view_only.v
-    }
-
-    #[cfg(feature = "unix-file-copy-paste")]
-    pub fn is_file_clipboard_required(&self) -> bool {
-        let lc = self.lc.read().unwrap();
-        *self.server_keyboard_enabled.read().unwrap()
-            && *self.server_file_transfer_enabled.read().unwrap()
-            && lc.enable_file_copy_paste.v
-            && !lc.view_only.v
     }
 }
 
@@ -383,10 +370,6 @@ impl<T: InvokeUiSession> Session<T> {
 
     pub fn toggle_option(&self, name: String) {
         let msg = self.lc.write().unwrap().toggle_option(name.clone());
-        #[cfg(all(target_os = "windows", not(feature = "flutter")))]
-        if name == keys::OPTION_ENABLE_FILE_COPY_PASTE {
-            self.send(Data::ToggleClipboardFile);
-        }
         if let Some(msg) = msg {
             self.send(Data::Message(msg));
         }
@@ -406,11 +389,6 @@ impl<T: InvokeUiSession> Session<T> {
 
     pub fn get_toggle_option(&self, name: String) -> bool {
         self.lc.read().unwrap().get_toggle_option(&name)
-    }
-
-    #[cfg(not(feature = "flutter"))]
-    pub fn is_privacy_mode_supported(&self) -> bool {
-        self.lc.read().unwrap().is_privacy_mode_supported()
     }
 
     #[cfg(not(target_os = "ios"))]
@@ -451,11 +429,6 @@ impl<T: InvokeUiSession> Session<T> {
         let mut msg_out = Message::new();
         msg_out.set_misc(misc);
         self.send(Data::Message(msg_out));
-    }
-
-    #[cfg(not(feature = "flutter"))]
-    pub fn refresh_video(&self, _display: i32) {
-        self.send(Data::Message(LoginConfigHandler::refresh()));
     }
 
     pub fn record_screen(&self, start: bool) {
@@ -511,25 +484,6 @@ impl<T: InvokeUiSession> Session<T> {
         self.lc.read().unwrap().remember
     }
 
-    #[cfg(not(feature = "flutter"))]
-    pub fn set_write_override(
-        &mut self,
-        job_id: i32,
-        file_num: i32,
-        is_override: bool,
-        remember: bool,
-        is_upload: bool,
-    ) -> bool {
-        self.send(Data::SetConfirmOverrideFile((
-            job_id,
-            file_num,
-            is_override,
-            remember,
-            is_upload,
-        )));
-        true
-    }
-
     pub fn alternative_codecs(&self) -> (bool, bool, bool, bool) {
         let luid = self.lc.read().unwrap().adapter_luid;
         let mark_unsupported = self.lc.read().unwrap().mark_unsupported.clone();
@@ -569,16 +523,6 @@ impl<T: InvokeUiSession> Session<T> {
         self.send(Data::Message(msg));
     }
 
-    #[cfg(all(feature = "flutter", feature = "plugin_framework"))]
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    pub fn send_plugin_request(&self, request: PluginRequest) {
-        let mut misc = Misc::new();
-        misc.set_plugin_request(request);
-        let mut msg_out = Message::new();
-        msg_out.set_misc(misc);
-        self.send(Data::Message(msg_out));
-    }
-
     pub fn get_audit_server(&self, typ: String) -> String {
         if LocalConfig::get_option("access_token").is_empty() {
             return "".to_owned();
@@ -598,12 +542,6 @@ impl<T: InvokeUiSession> Session<T> {
         std::thread::spawn(move || {
             send_note(url, id, session_id, note);
         });
-    }
-
-    #[cfg(not(feature = "flutter"))]
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    pub fn is_xfce(&self) -> bool {
-        crate::platform::is_xfce()
     }
 
     pub fn remove_port_forward(&self, port: i32) {
@@ -687,11 +625,6 @@ impl<T: InvokeUiSession> Session<T> {
 
     pub fn input_os_password(&self, pass: String, activate: bool) {
         input_os_password(pass, activate, self.clone());
-    }
-
-    #[cfg(not(feature = "flutter"))]
-    pub fn get_chatbox(&self) -> String {
-        "".to_owned()
     }
 
     pub fn swap_modifier_key(&self, msg: &mut KeyEvent) {
@@ -1313,57 +1246,6 @@ impl<T: InvokeUiSession> Session<T> {
         }));
     }
 
-    #[cfg(not(feature = "flutter"))]
-    pub fn get_icon_path(&self, file_type: i32, ext: String) -> String {
-        let mut path = Config::icon_path();
-        if file_type == FileType::DirLink as i32 {
-            let new_path = path.join("dir_link");
-            if !std::fs::metadata(&new_path).is_ok() {
-                #[cfg(windows)]
-                allow_err!(std::os::windows::fs::symlink_file(&path, &new_path));
-                #[cfg(not(windows))]
-                allow_err!(std::os::unix::fs::symlink(&path, &new_path));
-            }
-            path = new_path;
-        } else if file_type == FileType::File as i32 {
-            if !ext.is_empty() {
-                path = path.join(format!("file.{}", ext));
-            } else {
-                path = path.join("file");
-            }
-            if !std::fs::metadata(&path).is_ok() {
-                allow_err!(std::fs::File::create(&path));
-            }
-        } else if file_type == FileType::FileLink as i32 {
-            let new_path = path.join("file_link");
-            if !std::fs::metadata(&new_path).is_ok() {
-                path = path.join("file");
-                if !std::fs::metadata(&path).is_ok() {
-                    allow_err!(std::fs::File::create(&path));
-                }
-                #[cfg(windows)]
-                allow_err!(std::os::windows::fs::symlink_file(&path, &new_path));
-                #[cfg(not(windows))]
-                allow_err!(std::os::unix::fs::symlink(&path, &new_path));
-            }
-            path = new_path;
-        } else if file_type == FileType::DirDrive as i32 {
-            if cfg!(windows) {
-                path = fs::get_path("C:");
-            } else if cfg!(target_os = "macos") {
-                if let Ok(entries) = fs::get_path("/Volumes/").read_dir() {
-                    for entry in entries {
-                        if let Ok(entry) = entry {
-                            path = entry.path();
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        fs::get_string(&path)
-    }
-
     pub fn login(
         &self,
         os_username: String,
@@ -1480,7 +1362,7 @@ impl<T: InvokeUiSession> Session<T> {
         self.send(Data::ElevateWithLogon(username, password));
     }
 
-    #[cfg(any(target_os = "android", target_os = "ios", not(feature = "flutter")))]
+    #[cfg(any(target_os = "android", target_os = "ios"))]
     pub fn switch_sides(&self) {}
 
     #[cfg(feature = "flutter")]
@@ -1618,14 +1500,6 @@ impl<T: InvokeUiSession> Session<T> {
                             self.on_error(
                                 "No active console user logged on, please connect and logon first.",
                             );
-                        } else {
-                            #[cfg(not(feature = "flutter"))]
-                            {
-                                let remote_dir = self.get_option("remote_dir".to_string());
-                                let show_hidden =
-                                    !self.get_option("remote_show_hidden".to_string()).is_empty();
-                                self.read_remote_dir(remote_dir, show_hidden);
-                            }
                         }
                     } else if !self.is_terminal() {
                         self.msgbox(

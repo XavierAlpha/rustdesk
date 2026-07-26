@@ -573,10 +573,6 @@ impl<T: InvokeUiSession> Remote<T> {
                     .handle_login_from_ui(os_username, os_password, password, remember, peer)
                     .await;
             }
-            #[cfg(all(target_os = "windows", not(feature = "flutter")))]
-            Data::ToggleClipboardFile => {
-                self.check_clipboard_file_context();
-            }
             Data::Message(msg) => {
                 match &msg.union {
                     Some(message::Union::Misc(misc)) => match misc.union {
@@ -1384,24 +1380,10 @@ impl<T: InvokeUiSession> Remote<T> {
                             }
                         }
                         self.handler.handle_peer_info(pi);
-                        #[cfg(all(target_os = "windows", not(feature = "flutter")))]
-                        self.check_clipboard_file_context();
                         if self.handler.is_default() {
                             #[cfg(feature = "flutter")]
                             #[cfg(not(target_os = "ios"))]
                             let rx = Client::try_start_clipboard(None);
-                            #[cfg(not(feature = "flutter"))]
-                            #[cfg(not(any(target_os = "android", target_os = "ios")))]
-                            let rx = Client::try_start_clipboard(Some(
-                                crate::client::ClientClipboardContext {
-                                    cfg: self.handler.get_permission_config(),
-                                    tx: self.sender.clone(),
-                                    #[cfg(feature = "unix-file-copy-paste")]
-                                    is_file_supported: crate::is_support_file_copy_paste(
-                                        &peer_version,
-                                    ),
-                                },
-                            ));
                             // To make sure current text clipboard data is updated.
                             #[cfg(not(target_os = "ios"))]
                             if let Some(mut rx) = rx {
@@ -1433,14 +1415,6 @@ impl<T: InvokeUiSession> Remote<T> {
 
                             #[cfg(all(feature = "flutter", feature = "unix-file-copy-paste"))]
                             crate::flutter::update_file_clipboard_required();
-
-                            // on connection established client
-                            #[cfg(all(feature = "flutter", feature = "plugin_framework"))]
-                            #[cfg(not(any(target_os = "android", target_os = "ios")))]
-                            crate::plugin::handle_listen_event(
-                                crate::plugin::EVENT_ON_CONN_CLIENT.to_owned(),
-                                self.handler.get_id(),
-                            );
                         }
 
                         if self.handler.is_file_transfer() {
@@ -1897,21 +1871,6 @@ impl<T: InvokeUiSession> Remote<T> {
                                 self.handler.cancel_msgbox("elevation-error");
                             }
                         }
-                        #[cfg(not(feature = "flutter"))]
-                        {
-                            let msgtype = "custom-uac-nocancel";
-                            let title = "Prompt";
-                            let text = "Please wait for confirmation of UAC...";
-                            let link = "";
-                            if uac && keyboard {
-                                self.handler.msgbox(msgtype, title, text, link);
-                            } else {
-                                self.handler.cancel_msgbox(&format!(
-                                    "{}-{}-{}-{}",
-                                    msgtype, title, text, link,
-                                ));
-                            }
-                        }
                     }
                     Some(misc::Union::ForegroundWindowElevated(elevated)) => {
                         let keyboard = self.handler.server_keyboard_enabled.read().unwrap().clone();
@@ -1928,21 +1887,6 @@ impl<T: InvokeUiSession> Remote<T> {
                                 self.handler.cancel_msgbox("on-foreground-elevated");
                                 self.handler.cancel_msgbox("wait-uac");
                                 self.handler.cancel_msgbox("elevation-error");
-                            }
-                        }
-                        #[cfg(not(feature = "flutter"))]
-                        {
-                            let msgtype = "custom-elevated-foreground-nocancel";
-                            let title = "Prompt";
-                            let text = "elevated_foreground_window_tip";
-                            let link = "";
-                            if elevated && keyboard {
-                                self.handler.msgbox(msgtype, title, text, link);
-                            } else {
-                                self.handler.cancel_msgbox(&format!(
-                                    "{}-{}-{}-{}",
-                                    msgtype, title, text, link,
-                                ));
                             }
                         }
                     }
@@ -1984,26 +1928,6 @@ impl<T: InvokeUiSession> Remote<T> {
                             );
                         }
                     }
-                    #[cfg(all(feature = "flutter", feature = "plugin_framework"))]
-                    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-                    Some(misc::Union::PluginRequest(p)) => {
-                        allow_err!(crate::plugin::handle_server_event(
-                            &p.id,
-                            &self.handler.get_id(),
-                            &p.content
-                        ));
-                        // to-do: show message box on UI when error occurs?
-                    }
-                    #[cfg(all(feature = "flutter", feature = "plugin_framework"))]
-                    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-                    Some(misc::Union::PluginFailure(p)) => {
-                        let name = if p.name.is_empty() {
-                            "plugin".to_string()
-                        } else {
-                            p.name
-                        };
-                        self.handler.msgbox("custom-nocancel", &name, &p.msg, "");
-                    }
                     Some(misc::Union::SupportedEncoding(e)) => {
                         log::info!("update supported encoding:{:?}", e);
                         self.handler.lc.write().unwrap().supported_encoding = e;
@@ -2031,8 +1955,6 @@ impl<T: InvokeUiSession> Remote<T> {
                             let action = LocalConfig::get_option(
                                 config::keys::OPTION_PRINTER_INCOMING_JOB_ACTION,
                             );
-                            #[cfg(not(feature = "flutter"))]
-                            let action = "";
                             if action == "dismiss" {
                                 // Just ignore the incoming print job.
                             } else {
@@ -2041,8 +1963,6 @@ impl<T: InvokeUiSession> Remote<T> {
                                 let allow_auto_print = LocalConfig::get_bool_option(
                                     config::keys::OPTION_PRINTER_ALLOW_AUTO_PRINT,
                                 );
-                                #[cfg(not(feature = "flutter"))]
-                                let allow_auto_print = false;
                                 if allow_auto_print {
                                     let printer_name = if action == "" {
                                         "".to_string()
@@ -2333,13 +2253,6 @@ impl<T: InvokeUiSession> Remote<T> {
             _ => {}
         }
         true
-    }
-
-    #[cfg(all(target_os = "windows", not(feature = "flutter")))]
-    fn check_clipboard_file_context(&self) {
-        let enabled = *self.handler.server_file_transfer_enabled.read().unwrap()
-            && self.handler.lc.read().unwrap().enable_file_copy_paste.v;
-        ContextSend::enable(enabled);
     }
 
     #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]

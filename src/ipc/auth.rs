@@ -1,6 +1,4 @@
 use crate::ipc::{Connection, ConnectionTmpl};
-#[cfg(all(windows, not(feature = "flutter")))]
-use hbb_common::sha2::{Digest, Sha256};
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use hbb_common::{anyhow, bail, log, ResultType};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -12,8 +10,6 @@ use hbb_common::{
 use parity_tokio_ipc::SecurityAttributes;
 #[cfg(windows)]
 use std::io;
-#[cfg(all(windows, not(feature = "flutter")))]
-use std::io::Read;
 #[cfg(target_os = "macos")]
 use std::os::unix::fs::MetadataExt;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -105,35 +101,6 @@ fn macos_service_ipc_allows_gui_and_service_binaries(
         && allowed_exe
             .iter()
             .any(|name| os_str_eq_ignore_ascii_case(current_name, *name))
-}
-
-#[cfg(target_os = "windows")]
-#[inline]
-fn windows_portable_service_ipc_allows_logon_helper_executable(
-    _peer_exe: &Path,
-    postfix: &str,
-) -> bool {
-    if postfix != "_portable_service" {
-        return false;
-    }
-    #[cfg(feature = "flutter")]
-    {
-        false
-    }
-    #[cfg(not(feature = "flutter"))]
-    {
-        let Some((_, expected)) = crate::platform::windows::portable_service_logon_helper_paths()
-        else {
-            return false;
-        };
-        let Ok(expected) = fs::canonicalize(expected) else {
-            return false;
-        };
-        let Ok(current_exe) = current_exe_canonical_path() else {
-            return false;
-        };
-        portable_service_helper_is_trusted(_peer_exe, &expected, &current_exe)
-    }
 }
 
 #[cfg(windows)]
@@ -406,57 +373,6 @@ fn os_str_eq_ignore_ascii_case(
         .eq_ignore_ascii_case(&right.to_string_lossy())
 }
 
-#[cfg(all(windows, not(feature = "flutter")))]
-#[inline]
-fn file_sha256(path: &Path) -> ResultType<[u8; 32]> {
-    let mut file = fs::File::open(path)?;
-    let mut hasher = Sha256::new();
-    let mut buffer = [0u8; 8 * 1024];
-    loop {
-        let read_bytes = file.read(&mut buffer)?;
-        if read_bytes == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read_bytes]);
-    }
-    Ok(hasher.finalize().into())
-}
-
-#[cfg(all(windows, not(feature = "flutter")))]
-#[inline]
-fn portable_service_helper_is_trusted(
-    peer_exe: &Path,
-    expected_exe: &Path,
-    current_exe: &Path,
-) -> bool {
-    if !executable_paths_match(peer_exe, expected_exe) {
-        return false;
-    }
-    let peer_hash = match file_sha256(peer_exe) {
-        Ok(hash) => hash,
-        Err(err) => {
-            log::warn!(
-                "Failed to hash peer portable helper executable '{}': {}",
-                peer_exe.display(),
-                err
-            );
-            return false;
-        }
-    };
-    let current_hash = match file_sha256(current_exe) {
-        Ok(hash) => hash,
-        Err(err) => {
-            log::warn!(
-                "Failed to hash current executable '{}' for portable helper trust check: {}",
-                current_exe.display(),
-                err
-            );
-            return false;
-        }
-    };
-    peer_hash == current_hash
-}
-
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[inline]
 fn ensure_peer_executable_matches_current_by_pid(peer_pid: u32, postfix: &str) -> ResultType<()> {
@@ -467,10 +383,6 @@ fn ensure_peer_executable_matches_current_by_pid(peer_pid: u32, postfix: &str) -
     }
     #[cfg(target_os = "macos")]
     if macos_service_ipc_allows_gui_and_service_binaries(&peer_exe, &current_exe, postfix) {
-        return Ok(());
-    }
-    #[cfg(target_os = "windows")]
-    if windows_portable_service_ipc_allows_logon_helper_executable(&peer_exe, postfix) {
         return Ok(());
     }
     bail!(
@@ -1020,69 +932,6 @@ mod tests {
         assert!(!super::os_str_eq_ignore_ascii_case(
             Some(std::ffi::OsStr::new("RustDesk")),
             Some(std::ffi::OsStr::new("service"))
-        ));
-    }
-
-    #[cfg(all(windows, not(feature = "flutter")))]
-    struct TempDirGuard(std::path::PathBuf);
-
-    #[cfg(all(windows, not(feature = "flutter")))]
-    impl Drop for TempDirGuard {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
-
-    #[test]
-    #[cfg(all(windows, not(feature = "flutter")))]
-    fn test_portable_service_helper_trust_requires_content_match() {
-        let unique = format!(
-            "rustdesk-portable-helper-trust-test-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos()
-        );
-        let base = std::env::temp_dir().join(unique);
-        std::fs::create_dir_all(&base).unwrap();
-        let _cleanup = TempDirGuard(base.clone());
-
-        let current_exe = base.join("current.exe");
-        let helper_exe = base.join("helper.exe");
-        std::fs::write(&current_exe, b"trusted-binary").unwrap();
-        std::fs::write(&helper_exe, b"tampered-binary").unwrap();
-
-        assert!(
-            !super::portable_service_helper_is_trusted(&helper_exe, &helper_exe, &current_exe),
-            "helper trust check must reject path-match-only binaries with mismatched content"
-        );
-    }
-
-    #[test]
-    #[cfg(all(windows, not(feature = "flutter")))]
-    fn test_portable_service_helper_trust_accepts_matching_content() {
-        let unique = format!(
-            "rustdesk-portable-helper-trust-match-test-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos()
-        );
-        let base = std::env::temp_dir().join(unique);
-        std::fs::create_dir_all(&base).unwrap();
-        let _cleanup = TempDirGuard(base.clone());
-
-        let current_exe = base.join("current.exe");
-        let helper_exe = base.join("helper.exe");
-        std::fs::write(&current_exe, b"trusted-binary").unwrap();
-        std::fs::write(&helper_exe, b"trusted-binary").unwrap();
-
-        assert!(super::portable_service_helper_is_trusted(
-            &helper_exe,
-            &helper_exe,
-            &current_exe
         ));
     }
 

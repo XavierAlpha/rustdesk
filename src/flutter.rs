@@ -636,30 +636,6 @@ impl FlutterHandler {
         serde_json::ser::to_string(&msg_vec).unwrap_or("".to_owned())
     }
 
-    #[cfg(feature = "plugin_framework")]
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    pub(crate) fn add_session_hook(&self, key: String, hook: SessionHook) -> bool {
-        let mut hooks = self.hooks.write().unwrap();
-        if hooks.contains_key(&key) {
-            // Already has the hook with this key.
-            return false;
-        }
-        let _ = hooks.insert(key, hook);
-        true
-    }
-
-    #[cfg(feature = "plugin_framework")]
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    pub(crate) fn remove_session_hook(&self, key: &String) -> bool {
-        let mut hooks = self.hooks.write().unwrap();
-        if !hooks.contains_key(key) {
-            // The hook with this key does not found.
-            return false;
-        }
-        let _ = hooks.remove(key);
-        true
-    }
-
     pub fn update_use_texture_render(&self) {
         self.use_texture_render
             .store(crate::ui_interface::use_texture_render(), Ordering::Relaxed);
@@ -1237,8 +1213,9 @@ impl FlutterHandler {
                 }
             }
             if let Some(stream) = &h.event_stream {
-                let _ = stream.add(EventToUI::Rgba(display));
-                is_sent = true;
+                // Only a delivered event counts: a closed sink must fall through
+                // to the invalidation below, or the frame is silently dropped.
+                is_sent |= stream.add(EventToUI::Rgba(display)).is_ok();
             }
         }
         // We need `is_sent` here. Because we use texture render for multi-displays session.

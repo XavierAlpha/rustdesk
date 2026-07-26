@@ -190,9 +190,6 @@ pub fn core_main() -> Option<Vec<String>> {
         crate::platform::elevate_or_run_as_system(click_setup, _is_elevate, _is_run_as_system);
         return None;
     }
-    #[cfg(all(feature = "flutter", feature = "plugin_framework"))]
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    init_plugins(&args);
     if args.is_empty() || crate::common::is_empty_uni_link(&args[0]) {
         #[cfg(target_os = "macos")]
         {
@@ -424,16 +421,27 @@ pub fn core_main() -> Option<Vec<String>> {
             return None;
         } else if args[0] == "--import-config" {
             if args.len() == 2 {
-                let filepath;
                 let path = std::path::Path::new(&args[1]);
-                if !path.is_absolute() {
-                    let mut cur = std::env::current_dir().unwrap();
-                    cur.push(path);
-                    filepath = cur.to_str().unwrap().to_string();
+                let abs_path = if path.is_absolute() {
+                    path.to_path_buf()
                 } else {
-                    filepath = path.to_str().unwrap().to_string();
+                    match std::env::current_dir() {
+                        Ok(cur) => cur.join(path),
+                        Err(err) => {
+                            log::error!(
+                                "Failed to resolve current directory for --import-config: {err}"
+                            );
+                            return None;
+                        }
+                    }
+                };
+                match abs_path.to_str() {
+                    Some(filepath) => import_config(filepath),
+                    None => log::error!(
+                        "Failed to import config: path {} is not valid UTF-8",
+                        abs_path.display()
+                    ),
                 }
-                import_config(&filepath);
             }
             return None;
         } else if args[0] == "--password" {
@@ -737,46 +745,11 @@ pub fn core_main() -> Option<Vec<String>> {
                 crate::platform::gtk_sudo::exec();
             }
             return None;
-        } else {
-            #[cfg(all(feature = "flutter", feature = "plugin_framework"))]
-            #[cfg(not(any(target_os = "android", target_os = "ios")))]
-            if args[0] == "--plugin-install" {
-                if args.len() == 2 {
-                    crate::plugin::change_uninstall_plugin(&args[1], false);
-                } else if args.len() == 3 {
-                    crate::plugin::install_plugin_with_url(&args[1], &args[2]);
-                }
-                return None;
-            } else if args[0] == "--plugin-uninstall" {
-                if args.len() == 2 {
-                    crate::plugin::change_uninstall_plugin(&args[1], true);
-                }
-                return None;
-            }
         }
     }
     //_async_logger_holder.map(|x| x.flush());
     #[cfg(feature = "flutter")]
     return Some(flutter_args);
-    #[cfg(not(feature = "flutter"))]
-    return Some(args);
-}
-
-#[inline]
-#[cfg(all(feature = "flutter", feature = "plugin_framework"))]
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-fn init_plugins(args: &Vec<String>) {
-    if args.is_empty() || "--server" == (&args[0] as &str) {
-        #[cfg(debug_assertions)]
-        let load_plugins = true;
-        #[cfg(not(debug_assertions))]
-        let load_plugins = crate::platform::is_installed();
-        if load_plugins {
-            crate::plugin::init();
-        }
-    } else if "--service" == (&args[0] as &str) {
-        hbb_common::allow_err!(crate::plugin::remove_uninstalled());
-    }
 }
 
 fn import_config(path: &str) {

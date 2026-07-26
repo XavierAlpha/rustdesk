@@ -137,6 +137,8 @@ pub type PrivacyModeCreator = fn(impl_key: &str) -> Box<dyn PrivacyMode>;
 lazy_static::lazy_static! {
     static ref PRIVACY_MODE_CREATOR: Arc<Mutex<HashMap<&'static str, PrivacyModeCreator>>> = {
         #[cfg(not(windows))]
+        // Only the macOS-gated block below mutates the map on non-Windows targets.
+        #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
         let mut map: HashMap<&'static str, PrivacyModeCreator> = HashMap::new();
         #[cfg(target_os = "macos")]
         {

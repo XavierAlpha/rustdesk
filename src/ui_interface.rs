@@ -37,12 +37,8 @@ pub type Children = Arc<Mutex<(bool, HashMap<(String, String), Child>)>>;
 #[derive(Clone, Debug, Serialize)]
 pub struct UiStatus {
     pub status_num: i32,
-    #[cfg(not(feature = "flutter"))]
-    pub key_confirmed: bool,
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub mouse_time: i64,
-    #[cfg(not(feature = "flutter"))]
-    pub id: String,
     #[cfg(feature = "flutter")]
     pub video_conn_count: usize,
 }
@@ -57,12 +53,8 @@ pub struct LoginDeviceInfo {
 lazy_static::lazy_static! {
     static ref UI_STATUS : Arc<Mutex<UiStatus>> = Arc::new(Mutex::new(UiStatus{
         status_num: 0,
-        #[cfg(not(feature = "flutter"))]
-        key_confirmed: false,
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         mouse_time: 0,
-        #[cfg(not(feature = "flutter"))]
-        id: "".to_owned(),
         #[cfg(feature = "flutter")]
         video_conn_count: 0,
     }));
@@ -875,18 +867,6 @@ pub fn get_async_http_status(url: String) -> Option<String> {
 }
 
 #[inline]
-#[cfg(not(feature = "flutter"))]
-pub fn post_request(url: String, body: String, header: String) {
-    *ASYNC_JOB_STATUS.lock().unwrap() = " ".to_owned();
-    std::thread::spawn(move || {
-        *ASYNC_JOB_STATUS.lock().unwrap() = match crate::post_request_sync(url, body, &header) {
-            Err(err) => err.to_string(),
-            Ok(text) => text,
-        };
-    });
-}
-
-#[inline]
 pub fn get_async_job_status() -> String {
     ASYNC_JOB_STATUS.lock().unwrap().clone()
 }
@@ -1336,14 +1316,10 @@ pub fn get_login_device_info_json() -> String {
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::main(flavor = "current_thread")]
 async fn check_connect_status_(reconnect: bool, rx: mpsc::UnboundedReceiver<ipc::Data>) {
-    #[cfg(not(feature = "flutter"))]
-    let mut key_confirmed = false;
     let mut rx = rx;
     let mut mouse_time = 0;
     #[cfg(feature = "flutter")]
     let mut video_conn_count = 0;
-    #[cfg(not(feature = "flutter"))]
-    let mut id = "".to_owned();
     let is_cm = crate::common::is_cm();
 
     loop {
@@ -1370,12 +1346,7 @@ async fn check_connect_status_(reconnect: bool, rx: mpsc::UnboundedReceiver<ipc:
                                 *OPTION_SYNCED.lock().unwrap() = true;
                             }
                             Ok(Some(ipc::Data::Config((name, Some(value))))) => {
-                                if name == "id" {
-                                    #[cfg(not(feature = "flutter"))]
-                                    {
-                                        id = value;
-                                    }
-                                } else if name == "temporary-password" {
+                                if name == "temporary-password" {
                                     *TEMPORARY_PASSWD.lock().unwrap() = value;
                                 }
                             }
@@ -1387,18 +1358,10 @@ async fn check_connect_status_(reconnect: bool, rx: mpsc::UnboundedReceiver<ipc:
                                 if x > 0 {
                                     x = 1
                                 }
-                                #[cfg(not(feature = "flutter"))]
-                                {
-                                    key_confirmed = _c;
-                                }
                                 *UI_STATUS.lock().unwrap() = UiStatus {
                                     status_num: x as _,
-                                    #[cfg(not(feature = "flutter"))]
-                                    key_confirmed: _c,
                                     #[cfg(not(any(target_os = "android", target_os = "ios")))]
                                     mouse_time,
-                                    #[cfg(not(feature = "flutter"))]
-                                    id: id.clone(),
                                     #[cfg(feature = "flutter")]
                                     video_conn_count,
                                 };
@@ -1445,12 +1408,8 @@ async fn check_connect_status_(reconnect: bool, rx: mpsc::UnboundedReceiver<ipc:
         }
         *UI_STATUS.lock().unwrap() = UiStatus {
             status_num: -1,
-            #[cfg(not(feature = "flutter"))]
-            key_confirmed,
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             mouse_time,
-            #[cfg(not(feature = "flutter"))]
-            id: id.clone(),
             #[cfg(feature = "flutter")]
             video_conn_count,
         };

@@ -1745,10 +1745,10 @@ mod desktop {
             if self.display.is_empty() {
                 self.display = ":0".to_owned();
             }
-            self.display = self
-                .display
-                .replace(&hbb_common::whoami::hostname(), "")
-                .replace("localhost", "");
+            if let Ok(hostname) = hbb_common::whoami::fallible::hostname() {
+                self.display = self.display.replace(&hostname, "");
+            }
+            self.display = self.display.replace("localhost", "");
         }
 
         fn get_home(&mut self) {

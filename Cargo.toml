@@ -20,15 +20,12 @@ name = "service"
 path = "src/service.rs"
 
 [features]
-use_samplerate = ["samplerate"]
-use_rubato = ["rubato"]
 use_dasp = ["dasp"]
-flutter = ["flutter_rust_bridge"]
+flutter = []
 default = ["use_dasp", "flutter", "linux-pkg-config"]
 hwcodec = ["scrap/hwcodec"]
 vram = ["scrap/vram"]
 mediacodec = ["scrap/mediacodec"]
-plugin_framework = []
 linux-pkg-config = ["magnum-opus/linux-pkg-config", "scrap/linux-pkg-config"]
 unix-file-copy-paste = [
     "dep:x11-clipboard",
@@ -38,7 +35,6 @@ unix-file-copy-paste = [
     "clipboard/unix-file-copy-paste",
 ]
 screencapturekit = ["cpal/screencapturekit"]
-flutter_rust_bridge = ["dep:flutter_rust_bridge"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -58,19 +54,16 @@ repng = "0.2"
 parity-tokio-ipc = { git = "https://github.com/rustdesk-org/parity-tokio-ipc" }
 magnum-opus = { git = "https://github.com/rustdesk-org/magnum-opus" }
 dasp = { version = "0.11", features = ["signal", "interpolate-linear", "interpolate"], optional = true }
-rubato = { version = "0.12", optional = true }
-samplerate = { version = "0.2", optional = true }
 uuid = { version = "1.3", features = ["v4"] }
 num_cpus = "1.15"
 bytes = { version = "1.4", features = ["serde"] }
 default-net = "0.14"
 wol-rs = "1.0"
-flutter_rust_bridge = { version = "=2.12.0", features = ["uuid"], optional = true }
+flutter_rust_bridge = { version = "=2.12.0", features = ["uuid"] }
 errno = "0.3"
 rdev = { git = "https://github.com/rustdesk-org/rdev" }
 url = { version = "2.3", features = ["serde"] }
 crossbeam-queue = "0.3"
-hex = "0.4"
 chrono = "0.4"
 cidr-utils = "0.5"
 fon = "0.6"
@@ -98,7 +91,6 @@ clipboard-master = { git = "https://github.com/rustdesk-org/clipboard-master" }
 portable-pty = { git = "https://github.com/rustdesk-org/wezterm", branch = "rustdesk/pty_based_0.8.1", package = "portable-pty" }
 
 system_shutdown = "4.0"
-qrcode-generator = "4.1"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = [
@@ -148,8 +140,6 @@ dispatch = "0.2"
 core-foundation = "0.9"
 core-graphics = "0.22"
 include_dir = "0.7"
-fruitbasket = "0.10"
-objc_id = "0.1"
 # If we use piet "0.7" here, we must also update core-graphics to "0.24".
 piet = "0.6"
 piet-coregraphics = "0.6"
@@ -178,7 +168,6 @@ pulse = { package = "libpulse-binding", version = ">=2.27, <2.29" }
 libpulse-simple-sys = ">=1.21, <1.22"
 libpulse-sys = ">=1.21, <1.22"
 rust-pulsectl = { git = "https://github.com/rustdesk-org/pulsectl" }
-async-process = "1.7"
 evdev = { git="https://github.com/rustdesk-org/evdev" }
 dbus = "0.9"
 dbus-crossroads = "0.5"
@@ -213,17 +202,15 @@ libxdo-sys = { path = "libs/libxdo-sys-stub" }
 [build-dependencies]
 cc = "1.0"
 hbb_common = { path = "libs/hbb_common" }
-os-version = "0.2"
 
 [dev-dependencies]
-hound = "3.5"
 docopt = "1.1"
 
 [package.metadata.bundle]
 name = "Camellia"
 identifier = "com.camellia"
 icon = ["res/32x32.png", "res/128x128.png", "res/128x128@2x.png"]
-osx_minimum_system_version = "10.14"
+osx_minimum_system_version = "10.15"
 
 #https://github.com/johnthagen/min-sized-rust
 [profile.release]

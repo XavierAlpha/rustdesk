@@ -6,7 +6,6 @@
 * `src/` Rust app
 * `src/server/` audio / clipboard / input / video / network
 * `src/platform/` platform-specific code
-* `src/ui/` legacy Sciter UI (deprecated)
 * `flutter/` current UI
 * `libs/hbb_common/` config / proto / shared utils
 * `libs/scrap/` screen capture
@@ -22,8 +21,7 @@
 - **File Transfer**: Secure file transfer implementation in `libs/hbb_common/`
 
 ### UI Architecture
-- **Legacy UI**: Sciter-based (deprecated) - files in `src/ui/`
-- **Modern UI**: Flutter-based - files in `flutter/`
+- **UI**: Flutter-based - files in `flutter/`
   - Desktop: `flutter/lib/desktop/`
   - Mobile: `flutter/lib/mobile/`
   - Shared: `flutter/lib/common/` and `flutter/lib/models/`
