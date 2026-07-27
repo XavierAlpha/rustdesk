@@ -1,32 +1,14 @@
-name: Latest Release Build
+name: Release Build
 
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: "App version written into the build, for example 1.2.3"
-        required: true
-        type: string
       release_tag:
-        description: "GitHub release tag used when upload_release is true"
+        description: "Existing semantic-version tag to build, for example v1.4.9"
         required: true
-        default: "nightly"
         type: string
-      dependency_mode:
-        description: "latest updates dependencies in the CI workspace; locked reproduces committed locks"
-        required: true
-        default: "latest"
-        type: choice
-        options:
-          - latest
-          - locked
-      upload_artifact:
-        description: "Upload workflow artifacts"
-        required: true
-        default: true
-        type: boolean
       upload_release:
-        description: "Upload built packages to release_tag"
+        description: "Publish the built packages to the existing release tag"
         required: true
         default: false
         type: boolean
@@ -87,59 +69,126 @@ on:
         type: string
   push:
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
-      - "[0-9]+.[0-9]+.[0-9]+"
-      - "v[0-9]+.[0-9]+.[0-9]+-[0-9]+"
-      - "[0-9]+.[0-9]+.[0-9]+-[0-9]+"
+      - "v*.*.*"
+      - "*.*.*"
   pull_request:
     paths-ignore:
       - "docs/**"
       - "README.md"
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.repository }}-${{ github.event_name == 'pull_request' && github.ref || github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_TOOLCHAIN: stable
+  RUST_TOOLCHAIN: "1.93.0"
   FLUTTER_CHANNEL: stable
-  NODE_VERSION: "lts/*"
-  DEPENDENCY_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.dependency_mode || 'latest' }}
-  UPLOAD_ARTIFACT: ${{ (github.event_name == 'workflow_dispatch' && inputs.upload_artifact) || github.event_name == 'push' }}
-  UPLOAD_RELEASE: ${{ (github.event_name == 'workflow_dispatch' && inputs.upload_release) || github.event_name == 'push' }}
-  RS_PUB_KEY: ${{ github.event_name == 'workflow_dispatch' && inputs.rs_pub_key != '' && inputs.rs_pub_key || secrets.RS_PUB_KEY }}
-  RENDEZVOUS_SERVERS: ${{ github.event_name == 'workflow_dispatch' && inputs.rendezvous_servers != '' && inputs.rendezvous_servers || secrets.RENDEZVOUS_SERVERS }}
-  API_SERVER: ${{ github.event_name == 'workflow_dispatch' && inputs.api_server != '' && inputs.api_server || secrets.API_SERVER }}
+  FLUTTER_VERSION: "3.44.5"
+  FLUTTER_REVISION: f94f4fc76b4d74543ed9b085bbd75341ef65de22
+  NODE_VERSION: "24.18.0"
+  ANDROID_NDK_VERSION: "28.2.13676358"
+  DEPENDENCY_MODE: locked
+  RS_PUB_KEY: ${{ github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' && inputs.rs_pub_key != '' && inputs.rs_pub_key || secrets.RS_PUB_KEY) || '' }}
+  RENDEZVOUS_SERVERS: ${{ github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' && inputs.rendezvous_servers != '' && inputs.rendezvous_servers || secrets.RENDEZVOUS_SERVERS) || '' }}
+  API_SERVER: ${{ github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' && inputs.api_server != '' && inputs.api_server || secrets.API_SERVER) || '' }}
 
 jobs:
   prepare:
-    name: Prepare Build Metadata
-    runs-on: ubuntu-latest
+    name: Resolve Immutable Source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     outputs:
+      commit: ${{ steps.meta.outputs.commit }}
+      source_date_epoch: ${{ steps.meta.outputs.source_date_epoch }}
       version: ${{ steps.meta.outputs.version }}
       app_version: ${{ steps.meta.outputs.app_version }}
+      build_number: ${{ steps.meta.outputs.build_number }}
       release_tag: ${{ steps.meta.outputs.release_tag }}
     steps:
-      - name: Resolve version
+      - name: Checkout source metadata
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Resolve source and version
         id: meta
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}
         run: |
-          raw_version="${{ github.event_name == 'push' && github.ref_name || inputs.version || '0.0.0' }}"
-          version="${raw_version#v}"
-          release_tag="${{ github.event_name == 'push' && github.ref_name || inputs.release_tag || 'nightly' }}"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "app_version=${version}+${{ github.run_number }}" >> "$GITHUB_OUTPUT"
-          echo "release_tag=${release_tag}" >> "$GITHUB_OUTPUT"
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            commit="$(git rev-parse HEAD)"
+            release_tag=""
+            version="$(
+              python3 - <<'PY'
+          import tomllib
+          with open("Cargo.toml", "rb") as manifest:
+              print(tomllib.load(manifest)["package"]["version"])
+          PY
+            )"
+          else
+            release_tag="$RELEASE_TAG"
+            if [[ ! "$release_tag" =~ ^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$ ]]; then
+              echo "Invalid semantic-version release tag: $release_tag" >&2
+              exit 1
+            fi
+            if ! commit="$(git rev-parse --verify "refs/tags/${release_tag}^{commit}")"; then
+              echo "Release tag does not exist: $release_tag" >&2
+              exit 1
+            fi
+            version="${release_tag#v}"
+            manifest_version="$(
+              git show "$commit:Cargo.toml" |
+                python3 -c 'import sys, tomllib; print(tomllib.load(sys.stdin.buffer)["package"]["version"])'
+            )"
+            lock_version="$(
+              git show "$commit:Cargo.lock" |
+                python3 -c 'import sys, tomllib; data=tomllib.load(sys.stdin.buffer); print(next(package["version"] for package in data["package"] if package["name"] == "rustdesk"))'
+            )"
+            flutter_version="$(
+              git show "$commit:flutter/pubspec.yaml" |
+                sed -nE 's/^version:[[:space:]]*([^+[:space:]]+).*/\1/p'
+            )"
+            if [[ "$manifest_version" != "$version" ||
+                  "$lock_version" != "$version" ||
+                  "$flutter_version" != "$version" ]]; then
+              echo "Tag $release_tag does not match Cargo.toml, Cargo.lock, and Flutter version $version" >&2
+              exit 1
+            fi
+          fi
+          source_date_epoch="$(git show -s --format=%ct "$commit")"
+          build_number="$(git rev-list --count "$commit")"
+          {
+            echo "commit=$commit"
+            echo "source_date_epoch=$source_date_epoch"
+            echo "version=$version"
+            echo "app_version=$version+$build_number"
+            echo "build_number=$build_number"
+            echo "release_tag=$release_tag"
+          } >> "$GITHUB_OUTPUT"
+      - name: Validate release configuration
+        if: github.event_name != 'pull_request'
+        run: python3 .github/scripts/validate_build_config.py
 
   quality:
     name: Quality Gates
     needs: [prepare, generate_bridge]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout immutable source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
           submodules: recursive
-      - uses: actions/download-artifact@v8
+      - name: Download generated bridge
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: bridge-generated
           path: .
@@ -151,30 +200,48 @@ jobs:
             libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgtk-3-dev libaom-dev libopus-dev \
             libpam0g-dev libpulse-dev libva-dev libx11-dev libxi-dev libxtst-dev libxcb-randr0-dev libxcb-shape0-dev \
             libxcb-xfixes0-dev libxdo-dev libxfixes-dev libvpx-dev libyuv-dev nasm ninja-build pkg-config unzip wget
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           components: rustfmt,clippy
-      - uses: Swatinem/rust-cache@v2
-      - uses: subosito/flutter-action@v2
+      - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: ${{ env.FLUTTER_CHANNEL }}
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: flutter/web/js/package-lock.json
       - name: Sync version
-        run: bash .github/scripts/sync-version.sh "${{ needs.prepare.outputs.version }}" "${{ github.run_number }}"
+        run: |
+          bash .github/scripts/sync-version.sh \
+            "${{ needs.prepare.outputs.version }}" \
+            "${{ needs.prepare.outputs.build_number }}" \
+            "${{ needs.prepare.outputs.source_date_epoch }}"
       - name: Prepare dependencies
         run: bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
+      - name: Workflow and script lint
+        run: |
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          shellcheck .github/scripts/*.sh flutter/web/tools/build_web.sh
+      - name: Build configuration validator tests
+        run: |
+          python3 -m compileall -q .github/scripts libs/portable
+          python3 -m unittest discover -s .github/scripts/tests -v
+          python3 -m unittest discover -s libs/portable/tests -v
       - name: Rust format
         run: cargo fmt --all -- --check
+      - name: Install pinned Rust dependency auditor
+        run: cargo install cargo-audit --version 0.22.2 --locked --no-default-features
+      - name: Rust dependency audit
+        run: cargo audit
       - name: Rust clippy
-        run: cargo clippy --workspace --all-targets --features flutter
+        run: cargo clippy --locked --workspace --all-targets --features flutter
       - name: Rust tests
-        run: cargo test --workspace --features flutter
+        run: cargo test --locked --workspace --features flutter
       - name: Flutter analyze
         working-directory: flutter
         run: flutter analyze --no-fatal-infos
@@ -187,21 +254,29 @@ jobs:
       - name: Web bridge build
         working-directory: flutter/web/js
         run: npm run build
+      - name: Web dependency audit
+        working-directory: flutter/web/js
+        run: npm audit --audit-level=high
 
   generate_bridge:
     name: Generate Flutter Rust Bridge
     needs: prepare
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout immutable source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
           submodules: recursive
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: ${{ env.FLUTTER_CHANNEL }}
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
       - name: Install Linux prerequisites
         run: |
@@ -212,12 +287,16 @@ jobs:
             libpam0g-dev libpulse-dev libva-dev libx11-dev libxi-dev libxtst-dev libxcb-randr0-dev libxcb-shape0-dev \
             libxcb-xfixes0-dev libxdo-dev libxfixes-dev libvpx-dev libyuv-dev nasm ninja-build pkg-config unzip wget
       - name: Sync version
-        run: bash .github/scripts/sync-version.sh "${{ needs.prepare.outputs.version }}" "${{ github.run_number }}"
+        run: |
+          bash .github/scripts/sync-version.sh \
+            "${{ needs.prepare.outputs.version }}" \
+            "${{ needs.prepare.outputs.build_number }}" \
+            "${{ needs.prepare.outputs.source_date_epoch }}"
       - name: Prepare dependencies
         run: bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
       - name: Generate bridge
         run: bash .github/scripts/generate-bridge.sh
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bridge-generated
           path: |
@@ -226,44 +305,51 @@ jobs:
             flutter/lib/generated_bridge/**
             flutter/macos/Runner/bridge_generated.h
             flutter/ios/Runner/bridge_generated.h
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 7
 
   build_windows_x64:
     name: Windows x64
-    needs: [prepare, generate_bridge]
+    needs: [prepare, generate_bridge, quality]
     if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_windows_x64) }}
-    runs-on: windows-latest
+    runs-on: windows-2022
+    timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
           submodules: recursive
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: bridge-generated
           path: .
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: x86_64-pc-windows-msvc
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: ${{ env.FLUTTER_CHANNEL }}
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      - uses: lukka/run-vcpkg@v11
+      - uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11.6
         with:
           vcpkgDirectory: C:\vcpkg
-      - uses: microsoft/setup-msbuild@v2
+      - uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3.0.0
       - name: Build
         shell: bash
         env:
           VCPKG_DEFAULT_TRIPLET: x64-windows-static
         run: |
-          bash .github/scripts/sync-version.sh "${{ needs.prepare.outputs.version }}" "${{ github.run_number }}"
+          bash .github/scripts/sync-version.sh \
+            "${{ needs.prepare.outputs.version }}" \
+            "${{ needs.prepare.outputs.build_number }}" \
+            "${{ needs.prepare.outputs.source_date_epoch }}"
           bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
-          if [[ "${{ env.DEPENDENCY_MODE }}" == "latest" ]]; then "$VCPKG_ROOT/vcpkg" x-update-baseline; fi
           "$VCPKG_ROOT/vcpkg" install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"
           export SODIUM_LIB_DIR="$VCPKG_ROOT/installed/x64-windows-static/lib"
-          cargo build --release --lib --features flutter,hwcodec,vram
+          cargo build --locked --release --lib --features flutter,hwcodec,vram
           (cd flutter && flutter build windows --release)
           mkdir -p artifacts
           powershell -NoProfile -Command "Compress-Archive -Path 'flutter/build/windows/x64/runner/Release/*' -DestinationPath 'artifacts/camellia-${{ needs.prepare.outputs.version }}-windows-x64.zip' -Force"
@@ -274,7 +360,7 @@ jobs:
           python libs/portable/generate.py `
             -f flutter/build/windows/x64/runner/Release `
             -o libs/portable `
-            -e flutter/build/windows/x64/runner/Release/camellia.exe `
+            -e camellia.exe `
             -t x86_64-pc-windows-msvc
           Copy-Item target/x86_64-pc-windows-msvc/release/rustdesk-portable-packer.exe `
             artifacts/camellia-${{ needs.prepare.outputs.version }}-windows-x64-portable.exe
@@ -288,54 +374,63 @@ jobs:
           $msi = Get-ChildItem ./Package/bin/*/Release/en-us/Package.msi | Select-Object -First 1
           Copy-Item $msi.FullName ../../artifacts/camellia-${{ needs.prepare.outputs.version }}-windows-x64.msi
           Pop-Location
-      - uses: actions/upload-artifact@v7
-        if: env.UPLOAD_ARTIFACT == 'true'
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: camellia-${{ needs.prepare.outputs.version }}-windows-x64
           path: artifacts/*
           if-no-files-found: error
+          retention-days: 7
 
   build_windows_arm64:
     name: Windows arm64
-    needs: [prepare, generate_bridge]
+    needs: [prepare, generate_bridge, quality]
     if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_windows_arm64) }}
     runs-on: windows-11-arm
+    timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
           submodules: recursive
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: bridge-generated
           path: .
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: aarch64-pc-windows-msvc
       - name: Install Flutter stable from source
         shell: pwsh
         run: |
-          git clone --depth 1 --branch stable https://github.com/flutter/flutter.git "$env:RUNNER_TEMP\flutter"
+          git clone --depth 1 --branch $env:FLUTTER_VERSION https://github.com/flutter/flutter.git "$env:RUNNER_TEMP\flutter"
+          $revision = (git -C "$env:RUNNER_TEMP\flutter" rev-parse HEAD).Trim()
+          if ($revision -ne $env:FLUTTER_REVISION) {
+            throw "Unexpected Flutter revision: $revision"
+          }
           "FLUTTER_ROOT=$env:RUNNER_TEMP\flutter" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "$env:RUNNER_TEMP\flutter\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Precache Flutter Windows
         shell: pwsh
         run: flutter.bat precache --windows
-      - uses: lukka/run-vcpkg@v11
+      - uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11.6
         with:
           vcpkgDirectory: C:\vcpkg
-      - uses: microsoft/setup-msbuild@v2
+      - uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3.0.0
       - name: Build
         shell: bash
         env:
           VCPKG_DEFAULT_TRIPLET: arm64-windows-static
         run: |
-          bash .github/scripts/sync-version.sh "${{ needs.prepare.outputs.version }}" "${{ github.run_number }}"
+          bash .github/scripts/sync-version.sh \
+            "${{ needs.prepare.outputs.version }}" \
+            "${{ needs.prepare.outputs.build_number }}" \
+            "${{ needs.prepare.outputs.source_date_epoch }}"
           bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
-          if [[ "${{ env.DEPENDENCY_MODE }}" == "latest" ]]; then "$VCPKG_ROOT/vcpkg" x-update-baseline; fi
           "$VCPKG_ROOT/vcpkg" install --triplet arm64-windows-static --x-install-root="$VCPKG_ROOT/installed"
           export SODIUM_LIB_DIR="$VCPKG_ROOT/installed/arm64-windows-static/lib"
-          cargo build --release --target aarch64-pc-windows-msvc --lib --features flutter,hwcodec
+          cargo build --locked --release --target aarch64-pc-windows-msvc --lib --features flutter,hwcodec
           mkdir -p target/release
           cp target/aarch64-pc-windows-msvc/release/librustdesk.dll target/release/librustdesk.dll
           (cd flutter && flutter.bat build windows --release)
@@ -348,7 +443,7 @@ jobs:
           python libs/portable/generate.py `
             -f flutter/build/windows/arm64/runner/Release `
             -o libs/portable `
-            -e flutter/build/windows/arm64/runner/Release/camellia.exe `
+            -e camellia.exe `
             -t aarch64-pc-windows-msvc
           Copy-Item target/aarch64-pc-windows-msvc/release/rustdesk-portable-packer.exe `
             artifacts/camellia-${{ needs.prepare.outputs.version }}-windows-arm64-portable.exe
@@ -362,49 +457,55 @@ jobs:
           $msi = Get-ChildItem ./Package/bin/*/Release/en-us/Package.msi | Select-Object -First 1
           Copy-Item $msi.FullName ../../artifacts/camellia-${{ needs.prepare.outputs.version }}-windows-arm64.msi
           Pop-Location
-      - uses: actions/upload-artifact@v7
-        if: env.UPLOAD_ARTIFACT == 'true'
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: camellia-${{ needs.prepare.outputs.version }}-windows-arm64
           path: artifacts/*
           if-no-files-found: error
+          retention-days: 7
 
   build_macos_universal:
     name: macOS universal
-    needs: [prepare, generate_bridge]
+    needs: [prepare, generate_bridge, quality]
     if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_macos_universal) }}
-    runs-on: macos-latest
+    runs-on: macos-15
+    timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
           submodules: recursive
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: bridge-generated
           path: .
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: aarch64-apple-darwin,x86_64-apple-darwin
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: ${{ env.FLUTTER_CHANNEL }}
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
       - name: Install macOS prerequisites
         run: brew install nasm
-      - uses: lukka/run-vcpkg@v11
+      - uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11.6
         with:
           vcpkgDirectory: ${{ runner.temp }}/vcpkg
       - name: Build
         shell: bash
         run: |
-          bash .github/scripts/sync-version.sh "${{ needs.prepare.outputs.version }}" "${{ github.run_number }}"
+          bash .github/scripts/sync-version.sh \
+            "${{ needs.prepare.outputs.version }}" \
+            "${{ needs.prepare.outputs.build_number }}" \
+            "${{ needs.prepare.outputs.source_date_epoch }}"
           bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
-          if [[ "${{ env.DEPENDENCY_MODE }}" == "latest" ]]; then "$VCPKG_ROOT/vcpkg" x-update-baseline; fi
           "$VCPKG_ROOT/vcpkg" install --triplet arm64-osx --x-install-root="$VCPKG_ROOT/installed"
-          cargo build --release --target aarch64-apple-darwin --lib --features flutter,hwcodec,screencapturekit,unix-file-copy-paste
+          cargo build --locked --release --target aarch64-apple-darwin --lib --features flutter,hwcodec,screencapturekit,unix-file-copy-paste
           "$VCPKG_ROOT/vcpkg" install --triplet x64-osx --x-install-root="$VCPKG_ROOT/installed"
-          cargo build --release --target x86_64-apple-darwin --lib --features flutter,hwcodec,screencapturekit,unix-file-copy-paste
+          cargo build --locked --release --target x86_64-apple-darwin --lib --features flutter,hwcodec,screencapturekit,unix-file-copy-paste
           mkdir -p target/release
           lipo -create \
             target/aarch64-apple-darwin/release/liblibrustdesk.dylib \
@@ -419,23 +520,24 @@ jobs:
           cp -R flutter/build/macos/Build/Products/Release/Camellia.app "$dmg_root/"
           ln -s /Applications "$dmg_root/Applications"
           hdiutil create -volname Camellia -srcfolder "$dmg_root" -ov -format UDZO artifacts/camellia-${{ needs.prepare.outputs.version }}-macos-universal.dmg
-      - uses: actions/upload-artifact@v7
-        if: env.UPLOAD_ARTIFACT == 'true'
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: camellia-${{ needs.prepare.outputs.version }}-macos-universal
           path: artifacts/*
           if-no-files-found: error
+          retention-days: 7
 
   build_linux:
     name: Linux ${{ matrix.arch }}
-    needs: [prepare, generate_bridge]
+    needs: [prepare, generate_bridge, quality]
     if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.build_linux_x64 || inputs.build_linux_arm64)) }}
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: x64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             vcpkg_triplet: x64-linux
             deb_arch: amd64
@@ -453,11 +555,13 @@ jobs:
       - name: Skip disabled matrix entry
         if: ${{ !matrix.enabled }}
         run: echo "disabled"
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: ${{ matrix.enabled }}
         with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
           submodules: recursive
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         if: ${{ matrix.enabled }}
         with:
           name: bridge-generated
@@ -471,21 +575,27 @@ jobs:
             libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgtk-3-dev libaom-dev libopus-dev \
             libpam0g-dev libpulse-dev libva-dev libx11-dev libxi-dev libxtst-dev libxcb-randr0-dev libxcb-shape0-dev \
             libxcb-xfixes0-dev libxdo-dev libxfixes-dev libvpx-dev libyuv-dev nasm ninja-build pkg-config unzip wget
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         if: ${{ matrix.enabled }}
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: ${{ matrix.target }}
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         if: ${{ matrix.enabled && matrix.arch != 'arm64' }}
         with:
           channel: ${{ env.FLUTTER_CHANNEL }}
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
       - name: Install Flutter stable from source
         if: ${{ matrix.enabled && matrix.arch == 'arm64' }}
         shell: bash
         run: |
-          git clone --depth 1 --branch stable https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          revision="$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)"
+          if [[ "$revision" != "$FLUTTER_REVISION" ]]; then
+            echo "Unexpected Flutter revision: $revision" >&2
+            exit 1
+          fi
           echo "FLUTTER_ROOT=$RUNNER_TEMP/flutter" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
           echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
@@ -493,7 +603,7 @@ jobs:
         if: ${{ matrix.enabled && matrix.arch == 'arm64' }}
         shell: bash
         run: flutter precache --linux
-      - uses: lukka/run-vcpkg@v11
+      - uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11.6
         if: ${{ matrix.enabled }}
         with:
           vcpkgDirectory: ${{ runner.temp }}/vcpkg
@@ -501,11 +611,13 @@ jobs:
         if: ${{ matrix.enabled }}
         shell: bash
         run: |
-          bash .github/scripts/sync-version.sh "${{ needs.prepare.outputs.version }}" "${{ github.run_number }}"
+          bash .github/scripts/sync-version.sh \
+            "${{ needs.prepare.outputs.version }}" \
+            "${{ needs.prepare.outputs.build_number }}" \
+            "${{ needs.prepare.outputs.source_date_epoch }}"
           bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
-          if [[ "${{ env.DEPENDENCY_MODE }}" == "latest" ]]; then "$VCPKG_ROOT/vcpkg" x-update-baseline; fi
           "$VCPKG_ROOT/vcpkg" install --triplet "${{ matrix.vcpkg_triplet }}" --x-install-root="$VCPKG_ROOT/installed"
-          cargo build --release --target "${{ matrix.target }}" --lib --features flutter,hwcodec,unix-file-copy-paste
+          cargo build --locked --release --target "${{ matrix.target }}" --lib --features flutter,hwcodec,unix-file-copy-paste
           mkdir -p target/release
           cp "target/${{ matrix.target }}/release/liblibrustdesk.so" target/release/liblibrustdesk.so
           (cd flutter && flutter build linux --release)
@@ -517,8 +629,8 @@ jobs:
             "${{ matrix.arch }}" \
             "${{ matrix.deb_arch }}" \
             "${{ matrix.appimage_arch }}"
-      - uses: actions/upload-artifact@v7
-        if: ${{ matrix.enabled && env.UPLOAD_ARTIFACT == 'true' }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ matrix.enabled }}
         with:
           name: camellia-${{ needs.prepare.outputs.version }}-linux-${{ matrix.arch }}
           path: |
@@ -526,12 +638,14 @@ jobs:
             artifacts/*.deb
             artifacts/*.AppImage
           if-no-files-found: error
+          retention-days: 7
 
   build_android_arm64:
     name: Android arm64
-    needs: [prepare, generate_bridge]
+    needs: [prepare, generate_bridge, quality]
     if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_android_arm64) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
     steps:
       # The Android toolchain, Flutter cache, vcpkg, and Rust artifacts exceed
       # the free space available on some runners unless unused preinstalls are removed.
@@ -544,48 +658,50 @@ jobs:
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/*
           df -h /
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
           submodules: recursive
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: bridge-generated
           path: .
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
           distribution: temurin
           java-version: "21"
-      - uses: android-actions/setup-android@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: aarch64-linux-android
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: ${{ env.FLUTTER_CHANNEL }}
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      - uses: lukka/run-vcpkg@v11
+      - uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11.6
         with:
           vcpkgDirectory: ${{ runner.temp }}/vcpkg
       - name: Install host build prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install -y nasm ninja-build pkg-config
-      - name: Install latest NDK
+      - name: Install pinned NDK
         shell: bash
         run: |
-          latest_ndk="$(sdkmanager --list | awk '/^  ndk;[0-9]/{print $1}' | sort -V | tail -1)"
-          test -n "${latest_ndk}"
-          sdkmanager --install "${latest_ndk}"
-          ndk_version="${latest_ndk#ndk;}"
-          echo "ANDROID_NDK_ROOT=${ANDROID_HOME}/ndk/${ndk_version}" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${ndk_version}" >> "$GITHUB_ENV"
+          sdkmanager --install "ndk;${ANDROID_NDK_VERSION}"
+          echo "ANDROID_NDK_ROOT=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
       - name: Build
         shell: bash
         run: |
-          bash .github/scripts/sync-version.sh "${{ needs.prepare.outputs.version }}" "${{ github.run_number }}"
+          bash .github/scripts/sync-version.sh \
+            "${{ needs.prepare.outputs.version }}" \
+            "${{ needs.prepare.outputs.build_number }}" \
+            "${{ needs.prepare.outputs.source_date_epoch }}"
           bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
-          if [[ "${{ env.DEPENDENCY_MODE }}" == "latest" ]]; then "$VCPKG_ROOT/vcpkg" x-update-baseline; fi
           "$VCPKG_ROOT/vcpkg" install --triplet arm64-android --x-install-root="$VCPKG_ROOT/installed"
           android_api=26
           ndk_toolchain="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64"
@@ -605,7 +721,7 @@ jobs:
           # module in libs/scrap has drifted from the current ImageRgb/CodecFormat
           # APIs and does not compile. Re-add it together with the fixes, verified
           # against a real Android NDK toolchain.
-          cargo build --release --target aarch64-linux-android --lib --no-default-features --features use_dasp,flutter,hwcodec
+          cargo build --locked --release --target aarch64-linux-android --lib --no-default-features --features use_dasp,flutter,hwcodec
           mkdir -p flutter/android/app/src/main/jniLibs/arm64-v8a
           cp target/aarch64-linux-android/release/liblibrustdesk.so flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
           (cd flutter && flutter build apk --release --target-platform android-arm64)
@@ -613,45 +729,51 @@ jobs:
           mkdir -p artifacts
           cp flutter/build/app/outputs/flutter-apk/app-release.apk artifacts/camellia-${{ needs.prepare.outputs.version }}-android-arm64.apk
           cp flutter/build/app/outputs/bundle/release/app-release.aab artifacts/camellia-${{ needs.prepare.outputs.version }}-android-arm64.aab
-      - uses: actions/upload-artifact@v7
-        if: env.UPLOAD_ARTIFACT == 'true'
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: camellia-${{ needs.prepare.outputs.version }}-android-arm64
           path: artifacts/*
           if-no-files-found: error
+          retention-days: 7
 
   build_ios:
     name: iOS
-    needs: [prepare, generate_bridge]
+    needs: [prepare, generate_bridge, quality]
     if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_ios) }}
-    runs-on: macos-latest
+    runs-on: macos-15
+    timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
           submodules: recursive
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: bridge-generated
           path: .
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: aarch64-apple-ios
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: ${{ env.FLUTTER_CHANNEL }}
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      - uses: lukka/run-vcpkg@v11
+      - uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11.6
         with:
           vcpkgDirectory: ${{ runner.temp }}/vcpkg
       - name: Build
         shell: bash
         run: |
-          bash .github/scripts/sync-version.sh "${{ needs.prepare.outputs.version }}" "${{ github.run_number }}"
+          bash .github/scripts/sync-version.sh \
+            "${{ needs.prepare.outputs.version }}" \
+            "${{ needs.prepare.outputs.build_number }}" \
+            "${{ needs.prepare.outputs.source_date_epoch }}"
           bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
-          if [[ "${{ env.DEPENDENCY_MODE }}" == "latest" ]]; then "$VCPKG_ROOT/vcpkg" x-update-baseline; fi
           "$VCPKG_ROOT/vcpkg" install --triplet arm64-ios --x-install-root="$VCPKG_ROOT/installed"
-          cargo build --release --target aarch64-apple-ios --lib --features flutter
+          cargo build --locked --release --target aarch64-apple-ios --lib --features flutter
           mkdir -p flutter/ios/Runner
           cp target/aarch64-apple-ios/release/liblibrustdesk.a flutter/ios/Runner/librustdesk.a
           (cd flutter && flutter build ipa --release --no-codesign)
@@ -665,27 +787,31 @@ jobs:
           mkdir -p "$ipa_root/Payload"
           cp -R "$app" "$ipa_root/Payload/"
           (cd "$ipa_root" && zip -qry "$GITHUB_WORKSPACE/artifacts/camellia-${{ needs.prepare.outputs.version }}-ios-unsigned.ipa" Payload)
-      - uses: actions/upload-artifact@v7
-        if: env.UPLOAD_ARTIFACT == 'true'
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: camellia-${{ needs.prepare.outputs.version }}-ios
           path: artifacts/*
           if-no-files-found: error
+          retention-days: 7
 
   build_web:
     name: Web
-    needs: prepare
+    needs: [prepare, quality]
     if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_web) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
           submodules: recursive
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: ${{ env.FLUTTER_CHANNEL }}
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -695,7 +821,10 @@ jobs:
         env:
           APP_VERSION: ${{ needs.prepare.outputs.app_version }}
         run: |
-          bash .github/scripts/sync-version.sh "${{ needs.prepare.outputs.version }}" "${{ github.run_number }}"
+          bash .github/scripts/sync-version.sh \
+            "${{ needs.prepare.outputs.version }}" \
+            "${{ needs.prepare.outputs.build_number }}" \
+            "${{ needs.prepare.outputs.source_date_epoch }}"
           bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
           (cd flutter/web/js && npm run build)
           chmod +x flutter/web/tools/build_web.sh
@@ -703,17 +832,18 @@ jobs:
           mkdir -p artifacts
           tar -C flutter/build -czf artifacts/camellia-${{ needs.prepare.outputs.version }}-web.tar.gz web
           (cd flutter/build && zip -qry "$GITHUB_WORKSPACE/artifacts/camellia-${{ needs.prepare.outputs.version }}-web.zip" web)
-      - uses: actions/upload-artifact@v7
-        if: env.UPLOAD_ARTIFACT == 'true'
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: camellia-${{ needs.prepare.outputs.version }}-web
           path: artifacts/*
           if-no-files-found: error
+          retention-days: 7
 
   publish_release:
     name: Publish Release Assets
     needs:
       - prepare
+      - quality
       - build_windows_x64
       - build_windows_arm64
       - build_macos_universal
@@ -722,29 +852,103 @@ jobs:
       - build_ios
       - build_web
     if: ${{ always() && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.upload_release)) && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
     steps:
-      - uses: actions/download-artifact@v8
+      - name: Checkout immutable release metadata
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.prepare.outputs.commit }}
+      - name: Verify release tag is unchanged
+        env:
+          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          current_commit="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
+          if [[ "$current_commit" != "$RELEASE_COMMIT" ]]; then
+            echo "Release tag moved during the workflow" >&2
+            exit 1
+          fi
+      - name: Download release artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: camellia-*
-          path: release-assets
-          merge-multiple: true
+          path: release-inputs
       - name: Generate checksums and version manifest
-        shell: bash
+        env:
+          APP_VERSION: ${{ needs.prepare.outputs.app_version }}
+          BUILD_NUMBER: ${{ needs.prepare.outputs.build_number }}
+          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
         run: |
-          find release-assets -maxdepth 1 -type f -print0 | xargs -0 -r sha256sum > release-assets/SHA256SUMS
-          cat > release-assets/versions.json <<JSON
-          {
-            "version": "${{ needs.prepare.outputs.version }}",
-            "app_version": "${{ needs.prepare.outputs.app_version }}",
-            "dependency_mode": "${{ env.DEPENDENCY_MODE }}",
-            "rust_toolchain": "${{ env.RUST_TOOLCHAIN }}",
-            "flutter_channel": "${{ env.FLUTTER_CHANNEL }}",
-            "node_version": "${{ env.NODE_VERSION }}"
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+          import os
+          import shutil
+
+          source = Path("release-inputs")
+          output = Path("release-assets")
+          output.mkdir()
+
+          for path in sorted(source.glob("*/*")):
+              if not path.is_file():
+                  continue
+              destination = output / path.name
+              if destination.exists():
+                  raise RuntimeError(f"duplicate release filename: {path.name}")
+              shutil.copy2(path, destination)
+
+          artifacts = sorted(output.iterdir())
+          if not artifacts:
+              raise RuntimeError("no release artifacts were downloaded")
+
+          manifest = {
+              "version": os.environ["RELEASE_VERSION"],
+              "app_version": os.environ["APP_VERSION"],
+              "build_number": int(os.environ["BUILD_NUMBER"]),
+              "source_commit": os.environ["RELEASE_COMMIT"],
+              "source_date_epoch": int(os.environ["SOURCE_DATE_EPOCH"]),
+              "dependency_mode": "locked",
+              "rust_toolchain": os.environ["RUST_TOOLCHAIN"],
+              "flutter_version": os.environ["FLUTTER_VERSION"],
+              "flutter_revision": os.environ["FLUTTER_REVISION"],
+              "node_version": os.environ["NODE_VERSION"],
+              "android_ndk_version": os.environ["ANDROID_NDK_VERSION"],
           }
-          JSON
-      - uses: softprops/action-gh-release@v3
+          (output / "versions.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+
+          checksums = []
+          for path in sorted(output.iterdir()):
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              checksums.append(f"{digest}  {path.name}")
+          (output / "SHA256SUMS").write_text(
+              "\n".join(checksums) + "\n",
+              encoding="utf-8",
+          )
+          PY
+      - name: Attest release artifacts
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
         with:
-          prerelease: true
+          create-storage-record: false
+          subject-path: release-assets/*
+      - name: Publish release
+        uses: softprops/action-gh-release@fe965f7af51af5f2602596916f38a38df2e33de0 # v3.0.2
+        with:
+          draft: false
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          prerelease: ${{ contains(needs.prepare.outputs.release_tag, '-') }}
           tag_name: ${{ needs.prepare.outputs.release_tag }}
           files: release-assets/*

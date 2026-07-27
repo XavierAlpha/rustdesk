@@ -1,27 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mode="${1:-latest}"
+mode="${1:-locked}"
 
-case "${mode}" in
-  latest)
-    cargo update
-    (cd flutter && flutter pub upgrade)
-    if [[ -f flutter/web/js/package.json ]]; then
-      (cd flutter/web/js && npm install)
-    fi
-    ;;
-  locked)
-    cargo fetch --locked
-    (cd flutter && flutter pub get)
-    if [[ -f flutter/web/js/package-lock.json ]]; then
-      (cd flutter/web/js && npm ci)
-    elif [[ -f flutter/web/js/package.json ]]; then
-      (cd flutter/web/js && npm install)
-    fi
-    ;;
-  *)
-    echo "Unsupported dependency mode: ${mode}" >&2
-    exit 2
-    ;;
-esac
+if [[ "${mode}" != "locked" ]]; then
+  echo "Release dependencies must use committed lock files" >&2
+  exit 2
+fi
+
+cargo fetch --locked
+(cd flutter && flutter pub get --enforce-lockfile)
+if [[ -f flutter/web/js/package.json ]]; then
+  if [[ ! -f flutter/web/js/package-lock.json ]]; then
+    echo "Missing flutter/web/js/package-lock.json" >&2
+    exit 3
+  fi
+  (cd flutter/web/js && npm ci)
+fi
