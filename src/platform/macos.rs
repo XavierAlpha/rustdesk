@@ -2147,25 +2147,43 @@ pub fn elevate(args: Vec<&str>, prompt: &str) -> ResultType<bool> {
     }
 }
 
-pub struct WakeLock(Option<keepawake::AwakeHandle>);
+pub struct WakeLock {
+    handle: Option<keepawake::KeepAwake>,
+    display: bool,
+    idle: bool,
+    sleep: bool,
+}
 
 impl WakeLock {
     pub fn new(display: bool, idle: bool, sleep: bool) -> Self {
-        WakeLock(
-            keepawake::Builder::new()
-                .display(display)
-                .idle(idle)
-                .sleep(sleep)
-                .create()
-                .ok(),
-        )
+        Self {
+            handle: Self::acquire(display, idle, sleep).ok(),
+            display,
+            idle,
+            sleep,
+        }
+    }
+
+    fn acquire(display: bool, idle: bool, sleep: bool) -> keepawake::Result<keepawake::KeepAwake> {
+        keepawake::Builder::default()
+            .display(display)
+            .idle(idle)
+            .sleep(sleep)
+            .reason("Active Camellia remote session")
+            .app_name(crate::get_app_name())
+            .app_reverse_domain("com.camellia")
+            .create()
     }
 
     pub fn set_display(&mut self, display: bool) -> ResultType<()> {
-        self.0
-            .as_mut()
-            .map(|h| h.set_display(display))
-            .ok_or(anyhow!("no AwakeHandle"))?
+        if self.display == display && self.handle.is_some() {
+            return Ok(());
+        }
+
+        let handle = Self::acquire(display, self.idle, self.sleep)?;
+        self.handle = Some(handle);
+        self.display = display;
+        Ok(())
     }
 }
 

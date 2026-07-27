@@ -80,6 +80,7 @@ cpal = { git = "https://github.com/rustdesk-org/cpal", branch = "osx-screencaptu
 ringbuf = "0.3"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+dlopen = "0.1"
 mac_address = "1.1"
 sys-locale = "0.3"
 enigo = { path = "libs/enigo", features = [ "with_serde" ] }
@@ -130,7 +131,7 @@ virtual_display = { path = "libs/virtual_display" }
 remote_printer = { path = "libs/remote_printer" }
 impersonate_system = { git = "https://github.com/rustdesk-org/impersonate-system" }
 shared_memory = "0.12"
-tauri-winrt-notification = "0.1"
+tauri-winrt-notification = "0.8.1"
 runas = "1.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -151,7 +152,7 @@ tao = { git = "https://github.com/rustdesk-org/tao", branch = "dev" }
 image = "0.24"
 
 [target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
-keepawake = { git = "https://github.com/rustdesk-org/keepawake-rs" }
+keepawake = "0.6.0"
 
 [target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
 wallpaper = { git = "https://github.com/rustdesk-org/wallpaper.rs" }
@@ -171,7 +172,7 @@ rust-pulsectl = { git = "https://github.com/rustdesk-org/pulsectl" }
 evdev = { git="https://github.com/rustdesk-org/evdev" }
 dbus = "0.9"
 dbus-crossroads = "0.5"
-pam = { git="https://github.com/rustdesk-org/pam" }
+pam-client2 = { version = "0.5.5", default-features = false }
 x11-clipboard = {git="https://github.com/clslaid/x11-clipboard", branch = "feat/store-batch", optional = true}
 x11rb =  {version = "0.12", features = ["all-extensions"], optional = true}
 percent-encoding = {version = "2.3", optional = true}

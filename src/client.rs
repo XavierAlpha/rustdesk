@@ -409,25 +409,9 @@ impl Client {
             NatType::from_i32(my_nat_type).unwrap_or(NatType::UNKNOWN_NAT)
         };
 
-        if !key.is_empty() && !token.is_empty() {
-            // mainly for the security of token
-            secure_tcp(&mut socket, &key)
-                .await
-                .map_err(|e| anyhow!("Failed to secure tcp: {}", e))?;
-        } else if let Some(udp) = udp.1.as_ref() {
-            let tm = Instant::now();
-            loop {
-                let port = *udp.lock().unwrap();
-                if port > 0 {
-                    break;
-                }
-                // await for 0.5 RTT
-                if tm.elapsed() > rtt / 2 {
-                    break;
-                }
-                hbb_common::sleep(0.001).await;
-            }
-        }
+        secure_tcp(&mut socket, &key)
+            .await
+            .map_err(|e| anyhow!("Failed to secure rendezvous connection: {e}"))?;
         // Stop UDP NAT test task if still running
         stop_udp_tx.map(|tx| tx.send(()));
         let mut msg_out = RendezvousMessage::new();
@@ -839,10 +823,7 @@ impl Client {
                 .await
                 .with_context(|| "Failed to connect to rendezvous server")?;
 
-            if !key.is_empty() && !token.is_empty() {
-                // mainly for the security of token
-                secure_tcp(&mut socket, key).await?;
-            }
+            secure_tcp(&mut socket, key).await?;
 
             ipv4 = socket.local_addr().is_ipv4();
             let mut msg_out = RendezvousMessage::new();
@@ -4028,16 +4009,14 @@ pub mod peer_online {
     async fn create_online_stream() -> ResultType<Stream> {
         let (rendezvous_server, _servers, _contained) =
             crate::get_rendezvous_server(READ_TIMEOUT).await;
-        let tmp: Vec<&str> = rendezvous_server.split(":").collect();
-        if tmp.len() != 2 {
+        let online_server = crate::increase_port(&rendezvous_server, -1);
+        if online_server == rendezvous_server {
             bail!("Invalid server address: {}", rendezvous_server);
         }
-        let port: u16 = tmp[1].parse()?;
-        if port == 0 {
-            bail!("Invalid server address: {}", rendezvous_server);
-        }
-        let online_server = format!("{}:{}", tmp[0], port - 1);
-        connect_tcp(online_server, CONNECT_TIMEOUT).await
+        let mut stream = connect_tcp(online_server, CONNECT_TIMEOUT).await?;
+        let key = crate::get_key(true).await;
+        crate::secure_tcp(&mut stream, &key).await?;
+        Ok(stream)
     }
 
     async fn query_online_states_(

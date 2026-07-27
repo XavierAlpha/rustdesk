@@ -10,9 +10,12 @@ use hbb_common::{
     tokio::time,
     users::{get_user_by_name, os::unix::UserExt, User},
 };
-use pam;
+use pam_client2::{
+    conv_mock::Conversation as PamConversation, Context as PamContext, Flag as PamFlag,
+};
 use std::{
     collections::HashMap,
+    ffi::OsString,
     os::unix::process::CommandExt,
     path::Path,
     process::{Child, Command},
@@ -256,6 +259,20 @@ impl Drop for DesktopManager {
 }
 
 impl DesktopManager {
+    fn pam_context(username: &str, password: &str) -> ResultType<PamContext<PamConversation>> {
+        Ok(PamContext::new(
+            &pam_get_service_name(),
+            Some(username),
+            PamConversation::with_credentials(username, password),
+        )?)
+    }
+
+    fn authenticate_pam(context: &mut PamContext<PamConversation>) -> ResultType<()> {
+        context.authenticate(PamFlag::NONE)?;
+        context.acct_mgmt(PamFlag::NONE)?;
+        Ok(())
+    }
+
     fn fatal_exit() {
         std::process::exit(0);
     }
@@ -310,14 +327,10 @@ impl DesktopManager {
     ) -> Result<(), XSessionStartError> {
         match get_user_by_name(username) {
             Some(userinfo) => {
-                let mut client =
-                    pam::Client::with_password(&pam_get_service_name()).map_err(|e| {
-                        XSessionStartError::env(format!("failed to init pam client, {}", e))
-                    })?;
-                client
-                    .conversation_mut()
-                    .set_credentials(username, password);
-                match client.authenticate() {
+                let mut context = Self::pam_context(username, password).map_err(|e| {
+                    XSessionStartError::env(format!("failed to init pam context, {}", e))
+                })?;
+                match Self::authenticate_pam(&mut context) {
                     Ok(_) => {
                         if self.is_running() {
                             return Ok(());
@@ -378,14 +391,28 @@ impl DesktopManager {
         let uid = userinfo.uid();
         let gid = userinfo.primary_group_id();
         let envs = HashMap::from([
-            ("SHELL", userinfo.shell().to_string_lossy().to_string()),
-            ("PATH", "/sbin:/bin:/usr/bin:/usr/local/bin".to_owned()),
-            ("USER", username.to_string()),
-            ("UID", userinfo.uid().to_string()),
-            ("HOME", userinfo.home_dir().to_string_lossy().to_string()),
             (
-                "XDG_RUNTIME_DIR",
-                format!("/run/user/{}", userinfo.uid().to_string()),
+                OsString::from("SHELL"),
+                userinfo.shell().as_os_str().to_os_string(),
+            ),
+            (
+                OsString::from("PATH"),
+                OsString::from("/sbin:/bin:/usr/bin:/usr/local/bin"),
+            ),
+            (OsString::from("USER"), OsString::from(username)),
+            (OsString::from("LOGNAME"), OsString::from(username)),
+            (OsString::from("UID"), OsString::from(uid.to_string())),
+            (
+                OsString::from("HOME"),
+                userinfo.home_dir().as_os_str().to_os_string(),
+            ),
+            (
+                OsString::from("PWD"),
+                userinfo.home_dir().as_os_str().to_os_string(),
+            ),
+            (
+                OsString::from("XDG_RUNTIME_DIR"),
+                OsString::from(format!("/run/user/{uid}")),
             ),
             // ("DISPLAY", self.display.clone()),
             // ("XAUTHORITY", self.xauth.clone()),
@@ -445,16 +472,18 @@ impl DesktopManager {
         display_num: u32,
         username: String,
         password: String,
-        envs: HashMap<&str, String>,
+        mut envs: HashMap<OsString, OsString>,
     ) -> ResultType<()> {
-        let mut client = pam::Client::with_password(&pam_get_service_name())?;
-        client
-            .conversation_mut()
-            .set_credentials(&username, &password);
-        client.authenticate()?;
+        let mut context = Self::pam_context(&username, &password)?;
+        Self::authenticate_pam(&mut context)?;
 
-        client.set_item(pam::PamItemType::TTY, &Self::display_from_num(display_num))?;
-        client.open_session()?;
+        let display = Self::display_from_num(display_num);
+        context.set_tty(Some(&display))?;
+        let _pam_session = context.open_session(PamFlag::NONE)?;
+        for (key, value) in _pam_session.envlist().iter_tuples() {
+            envs.entry(key.to_os_string())
+                .or_insert_with(|| value.to_os_string());
+        }
 
         // fixme: FreeBSD kernel needs to login here.
         // see: https://github.com/neutrinolabs/xrdp/blob/a64573b596b5fb07ca3a51590c5308d621f7214e/sesman/session.c#L556
@@ -501,7 +530,7 @@ impl DesktopManager {
         display: &str,
         uid: u32,
         gid: u32,
-        envs: &HashMap<&str, String>,
+        envs: &HashMap<OsString, OsString>,
     ) -> ResultType<()> {
         let randstr = (0..16)
             .map(|_| format!("{:02x}", random::<u8>()))
@@ -545,7 +574,7 @@ impl DesktopManager {
         gid: u32,
         username: String,
         display_num: u32,
-        envs: &HashMap<&str, String>,
+        envs: &HashMap<OsString, OsString>,
     ) -> ResultType<(Child, Child)> {
         log::debug!("envs of user {}: {:?}", &username, &envs);
 
@@ -578,10 +607,11 @@ impl DesktopManager {
             &xauth
         );
 
-        std::env::set_var("DISPLAY", &display);
-        std::env::set_var("XAUTHORITY", &xauth);
+        let mut window_manager_envs = envs.clone();
+        window_manager_envs.insert(OsString::from("DISPLAY"), OsString::from(&display));
+        window_manager_envs.insert(OsString::from("XAUTHORITY"), OsString::from(&xauth));
         // start window manager (startwm.sh)
-        let child_wm = match Self::start_x_window_manager(uid, gid, &envs) {
+        let child_wm = match Self::start_x_window_manager(uid, gid, &window_manager_envs) {
             Ok(c) => c,
             Err(e) => {
                 match Self::wait_xorg_exit(&mut child_xorg) {
@@ -1024,7 +1054,7 @@ impl DesktopManager {
         display: &str,
         uid: u32,
         gid: u32,
-        envs: &HashMap<&str, String>,
+        envs: &HashMap<OsString, OsString>,
     ) -> ResultType<Child> {
         let xorg = Self::get_xorg();
         log::info!("Use xorg: {}", &xorg);
@@ -1060,7 +1090,7 @@ impl DesktopManager {
     fn start_x_window_manager(
         uid: u32,
         gid: u32,
-        envs: &HashMap<&str, String>,
+        envs: &HashMap<OsString, OsString>,
     ) -> ResultType<Child> {
         let app_name = crate::get_app_name().to_lowercase();
         match Command::new(&format!("/etc/{app_name}/startwm.sh"))

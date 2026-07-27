@@ -20,9 +20,8 @@ use hbb_common::{
     protobuf::Message as _,
     rendezvous_proto::*,
     sleep,
-    socket_client::{self, connect_tcp, is_ipv4, new_direct_udp_for, new_udp_for},
+    socket_client::{self, connect_tcp, is_ipv4, new_direct_udp_for},
     tokio::{self, select, sync::Mutex, time::interval},
-    udp::FramedSocket,
     AddrMangle, IntoTargetAddr, ResultType, Stream, TargetAddr,
 };
 
@@ -60,24 +59,6 @@ lazy_static::lazy_static! {
     static ref LAST_NOT_DEPLOYED_REGISTER: Mutex<Option<Instant>> = Mutex::new(None);
 }
 
-// Single source of truth for the "awaiting deployment" backoff. The server has
-// already told us this device is not in its db; until the operator runs
-// `rustdesk --deploy --token <api_token>` there is no point re-running the
-// register path more often than DEPLOY_RETRY_INTERVAL. Gating in the timer
-// loops (rather than only inside register_pk) also avoids the
-// last_register_sent / fails / latency / UDP-rebind churn the loop would
-// otherwise spin on while no response ever comes back.
-async fn deploy_register_throttled() -> bool {
-    if !NEEDS_DEPLOY.load(Ordering::SeqCst) {
-        return false;
-    }
-    LAST_NOT_DEPLOYED_REGISTER
-        .lock()
-        .await
-        .map(|t| (t.elapsed().as_millis() as i64) < DEPLOY_RETRY_INTERVAL)
-        .unwrap_or(false)
-}
-
 #[cfg(target_os = "android")]
 fn notify_android_needs_deploy() {
     if NOTIFIED_NEEDS_DEPLOY.load(Ordering::SeqCst) {
@@ -107,6 +88,13 @@ pub struct RendezvousMediator {
 }
 
 impl RendezvousMediator {
+    async fn connect_control(host: &str) -> ResultType<Stream> {
+        let mut connection = connect_tcp(host, CONNECT_TIMEOUT).await?;
+        let key = crate::get_key(true).await;
+        crate::secure_tcp(&mut connection, &key).await?;
+        Ok(connection)
+    }
+
     pub fn restart() {
         SHOULD_EXIT.store(true, Ordering::SeqCst);
         MANUAL_RESTARTED.store(true, Ordering::SeqCst);
@@ -211,126 +199,6 @@ impl RendezvousMediator {
             .unwrap_or(host.to_owned())
     }
 
-    pub async fn start_udp(server: ServerPtr, host: String) -> ResultType<()> {
-        let host = check_port(&host, RENDEZVOUS_PORT);
-        log::info!("start udp: {host}");
-        let (mut socket, mut addr) = new_udp_for(&host, CONNECT_TIMEOUT).await?;
-        let mut rz = Self {
-            addr: addr.clone(),
-            host: host.clone(),
-            host_prefix: Self::get_host_prefix(&host),
-            keep_alive: crate::DEFAULT_KEEP_ALIVE,
-        };
-
-        let mut timer = crate::rustdesk_interval(interval(crate::TIMER_OUT));
-        const MIN_REG_TIMEOUT: i64 = 3_000;
-        const MAX_REG_TIMEOUT: i64 = 30_000;
-        let mut reg_timeout = MIN_REG_TIMEOUT;
-        const MAX_FAILS1: i64 = 2;
-        const MAX_FAILS2: i64 = 4;
-        const DNS_INTERVAL: i64 = 60_000;
-        let mut fails = 0;
-        let mut last_register_resp: Option<Instant> = None;
-        let mut last_register_sent: Option<Instant> = None;
-        let mut last_dns_check = Instant::now();
-        let mut old_latency = 0;
-        let mut ema_latency = 0;
-        loop {
-            let mut update_latency = || {
-                last_register_resp = Some(Instant::now());
-                fails = 0;
-                reg_timeout = MIN_REG_TIMEOUT;
-                let mut latency = last_register_sent
-                    .map(|x| x.elapsed().as_micros() as i64)
-                    .unwrap_or(0);
-                last_register_sent = None;
-                if latency < 0 || latency > 1_000_000 {
-                    return;
-                }
-                if ema_latency == 0 {
-                    ema_latency = latency;
-                } else {
-                    ema_latency = latency / 30 + (ema_latency * 29 / 30);
-                    latency = ema_latency;
-                }
-                let mut n = latency / 5;
-                if n < 3000 {
-                    n = 3000;
-                }
-                if (latency - old_latency).abs() > n || old_latency <= 0 {
-                    Config::update_latency(&host, latency);
-                    log::debug!("Latency of {}: {}ms", host, latency as f64 / 1000.);
-                    old_latency = latency;
-                }
-            };
-            select! {
-                n = socket.next() => {
-                    match n {
-                        Some(Ok((bytes, _))) => {
-                            if let Ok(msg) = Message::parse_from_bytes(&bytes) {
-                                rz.handle_resp(msg.union, Sink::Framed(&mut socket, &addr), &server, &mut update_latency).await?;
-                            } else {
-                                log::debug!("Non-protobuf message bytes received: {:?}", bytes);
-                            }
-                        },
-                        Some(Err(e)) => bail!("Failed to receive next: {}", e),  // maybe socks5 tcp disconnected
-                        None => {
-                            bail!("Socket receive none. Maybe socks5 server is down.");
-                        },
-                    }
-                },
-                _ = timer.tick() => {
-                    if SHOULD_EXIT.load(Ordering::SeqCst) {
-                        break;
-                    }
-                    // The server already told us this device is not deployed. Skip
-                    // the whole register / fails / latency / UDP-rebind path until
-                    // DEPLOY_RETRY_INTERVAL elapses, otherwise the loop spins every
-                    // few seconds (log spam + misapplied network-recovery rebind)
-                    // until the operator runs `rustdesk --deploy`.
-                    if deploy_register_throttled().await {
-                        continue;
-                    }
-                    let now = Some(Instant::now());
-                    let expired = last_register_resp.map(|x| x.elapsed().as_millis() as i64 >= REG_INTERVAL).unwrap_or(true);
-                    let timeout = last_register_sent.map(|x| x.elapsed().as_millis() as i64 >= reg_timeout).unwrap_or(false);
-                    // temporarily disable exponential backoff for android before we add wakeup trigger to force connect in android
-                    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-                    if crate::using_public_server() { // only turn on this for public server, may help DDNS self-hosting user.
-                        if timeout && reg_timeout < MAX_REG_TIMEOUT {
-                            reg_timeout += MIN_REG_TIMEOUT;
-                        }
-                    }
-                    if timeout || (last_register_sent.is_none() && expired) {
-                        if timeout {
-                            fails += 1;
-                            if fails >= MAX_FAILS2 {
-                                Config::update_latency(&host, -1);
-                                old_latency = 0;
-                                if last_dns_check.elapsed().as_millis() as i64 > DNS_INTERVAL {
-                                    // in some case of network reconnect (dial IP network),
-                                    // old UDP socket not work any more after network recover
-                                    if let Some((s, new_addr)) = socket_client::rebind_udp_for(&rz.host).await? {
-                                        socket = s;
-                                        rz.addr = new_addr.clone();
-                                        addr = new_addr;
-                                    }
-                                    last_dns_check = Instant::now();
-                                }
-                            } else if fails >= MAX_FAILS1 {
-                                Config::update_latency(&host, 0);
-                                old_latency = 0;
-                            }
-                        }
-                        rz.register_peer(Sink::Framed(&mut socket, &addr)).await?;
-                        last_register_sent = now;
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
     #[inline]
     async fn handle_resp(
         &mut self,
@@ -423,9 +291,7 @@ impl RendezvousMediator {
     pub async fn start_tcp(server: ServerPtr, host: String) -> ResultType<()> {
         let host = check_port(&host, RENDEZVOUS_PORT);
         log::info!("start tcp: {}", hbb_common::websocket::check_ws(&host));
-        let mut conn = connect_tcp(host.clone(), CONNECT_TIMEOUT).await?;
-        let key = crate::get_key(true).await;
-        crate::secure_tcp(&mut conn, &key).await?;
+        let mut conn = Self::connect_control(&host).await?;
         let mut rz = Self {
             addr: conn.local_addr().into_target_addr()?,
             host: host.clone(),
@@ -488,16 +354,10 @@ impl RendezvousMediator {
 
     pub async fn start(server: ServerPtr, host: String) -> ResultType<()> {
         log::info!("start rendezvous mediator of {}", host);
-        //If the investment agent type is http or https, then tcp forwarding is enabled.
-        if (cfg!(debug_assertions) && option_env!("TEST_TCP").is_some())
-            || Config::is_proxy()
-            || use_ws()
-            || crate::is_udp_disabled()
-        {
-            Self::start_tcp(server, host).await
-        } else {
-            Self::start_udp(server, host).await
-        }
+        // Device identity, registration, and control traffic must always use the
+        // authenticated encrypted TCP/WebSocket rendezvous channel. UDP remains
+        // available only for peer-to-peer NAT traversal.
+        Self::start_tcp(server, host).await
     }
 
     async fn handle_request_relay(&self, rr: RequestRelay, server: ServerPtr) -> ResultType<()> {
@@ -521,6 +381,7 @@ impl RendezvousMediator {
             rr.secure,
             false,
             Default::default(),
+            rr.rendezvous_token,
             meta,
         )
         .await
@@ -535,6 +396,7 @@ impl RendezvousMediator {
         secure: bool,
         initiate: bool,
         socket_addr_v6: bytes::Bytes,
+        rendezvous_token: bytes::Bytes,
         meta: ConnectionMeta,
     ) -> ResultType<()> {
         let peer_addr = AddrMangle::decode(&socket_addr);
@@ -546,13 +408,14 @@ impl RendezvousMediator {
             secure,
         );
 
-        let mut socket = connect_tcp(&*self.host, CONNECT_TIMEOUT).await?;
+        let mut socket = Self::connect_control(&self.host).await?;
 
         let mut msg_out = Message::new();
         let mut rr = RelayResponse {
             socket_addr: socket_addr.into(),
             version: crate::VERSION.to_owned(),
             socket_addr_v6,
+            rendezvous_token,
             ..Default::default()
         };
         rr.set_id(Config::get_id());
@@ -619,6 +482,7 @@ impl RendezvousMediator {
             true,
             true,
             socket_addr_v6,
+            fla.rendezvous_token,
             meta,
         )
         .await
@@ -634,7 +498,7 @@ impl RendezvousMediator {
     ) -> ResultType<()> {
         let peer_addr = AddrMangle::decode(&fla.socket_addr);
         log::debug!("Handle intranet from {:?}", peer_addr);
-        let mut socket = connect_tcp(&*self.host, CONNECT_TIMEOUT).await?;
+        let mut socket = Self::connect_control(&self.host).await?;
         let local_addr = socket.local_addr();
         // we saw invalid local_addr while using proxy, local_addr.ip() == "::1"
         let local_addr: SocketAddr =
@@ -647,6 +511,7 @@ impl RendezvousMediator {
             relay_server,
             version: crate::VERSION.to_owned(),
             socket_addr_v6,
+            rendezvous_token: fla.rendezvous_token,
             ..Default::default()
         });
         let bytes = msg_out.write_to_bytes()?;
@@ -691,6 +556,7 @@ impl RendezvousMediator {
                     true,
                     true,
                     socket_addr_v6.clone(),
+                    ph.rendezvous_token,
                     meta,
                 )
                 .await;
@@ -704,6 +570,7 @@ impl RendezvousMediator {
             nat_type: nat_type.into(),
             version: crate::VERSION.to_owned(),
             socket_addr_v6,
+            rendezvous_token: ph.rendezvous_token,
             ..Default::default()
         };
         if ph.udp_port > 0 {
@@ -714,7 +581,7 @@ impl RendezvousMediator {
         }
         log::debug!("Punch tcp hole to {:?}", peer_addr);
         let mut socket = {
-            let socket = connect_tcp(&*self.host, CONNECT_TIMEOUT).await?;
+            let socket = Self::connect_control(&self.host).await?;
             let local_addr = socket.local_addr();
             // key important here for punch hole to tell my gateway incoming peer is safe.
             // it can not be async here, because local_addr can not be reused, we must close the connection before use it again.
@@ -921,14 +788,12 @@ async fn direct_server(server: ServerPtr) {
 }
 
 enum Sink<'a> {
-    Framed(&'a mut FramedSocket, &'a TargetAddr<'a>),
     Stream(&'a mut Stream),
 }
 
 impl Sink<'_> {
     async fn send(self, msg: &Message) -> ResultType<()> {
         match self {
-            Sink::Framed(socket, addr) => socket.send(msg, addr.to_owned()).await,
             Sink::Stream(stream) => stream.send(msg).await,
         }
     }

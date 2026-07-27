@@ -556,6 +556,7 @@ async fn test_nat_type_() -> ResultType<bool> {
     let mut port1 = 0;
     let mut port2 = 0;
     let mut local_addr = None;
+    let key = crate::get_key(true).await;
     for i in 0..2 {
         let server = if i == 0 { &*server1 } else { &*server2 };
         let mut socket =
@@ -568,6 +569,7 @@ async fn test_nat_type_() -> ResultType<bool> {
                 socket.local_addr().ip().to_string(),
             );
         }
+        secure_tcp_silent(&mut socket, &key).await?;
         socket.send(&msg_out).await?;
         if let Some(msg_in) = get_next_nonkeyexchange_msg(&mut socket, None).await {
             if let Some(rendezvous_message::Union::TestNatResponse(tnr)) = msg_in.union {
@@ -667,13 +669,18 @@ async fn test_rendezvous_server_() {
     for host in servers {
         futs.push(tokio::spawn(async move {
             let tm = std::time::Instant::now();
-            if socket_client::connect_tcp(
+            let connection = socket_client::connect_tcp(
                 crate::check_port(&host, RENDEZVOUS_PORT),
                 CONNECT_TIMEOUT,
             )
-            .await
-            .is_ok()
-            {
+            .await;
+            let healthy = if let Ok(mut connection) = connection {
+                let key = crate::get_key(true).await;
+                secure_tcp_silent(&mut connection, &key).await.is_ok()
+            } else {
+                false
+            };
+            if healthy {
                 let elapsed = tm.elapsed().as_micros();
                 Config::update_latency(&host, elapsed as _);
             } else {
@@ -1171,6 +1178,7 @@ async fn tcp_proxy_request(
         req.path = path;
         req.headers = headers.into();
         req.body = Bytes::from(body.to_vec());
+        req.licence_key = key;
 
         let mut msg_out = RendezvousMessage::new();
         msg_out.set_http_proxy_request(req);
@@ -1734,49 +1742,38 @@ pub fn check_process(arg: &str, mut same_uid: bool) -> bool {
 }
 
 async fn secure_tcp_impl(conn: &mut Stream, key: &str, log_on_success: bool) -> ResultType<()> {
-    // Skip additional encryption only when using WebSocket Secure (wss://),
-    // which already provides transport layer encryption.
-    // This doesn't affect the end-to-end encryption between clients,
-    // it only avoids redundant encryption between client and server.
-    if let Stream::WebSocket(ws) = conn {
-        if ws.is_tls() {
-            return Ok(());
-        }
-    }
     let rs_pk = get_rs_pk(key);
     let Some(rs_pk) = rs_pk else {
         bail!("Handshake failed: invalid public key from rendezvous server");
     };
-    match timeout(READ_TIMEOUT, conn.next()).await? {
-        Some(Ok(bytes)) => {
-            if let Ok(msg_in) = RendezvousMessage::parse_from_bytes(&bytes) {
-                match msg_in.union {
-                    Some(rendezvous_message::Union::KeyExchange(ex)) => {
-                        if ex.keys.len() != 1 {
-                            bail!("Handshake failed: invalid key exchange message");
-                        }
-                        let their_pk_b = sign::verify(&ex.keys[0], &rs_pk)
-                            .map_err(|_| anyhow!("Signature mismatch in key exchange"))?;
-                        let (asymmetric_value, symmetric_value, key) = create_symmetric_key_msg(
-                            get_pk(&their_pk_b)
-                                .context("Wrong their public length in key exchange")?,
-                        );
-                        let mut msg_out = RendezvousMessage::new();
-                        msg_out.set_key_exchange(KeyExchange {
-                            keys: vec![asymmetric_value, symmetric_value],
-                            ..Default::default()
-                        });
-                        timeout(CONNECT_TIMEOUT, conn.send(&msg_out)).await??;
-                        conn.set_key(key);
-                        if log_on_success {
-                            log::info!("Connection secured");
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-        _ => {}
+    let bytes = timeout(READ_TIMEOUT, conn.next())
+        .await?
+        .ok_or_else(|| anyhow!("Handshake failed: rendezvous server closed the connection"))??;
+    let msg_in = RendezvousMessage::parse_from_bytes(&bytes)
+        .context("Handshake failed: invalid rendezvous response")?;
+    let Some(rendezvous_message::Union::KeyExchange(ex)) = msg_in.union else {
+        bail!("Handshake failed: key exchange response was required");
+    };
+    if ex.keys.len() != 1 {
+        bail!("Handshake failed: invalid key exchange message");
+    }
+    let their_pk_b = sign::verify(&ex.keys[0], &rs_pk)
+        .map_err(|_| anyhow!("Signature mismatch in key exchange"))?;
+    let (asymmetric_value, symmetric_value, key) = create_symmetric_key_msg(
+        get_pk(&their_pk_b).context("Wrong their public length in key exchange")?,
+    );
+    let mut msg_out = RendezvousMessage::new();
+    msg_out.set_key_exchange(KeyExchange {
+        keys: vec![asymmetric_value, symmetric_value],
+        ..Default::default()
+    });
+    timeout(CONNECT_TIMEOUT, conn.send(&msg_out)).await??;
+    conn.set_key(key);
+    if !conn.is_secured() {
+        bail!("Handshake failed: secure channel was not activated");
+    }
+    if log_on_success {
+        log::info!("Connection secured");
     }
     Ok(())
 }

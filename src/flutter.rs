@@ -5,7 +5,7 @@ use crate::{
     ui_session_interface::{io_loop, InvokeUiSession, Session},
 };
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-use hbb_common::dlopen::{
+use dlopen::{
     symbor::{Library, Symbol},
     Error as LibError,
 };

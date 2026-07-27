@@ -1,5 +1,6 @@
 use super::service::{EmptyExtraFieldService, GenericService, Service};
-use hbb_common::{bail, dlopen::symbor::Library, log, ResultType};
+use dlopen::symbor::Library;
+use hbb_common::{bail, log, ResultType};
 use std::{
     sync::{Arc, Mutex},
     thread,

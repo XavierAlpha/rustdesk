@@ -1977,18 +1977,23 @@ mod desktop {
     }
 }
 
-pub struct WakeLock(Option<keepawake::AwakeHandle>);
+pub struct WakeLock {
+    _handle: Option<keepawake::KeepAwake>,
+}
 
 impl WakeLock {
     pub fn new(display: bool, idle: bool, sleep: bool) -> Self {
-        WakeLock(
-            keepawake::Builder::new()
+        Self {
+            _handle: keepawake::Builder::default()
                 .display(display)
                 .idle(idle)
                 .sleep(sleep)
+                .reason("Active Camellia remote session")
+                .app_name(crate::get_app_name())
+                .app_reverse_domain("com.camellia")
                 .create()
                 .ok(),
-        )
+        }
     }
 }
 

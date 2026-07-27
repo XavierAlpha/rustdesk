@@ -1521,6 +1521,11 @@ async fn check_id(
     )
     .await
     {
+        let key = crate::get_key(true).await;
+        if let Err(err) = crate::secure_tcp(&mut socket, &key).await {
+            log::warn!("Failed to secure rendezvous connection for ID change: {err}");
+            return "Failed to connect to rendezvous server";
+        }
         let mut msg_out = Message::new();
         msg_out.set_register_pk(RegisterPk {
             old_id,
