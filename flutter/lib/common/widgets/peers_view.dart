@@ -4,6 +4,7 @@ import 'dart:collection';
 import 'package:dynamic_layouts/dynamic_layouts.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_hbb/common/widgets/adaptive_layout.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/models/ab_model.dart';
 import 'package:flutter_hbb/models/peer_tab_model.dart';
@@ -187,25 +188,11 @@ class _PeersViewState extends State<_PeersView>
       child: Consumer<Peers>(builder: (context, peers, child) {
         if (peers.peers.isEmpty) {
           gFFI.peerTabModel.setCurrentTabCachedPeers([]);
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.sentiment_very_dissatisfied_rounded,
-                  color: Theme.of(context).tabBarTheme.labelColor,
-                  size: 40,
-                ).paddingOnly(bottom: 10),
-                Text(
-                  translate(
-                    _emptyMessages[widget.peers.loadEvent] ?? 'Empty',
-                  ),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Theme.of(context).tabBarTheme.labelColor,
-                  ),
-                ),
-              ],
+          return AppStatePane(
+            state: AppContentState.empty,
+            title: translate('Empty'),
+            message: translate(
+              _emptyMessages[widget.peers.loadEvent] ?? 'Empty',
             ),
           );
         } else {
@@ -251,13 +238,13 @@ class _PeersViewState extends State<_PeersView>
               // and the peers change event will trigger _buildPeersView().
               return !isPortrait
                   ? Obx(() => peerCardUiType.value == PeerUiType.list
-                      ? Container(height: 45, child: visibilityChild)
+                      ? SizedBox(height: 54, child: visibilityChild)
                       : peerCardUiType.value == PeerUiType.grid
                           ? SizedBox(
-                              width: 220, height: 140, child: visibilityChild)
+                              width: 244, height: 152, child: visibilityChild)
                           : SizedBox(
-                              width: 220, height: 42, child: visibilityChild))
-                  : Container(child: visibilityChild);
+                              width: 264, height: 56, child: visibilityChild))
+                  : visibilityChild;
             }
 
             // We should avoid too many rebuilds. Win10(Some machines) on Flutter 3.19.6.
@@ -298,8 +285,10 @@ class _PeersViewState extends State<_PeersView>
             }
             return child;
           } else {
-            return const Center(
-              child: CircularProgressIndicator(),
+            return AppStatePane(
+              state: AppContentState.loading,
+              title: translate('Loading...'),
+              message: translate('Please wait'),
             );
           }
         },

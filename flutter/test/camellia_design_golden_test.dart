@@ -6,14 +6,14 @@ import 'package:flutter_test/flutter_test.dart';
 
 const _destinations = <NavigationDestination>[
   NavigationDestination(
+    icon: Icon(Icons.home_outlined),
+    selectedIcon: Icon(Icons.home_rounded),
+    label: 'Home',
+  ),
+  NavigationDestination(
     icon: Icon(Icons.devices_outlined),
     selectedIcon: Icon(Icons.devices_rounded),
     label: 'Devices',
-  ),
-  NavigationDestination(
-    icon: Icon(Icons.menu_book_outlined),
-    selectedIcon: Icon(Icons.menu_book_rounded),
-    label: 'Address book',
   ),
   NavigationDestination(
     icon: Icon(Icons.tune_outlined),

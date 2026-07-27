@@ -8,7 +8,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/widgets/adaptive_layout.dart';
 import 'package:flutter_hbb/common/widgets/animated_rotation_widget.dart';
-import 'package:flutter_hbb/common/widgets/address_book.dart';
 import 'package:flutter_hbb/common/widgets/brand_shell.dart';
 import 'package:flutter_hbb/ui/camellia_design.dart';
 import 'package:flutter_hbb/common/widgets/custom_password.dart';
@@ -17,9 +16,7 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/connection_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/desktop/widgets/update_progress.dart';
-import 'package:flutter_hbb/models/ab_model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
-import 'package:flutter_hbb/models/peer_tab_model.dart';
 import 'package:flutter_hbb/models/server_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
 import 'package:flutter_hbb/models/user_model.dart';
@@ -133,11 +130,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       label: translate('Devices'),
     ),
     NavigationDestination(
-      icon: const Icon(Icons.menu_book_outlined),
-      selectedIcon: const Icon(Icons.menu_book_rounded),
-      label: translate('Address book'),
-    ),
-    NavigationDestination(
       icon: const Icon(Icons.tune_outlined),
       selectedIcon: const Icon(Icons.tune_rounded),
       label: translate('Settings'),
@@ -161,8 +153,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           child: const PeerTabPage(),
         );
       case 2:
-        return const AddressBook();
-      case 3:
         return DesktopSettingPage(
           key: ValueKey(_settingsInitialTab),
           initialTabkey: _settingsInitialTab,
@@ -174,8 +164,10 @@ class _DesktopHomePageState extends State<DesktopHomePage>
 
   Widget _buildHomeWorkspace(BuildContext context, BoxConstraints constraints) {
     final incomingOnly = bind.isIncomingOnly();
-    final wide = constraints.maxWidth >= AppLayout.splitBreakpoint &&
-        constraints.maxHeight >= 640;
+    final outgoingOnly = bind.isOutgoingOnly();
+    final wide =
+        constraints.maxWidth >= AppLayout.splitBreakpoint &&
+        constraints.maxHeight >= 600;
     if (incomingOnly) {
       return Align(
         alignment: Alignment.topCenter,
@@ -184,6 +176,9 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           width: constraints.maxWidth.clamp(320.0, 520.0).toDouble(),
         ),
       );
+    }
+    if (outgoingOnly) {
+      return const ConnectionPage();
     }
     if (wide) {
       return Row(
@@ -195,56 +190,38 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                 ? 390
                 : 350,
           ),
-          const Expanded(child: ConnectionPage(showDevices: false)),
+          const Expanded(child: ConnectionPage()),
         ],
       );
     }
-    final identityHeight = constraints.maxHeight >= 760 ? 390.0 : 330.0;
-    return ListView(
-      padding: EdgeInsets.zero,
+    final identityHeight = (constraints.maxHeight * 0.38)
+        .clamp(280.0, 360.0)
+        .toDouble();
+    return Column(
       children: [
         SizedBox(
           height: identityHeight,
           child: buildLeftPane(context, width: constraints.maxWidth),
         ),
-        const SizedBox(height: 340, child: ConnectionPage(showDevices: false)),
+        const Expanded(child: ConnectionPage()),
       ],
     );
   }
 
   void _selectNavigationDestination(int index) {
-    if (index == 1 && gFFI.peerTabModel.currentTab == PeerTabIndex.ab.index) {
-      gFFI.peerTabModel.setCurrentTab(PeerTabIndex.recent.index);
-    } else if (index == 2) {
-      gFFI.peerTabModel.setCurrentTab(PeerTabIndex.ab.index);
-      gFFI.abModel.pullAb(force: ForcePullAb.listAndCurrent, quiet: false);
-    }
     setState(() => _navigationIndex = index);
-  }
-
-  void _syncNavigationWithPeerTab() {
-    if (!mounted) return;
-    if (gFFI.peerTabModel.currentTab == PeerTabIndex.ab.index &&
-        _navigationIndex == 1) {
-      setState(() => _navigationIndex = 2);
-    } else if (gFFI.peerTabModel.currentTab != PeerTabIndex.ab.index &&
-        _navigationIndex == 2) {
-      setState(() => _navigationIndex = 1);
-    }
   }
 
   Widget _buildWorkspaceHeader(BuildContext context, bool compact) {
     final theme = Theme.of(context);
     final title = switch (_navigationIndex) {
       1 => translate('Devices'),
-      2 => translate('Address book'),
-      3 => translate('Settings'),
+      2 => translate('Settings'),
       _ => translate('Remote workspace'),
     };
     final subtitle = switch (_navigationIndex) {
-      1 => translate('Recent, favorite, and discovered devices'),
-      2 => translate('Trusted contacts and shared devices'),
-      3 => translate('Client preferences and security'),
+      1 => translate('Recent, favorite, discovered, and shared devices'),
+      2 => translate('Client preferences and security'),
       _ => translate('Connect, share, and manage trusted devices'),
     };
     return Container(
@@ -295,7 +272,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
               const SizedBox(width: 6),
               IconButton(
                 tooltip: translate('Settings'),
-                onPressed: () => _selectNavigationDestination(3),
+                onPressed: () => _selectNavigationDestination(2),
                 icon: const Icon(Icons.tune_rounded),
               ),
             ],
@@ -356,7 +333,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
             : () {
                 setState(() {
                   _settingsInitialTab = SettingsTabKey.account;
-                  _navigationIndex = 3;
+                  _navigationIndex = 2;
                 });
               },
       );
@@ -424,15 +401,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         duration: AppMotion.duration(context, AppMotion.stateChange),
         curve: Curves.easeOutCubic,
         width: width ?? (isIncomingOnly ? 340.0 : 330.0),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.96),
-          border: Border(
-            right: BorderSide(color: AppVisual.border(context)),
-            top: isIncomingOnly
-                ? BorderSide.none
-                : BorderSide(color: AppVisual.border(context)),
-          ),
-        ),
+        color: Colors.transparent,
         clipBehavior: Clip.antiAlias,
         child: Stack(
           children: [
@@ -559,7 +528,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     RxBool hover = false.obs;
     return InkWell(
       borderRadius: BorderRadius.circular(CamelliaRadius.status),
-      onTap: () => _selectNavigationDestination(3),
+      onTap: () => _selectNavigationDestination(2),
       child: Tooltip(
         message: translate('Settings'),
         child: Obx(
@@ -1072,7 +1041,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   @override
   void initState() {
     super.initState();
-    gFFI.peerTabModel.addListener(_syncNavigationWithPeerTab);
     _updateTimer = periodic_immediate(const Duration(seconds: 1), () async {
       await gFFI.serverModel.fetchID();
       final error = await bind.mainGetError();
@@ -1267,11 +1235,11 @@ class _DesktopHomePageState extends State<DesktopHomePage>
 
   @override
   void dispose() {
-    gFFI.peerTabModel.removeListener(_syncNavigationWithPeerTab);
     _uniLinksSubscription?.cancel();
     Get.delete<RxBool>(tag: 'stop-service');
     _updateTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
+    _leftPaneScrollController.dispose();
     super.dispose();
   }
 

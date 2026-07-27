@@ -89,6 +89,10 @@ void main() {
     }
   });
 
+  test('navigation labels appear before ultra-wide desktop sizes', () {
+    expect(AppLayout.railExtendBreakpoint, 1120);
+  });
+
   testWidgets('navigation changes shape with available width', (tester) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -108,6 +112,15 @@ void main() {
           .widget<CamelliaNavigationRail>(find.byType(CamelliaNavigationRail))
           .extended,
       isFalse,
+    );
+
+    tester.view.physicalSize = const Size(1120, 800);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<CamelliaNavigationRail>(find.byType(CamelliaNavigationRail))
+          .extended,
+      isTrue,
     );
 
     tester.view.physicalSize = const Size(1440, 900);

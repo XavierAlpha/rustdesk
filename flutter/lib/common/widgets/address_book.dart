@@ -118,37 +118,102 @@ class _AddressBookState extends State<AddressBook> {
   });
 
   Widget _buildAddressBookLandscape() {
-    return Row(
+    return Column(
       children: [
-        Offstage(
-          offstage: hideAbTagsPanel.value,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              border: Border(
-                right: BorderSide(
-                  color: Theme.of(context).colorScheme.outlineVariant,
-                ),
-              ),
-            ),
-            child: SizedBox(
-              width: 210,
-              child: Column(
-                children: [
-                  _buildAbDropdown(),
-                  _buildTagHeader().marginOnly(left: 12, right: 4),
-                  Expanded(child: SizedBox.expand(child: _buildTags())),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 4, 8, 10),
-                    child: _buildAbPermission(),
-                  ),
-                ],
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant,
               ),
             ),
           ),
+          child: Row(
+            children: [
+              SizedBox(width: 250, child: _buildAbDropdown()),
+              if (!hideAbTagsPanel.value) ...[
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 30,
+                  child: VerticalDivider(
+                    width: 1,
+                    color: AppVisual.border(context),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      translate('Tags'),
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
+                    const SizedBox(width: 2),
+                    Listener(
+                      onPointerDown: (event) {
+                        final x = event.position.dx;
+                        final y = event.position.dy;
+                        menuPos = RelativeRect.fromLTRB(x, y, x, y);
+                      },
+                      onPointerUp: (_) => _showMenu(menuPos),
+                      child: build_more(context, invert: true),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: _buildTagStrip()),
+              ] else
+                const Spacer(),
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: _buildAbPermission(),
+              ),
+            ],
+          ),
         ),
+        const SizedBox(height: 10),
         _buildPeersViews(),
       ],
+    );
+  }
+
+  Widget _buildTagStrip() {
+    return Obx(
+      () => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [for (final tag in _addressBookTags()) _tagBuilder(tag)],
+        ),
+      ),
+    );
+  }
+
+  List<String> _addressBookTags() {
+    final tags = gFFI.abModel.currentAbTags
+        .map((tag) => tag.toString())
+        .toList(growable: true);
+    if (gFFI.abModel.sortTags.value) {
+      tags.sort(
+        (left, right) => left.toLowerCase().compareTo(right.toLowerCase()),
+      );
+    }
+    return [kUntagged, ...tags];
+  }
+
+  Widget _tagBuilder(String tag) {
+    return AddressBookTag(
+      name: tag,
+      tags: gFFI.abModel.selectedTags,
+      onTap: () {
+        if (gFFI.abModel.selectedTags.contains(tag)) {
+          gFFI.abModel.selectedTags.remove(tag);
+        } else {
+          gFFI.abModel.selectedTags.add(tag);
+        }
+      },
+      showActionMenu: gFFI.abModel.current.canWrite(),
     );
   }
 
@@ -346,37 +411,13 @@ class _AddressBookState extends State<AddressBook> {
 
   Widget _buildTags() {
     return Obx(() {
-      List tags;
-      if (gFFI.abModel.sortTags.value) {
-        tags = gFFI.abModel.currentAbTags.toList();
-        tags.sort();
-      } else {
-        tags = gFFI.abModel.currentAbTags.toList();
-      }
-      tags = [kUntagged, ...tags].toList();
-      final editPermission = gFFI.abModel.current.canWrite();
-      tagBuilder(String e) {
-        return AddressBookTag(
-          name: e,
-          tags: gFFI.abModel.selectedTags,
-          onTap: () {
-            if (gFFI.abModel.selectedTags.contains(e)) {
-              gFFI.abModel.selectedTags.remove(e);
-            } else {
-              gFFI.abModel.selectedTags.add(e);
-            }
-          },
-          showActionMenu: editPermission,
-        );
-      }
-
+      final tags = _addressBookTags();
       gridView(bool isPortrait) => DynamicGridView.builder(
         shrinkWrap: isPortrait,
         gridDelegate: SliverGridDelegateWithWrapping(),
         itemCount: tags.length,
         itemBuilder: (BuildContext context, int index) {
-          final e = tags[index];
-          return tagBuilder(e);
+          return _tagBuilder(tags[index]);
         },
       );
       final maxHeight = max(MediaQuery.of(context).size.height / 6, 100.0);
@@ -809,53 +850,80 @@ class AddressBookTag extends StatelessWidget {
       pos = RelativeRect.fromLTRB(x, y, x, y);
     }
 
-    const double radius = 8;
     final isUnTagged = name == kUntagged;
     final showAction = showActionMenu && !isUnTagged;
     return GestureDetector(
-      onTap: onTap,
       onTapDown: showAction ? setPosition : null,
       onSecondaryTapDown: showAction ? setPosition : null,
       onSecondaryTap: showAction ? () => _showMenu(context, pos) : null,
       onLongPress: showAction ? () => _showMenu(context, pos) : null,
-      child: Obx(
-        () => Container(
-          decoration: BoxDecoration(
-            color: tags.contains(name)
-                ? gFFI.abModel.getCurrentAbTagColor(name)
-                : Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          margin: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
-          padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 6.0),
-          child: IntrinsicWidth(
-            child: Row(
-              children: [
-                if (!isUnTagged)
-                  Container(
-                    width: radius,
-                    height: radius,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: tags.contains(name)
-                          ? Colors.white
-                          : gFFI.abModel.getCurrentAbTagColor(name),
-                    ),
-                  ).marginOnly(right: radius / 2),
-                Expanded(
-                  child: Text(
-                    isUnTagged ? translate(name) : name,
-                    style: TextStyle(
-                      overflow: TextOverflow.ellipsis,
-                      color: tags.contains(name) ? Colors.white : null,
+      child: Obx(() {
+        final theme = Theme.of(context);
+        final selected = tags.contains(name);
+        final tagColor = gFFI.abModel.getCurrentAbTagColor(name);
+        final selectedForeground =
+            ThemeData.estimateBrightnessForColor(tagColor) == Brightness.dark
+            ? Colors.white
+            : const Color(0xFF171A21);
+        return Semantics(
+          selected: selected,
+          button: true,
+          label: isUnTagged ? translate(name) : name,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+            child: Material(
+              color: selected ? tagColor : theme.colorScheme.surfaceContainer,
+              shape: StadiumBorder(
+                side: BorderSide(
+                  color: selected ? tagColor : theme.colorScheme.outlineVariant,
+                ),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: onTap,
+                customBorder: const StadiumBorder(),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minHeight: 34,
+                    maxWidth: 180,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!isUnTagged) ...[
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: selected ? selectedForeground : tagColor,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Flexible(
+                          child: Text(
+                            isUnTagged ? translate(name) : name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: selected
+                                  ? selectedForeground
+                                  : theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      }),
     );
   }
 

@@ -8,7 +8,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/widgets/adaptive_layout.dart';
 import 'package:flutter_hbb/common/widgets/audio_input.dart';
-import 'package:flutter_hbb/common/widgets/brand_shell.dart';
 import 'package:flutter_hbb/common/widgets/setting_widgets.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_home_page.dart';
@@ -30,8 +29,8 @@ import 'package:url_launcher/url_launcher_string.dart';
 import '../../common/widgets/dialog.dart';
 import '../../common/widgets/login.dart';
 
-const double _kTabWidth = 200;
-const double _kCardFixedWidth = 640;
+const double _kTabWidth = 216;
+const double _kCardFixedWidth = 920;
 const double _kCardLeftMargin = 15;
 const double _kContentHMargin = 15;
 const double _kContentHSubMargin = _kContentHMargin + 33;
@@ -173,11 +172,12 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
 
   @override
   void dispose() {
-    super.dispose();
-    Get.delete<PageController>(tag: _kSettingPageControllerTag);
-    Get.delete<RxInt>(tag: _kSettingPageTabKeyTag);
-    WidgetsBinding.instance.removeObserver(this);
     _videoConnTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    Get.delete<PageController>(tag: _kSettingPageControllerTag);
+    Get.delete<Rx<SettingsTabKey>>(tag: _kSettingPageTabKeyTag);
+    controller.dispose();
+    super.dispose();
   }
 
   List<_TabInfo> _settingTabs() {
@@ -319,7 +319,7 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
                   ),
                   child: Column(
                     children: [
-                      _header(context, compact: compact),
+                      SizedBox(height: compact ? 10 : 14),
                       Flexible(
                         child: _listView(
                           tabs: _settingTabs(),
@@ -330,16 +330,40 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
                   ),
                 ),
                 Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: compact ? 8 : 20,
-                      vertical: 8,
-                    ),
-                    child: PageView(
-                      controller: controller,
-                      physics: const NeverScrollableScrollPhysics(),
-                      children: _children(),
-                    ),
+                  child: Column(
+                    children: [
+                      _contentHeader(context, compact: compact),
+                      Divider(height: 1, color: AppVisual.border(context)),
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, contentConstraints) {
+                            final contentWidth = contentConstraints.maxWidth
+                                .clamp(0.0, 1040.0)
+                                .toDouble();
+                            return Center(
+                              child: SizedBox(
+                                width: contentWidth,
+                                height: contentConstraints.maxHeight,
+                                child: Padding(
+                                  padding: EdgeInsets.fromLTRB(
+                                    compact ? 8 : 20,
+                                    0,
+                                    compact ? 8 : 20,
+                                    8,
+                                  ),
+                                  child: PageView(
+                                    controller: controller,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    children: _children(),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -350,56 +374,78 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
     );
   }
 
-  Widget _header(BuildContext context, {required bool compact}) {
-    if (compact) {
-      return SizedBox(
-        height: 62,
-        child: Center(
-          child: isWeb
-              ? IconButton(
-                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                  onPressed: () {
-                    if (Navigator.canPop(context)) {
-                      Navigator.pop(context);
-                    }
-                  },
-                  icon: const Icon(Icons.arrow_back),
-                )
-              : Tooltip(
-                  message: translate('Settings'),
-                  child: const Icon(Icons.settings_outlined),
-                ),
+  Widget _contentHeader(BuildContext context, {required bool compact}) {
+    return Obx(() {
+      final tabs = _settingTabs();
+      final tab = tabs.firstWhere(
+        (entry) => entry.key == selectedTab.value,
+        orElse: () => tabs.first,
+      );
+      return Container(
+        height: compact ? 62 : 72,
+        padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 22),
+        color: Theme.of(context).colorScheme.surface,
+        child: Row(
+          children: [
+            if (isWeb) ...[
+              IconButton(
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: () {
+                  if (Navigator.canPop(context)) {
+                    Navigator.pop(context);
+                  }
+                },
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+              const SizedBox(width: 8),
+            ],
+            AppIconBadge(
+              icon: tab.selected,
+              colors: AppVisual.connectGradient,
+              size: compact ? 34 : 38,
+              iconSize: compact ? 18 : 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    translate(tab.label),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  if (!compact)
+                    Text(
+                      translate(_tabDescription(tab.key)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
       );
-    }
-    final settingsText = CamelliaWordmark(
-      subtitle: translate('Settings'),
-      compact: true,
-    );
-    return Row(
-      children: [
-        if (isWeb)
-          IconButton(
-            onPressed: () {
-              if (Navigator.canPop(context)) {
-                Navigator.pop(context);
-              }
-            },
-            icon: Icon(Icons.arrow_back),
-          ).marginOnly(left: 5),
-        if (isWeb)
-          SizedBox(height: 72, child: settingsText).marginOnly(left: 12),
-        if (!isWeb)
-          SizedBox(height: 76, child: settingsText).marginOnly(left: 14),
-        const Spacer(),
-      ],
-    );
+    });
   }
 
+  String _tabDescription(SettingsTabKey key) => switch (key) {
+    SettingsTabKey.general => 'Appearance, language, and app behavior',
+    SettingsTabKey.safety => 'Authentication and incoming access',
+    SettingsTabKey.network => 'Servers, proxy, and transport',
+    SettingsTabKey.display => 'Image quality and remote screen behavior',
+    SettingsTabKey.plugin => 'Extensions and integrations',
+    SettingsTabKey.account => 'Profile and cloud services',
+    SettingsTabKey.printer => 'Remote printing preferences',
+    SettingsTabKey.about => 'Version, privacy, and licenses',
+  };
+
   Widget _listView({required List<_TabInfo> tabs, required bool compact}) {
-    final scrollController = ScrollController();
     return ListView(
-      controller: scrollController,
       children: tabs
           .map((tab) => _listItem(tab: tab, compact: compact))
           .toList(),
@@ -498,9 +544,7 @@ class _GeneralState extends State<_General> {
 
   @override
   Widget build(BuildContext context) {
-    final scrollController = ScrollController();
     return ListView(
-      controller: scrollController,
       children: [
         if (!isWeb) service(),
         theme(),
@@ -1031,13 +1075,11 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
   bool locked = bind.mainIsInstalled();
-  final scrollController = ScrollController();
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
     return SingleChildScrollView(
-      controller: scrollController,
       child: Column(
         children: [
           _lock(locked, 'Unlock Security Settings', () {
@@ -1918,13 +1960,10 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
   bool get wantKeepAlive => true;
   bool locked = !isWeb && bind.mainIsInstalled();
 
-  final scrollController = ScrollController();
-
   @override
   Widget build(BuildContext context) {
     super.build(context);
     return ListView(
-      controller: scrollController,
       children: [
         _lock(locked, 'Unlock Network Settings', () {
           locked = false;
@@ -2112,9 +2151,7 @@ class _Display extends StatefulWidget {
 class _DisplayState extends State<_Display> {
   @override
   Widget build(BuildContext context) {
-    final scrollController = ScrollController();
     return ListView(
-      controller: scrollController,
       children: [
         viewStyle(context),
         scrollStyle(context),
@@ -2455,9 +2492,7 @@ class _Account extends StatefulWidget {
 class _AccountState extends State<_Account> {
   @override
   Widget build(BuildContext context) {
-    final scrollController = ScrollController();
     return ListView(
-      controller: scrollController,
       children: [
         _Card(title: 'Account', children: [accountAction(), useInfo()]),
       ],
@@ -2604,13 +2639,11 @@ class _PluginState extends State<_Plugin> {
   @override
   Widget build(BuildContext context) {
     bind.pluginListReload();
-    final scrollController = ScrollController();
     return ChangeNotifierProvider.value(
       value: pluginManager,
       child: Consumer<PluginManager>(
         builder: (context, model, child) {
           return ListView(
-            controller: scrollController,
             children: model.plugins.map((entry) => pluginCard(entry)).toList(),
           ).marginOnly(bottom: _kListViewBottomMargin);
         },
@@ -2653,9 +2686,7 @@ class _Printer extends StatefulWidget {
 class __PrinterState extends State<_Printer> {
   @override
   Widget build(BuildContext context) {
-    final scrollController = ScrollController();
     return ListView(
-      controller: scrollController,
       children: [outgoing(context), incoming(context)],
     ).marginOnly(bottom: _kListViewBottomMargin);
   }
@@ -2842,9 +2873,7 @@ class _AboutState extends State<_About> {
         final buildDate = data['buildDate'].toString();
         final fingerprint = data['fingerprint'].toString();
         const linkStyle = TextStyle(decoration: TextDecoration.underline);
-        final scrollController = ScrollController();
         return SingleChildScrollView(
-          controller: scrollController,
           child: _Card(
             title: translate('About RustDesk'),
             children: [
@@ -2939,26 +2968,26 @@ Widget _Card({
   required List<Widget> children,
   List<Widget>? title_suffix,
 }) {
-  return Row(
-    children: [
-      Flexible(
-        child: SizedBox(
-          width: _kCardFixedWidth,
-          child: CamelliaSection(
-            accent: CamelliaColors.indigo,
-            title: translate(title),
-            trailing: title_suffix == null
-                ? null
-                : Row(mainAxisSize: MainAxisSize.min, children: title_suffix),
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [...children.map((e) => e.marginOnly(top: 4))],
-            ),
-          ).marginOnly(left: _kCardLeftMargin, top: 15),
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(12, 14, 12, 0),
+    child: Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kCardFixedWidth),
+        child: CamelliaSection(
+          accent: CamelliaColors.indigo,
+          title: translate(title),
+          trailing: title_suffix == null
+              ? null
+              : Row(mainAxisSize: MainAxisSize.min, children: title_suffix),
+          padding: const EdgeInsets.fromLTRB(18, 2, 18, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [...children.map((e) => e.marginOnly(top: 4))],
+          ),
         ),
       ),
-    ],
+    ),
   );
 }
 

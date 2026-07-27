@@ -16,7 +16,7 @@ class AppLayout {
   static const double splitBreakpoint = 960;
 
   /// Width at which the navigation rail can afford inline labels.
-  static const double railExtendBreakpoint = 1440;
+  static const double railExtendBreakpoint = 1120;
 
   static AppLayoutSize forWidth(double width) {
     if (width < compactBreakpoint) return AppLayoutSize.compact;
@@ -110,7 +110,8 @@ class AdaptiveNavigationScaffold extends StatelessWidget {
               children: [
                 if (!compact) ...[
                   CamelliaNavigationRail(
-                    extended: size == AppLayoutSize.expanded,
+                    extended:
+                        constraints.maxWidth >= AppLayout.railExtendBreakpoint,
                     selectedIndex: selectedIndex,
                     onDestinationSelected: onDestinationSelected,
                     destinations: destinations,

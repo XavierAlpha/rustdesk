@@ -160,8 +160,8 @@ class _PeerCardState extends State<_PeerCard>
         ? peer.hostname
         : '${peer.username}${peer.username.isNotEmpty && peer.hostname.isNotEmpty ? '@' : ''}${peer.hostname}';
     final greyStyle = TextStyle(
-      fontSize: 11,
-      color: Theme.of(context).textTheme.titleLarge?.color?.withValues(alpha: 0.6),
+      fontSize: 12,
+      color: Theme.of(context).textTheme.titleLarge?.color?.withValues(alpha: 0.62),
     );
     final showNote = _showNote(peer);
 
@@ -181,14 +181,14 @@ class _PeerCardState extends State<_PeerCard>
                   ),
           ),
           alignment: Alignment.center,
-          width: isPortrait ? 50 : 42,
+          width: isPortrait ? 50 : 54,
           height: isPortrait ? 50 : null,
           child: Stack(
             children: [
               getPlatformImage(
                 peer.platform,
-                size: isPortrait ? 38 : 30,
-              ).paddingAll(6),
+                size: isPortrait ? 38 : 32,
+              ).paddingAll(isPortrait ? 6 : 8),
               if (_shouldBuildPasswordIcon(peer))
                 Positioned(
                   top: 1,
@@ -225,7 +225,7 @@ class _PeerCardState extends State<_PeerCard>
                             ),
                           ),
                         ],
-                      ).marginOnly(top: isPortrait ? 0 : 2),
+                      ).marginOnly(top: isPortrait ? 0 : 1),
                       Row(
                         children: [
                           Flexible(
@@ -275,7 +275,12 @@ class _PeerCardState extends State<_PeerCard>
                     ? checkBoxOrActionMorePortrait(peer)
                     : checkBoxOrActionMoreLandscape(peer, isTile: true),
               ],
-            ).paddingOnly(left: 10.0, top: 3.0),
+            ).paddingOnly(
+              left: isPortrait ? 10 : 12,
+              right: 4,
+              top: isPortrait ? 3 : 4,
+              bottom: isPortrait ? 0 : 4,
+            ),
           ),
         ),
       ],
