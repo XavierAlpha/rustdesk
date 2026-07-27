@@ -137,6 +137,9 @@ type SoftwareDecoderConfig = {
     | 'ogv-decoder-video-vp9-wasm.js'
     | 'ogv-decoder-video-av1-wasm.js';
 };
+type SoftwareDecoderGlobals = Partial<
+  Record<SoftwareDecoderConfig['globalName'], PromiseLike<OgvDecoderModule>>
+>;
 
 const CODEC_CONFIG: Record<CodecType, string[]> = {
   vp8: ['vp8'],
@@ -164,8 +167,9 @@ const SOFTWARE_DECODER_CONFIG: Partial<Record<CodecType, SoftwareDecoderConfig>>
     scriptName: 'ogv-decoder-video-av1-wasm.js'
   }
 };
-const SOFTWARE_DECODER_SOURCES = new Map<CodecType, Promise<string>>();
 const SOFTWARE_DECODER_AVAILABILITY = new Map<CodecType, Promise<boolean>>();
+const SOFTWARE_DECODER_SCRIPT_QUEUES = new Map<CodecType, Promise<void>>();
+const SOFTWARE_DECODER_LOAD_TIMEOUT_MS = 15_000;
 
 const RENDER_QUALITY_PROFILES: Record<RenderQualityPreference, RenderQualityProfile> = {
   low: {
@@ -2824,12 +2828,13 @@ function normalizeRenderQualityPreference(value: string): RenderQualityPreferenc
 }
 
 async function hasSoftwareDecoder(codec: CodecType): Promise<boolean> {
-  if (!SOFTWARE_DECODER_CONFIG[codec]) {
+  const config = SOFTWARE_DECODER_CONFIG[codec];
+  if (!config) {
     return false;
   }
   let cached = SOFTWARE_DECODER_AVAILABILITY.get(codec);
   if (!cached) {
-    cached = loadSoftwareDecoderSource(codec)
+    cached = checkSoftwareDecoderAsset(config)
       .then(() => true)
       .catch(() => false);
     SOFTWARE_DECODER_AVAILABILITY.set(codec, cached);
@@ -2842,35 +2847,118 @@ async function instantiateSoftwareDecoder(codec: CodecType): Promise<OgvDecoderM
   if (!config) {
     throw new Error(`software decoder is not available for ${codec}`);
   }
-  const source = await loadSoftwareDecoderSource(codec);
-  const scriptUrl = softwareDecoderScriptUrl(config.scriptName);
-  const factory = new Function(
-    `var _scriptDir = ${JSON.stringify(scriptUrl)};\n${source}\nreturn ${config.globalName};`
+  const previous = SOFTWARE_DECODER_SCRIPT_QUEUES.get(codec) ?? Promise.resolve();
+  const decoder = previous
+    .catch(() => undefined)
+    .then(() => loadSoftwareDecoderScript(config));
+  const queue = decoder.then(
+    () => undefined,
+    () => undefined
   );
-  return await (factory() as Promise<OgvDecoderModule>);
+  SOFTWARE_DECODER_SCRIPT_QUEUES.set(codec, queue);
+  void queue.then(() => {
+    if (SOFTWARE_DECODER_SCRIPT_QUEUES.get(codec) === queue) {
+      SOFTWARE_DECODER_SCRIPT_QUEUES.delete(codec);
+    }
+  });
+  return decoder;
 }
 
-function loadSoftwareDecoderSource(codec: CodecType): Promise<string> {
-  const config = SOFTWARE_DECODER_CONFIG[codec];
-  if (!config) {
-    return Promise.reject(new Error(`unknown software decoder codec: ${codec}`));
+async function checkSoftwareDecoderAsset(config: SoftwareDecoderConfig): Promise<void> {
+  const url = softwareDecoderScriptUrl(config.scriptName);
+  let response = await fetchSoftwareDecoderAsset(url, { method: 'HEAD' });
+  if (response.status === 405 || response.status === 501) {
+    response = await fetchSoftwareDecoderAsset(url);
+    await response.body?.cancel();
   }
-  let cached = SOFTWARE_DECODER_SOURCES.get(codec);
-  if (!cached) {
-    const url = softwareDecoderScriptUrl(config.scriptName);
-    cached = fetch(url).then(async (response) => {
-      if (!response.ok) {
-        throw new Error(`failed to load ${config.scriptName}: ${response.status}`);
-      }
-      return response.text();
+  if (!response.ok) {
+    throw new Error(`failed to load ${config.scriptName}: ${response.status}`);
+  }
+}
+
+async function fetchSoftwareDecoderAsset(
+  url: string,
+  init: RequestInit = {}
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    SOFTWARE_DECODER_LOAD_TIMEOUT_MS
+  );
+  try {
+    return await fetch(url, {
+      ...init,
+      cache: 'force-cache',
+      credentials: 'same-origin',
+      signal: controller.signal
     });
-    SOFTWARE_DECODER_SOURCES.set(codec, cached);
+  } finally {
+    clearTimeout(timeout);
   }
-  return cached;
+}
+
+function loadSoftwareDecoderScript(
+  config: SoftwareDecoderConfig
+): Promise<OgvDecoderModule> {
+  if (typeof document === 'undefined') {
+    return Promise.reject(new Error('software decoder requires a browser document'));
+  }
+  const scriptUrl = softwareDecoderScriptUrl(config.scriptName);
+  const globalScope = globalThis as typeof globalThis & SoftwareDecoderGlobals;
+  globalScope[config.globalName] = undefined;
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    const timeout = setTimeout(
+      () => fail(new Error(`timed out loading ${config.scriptName}`)),
+      SOFTWARE_DECODER_LOAD_TIMEOUT_MS
+    );
+    const cleanup = () => {
+      clearTimeout(timeout);
+      script.onload = null;
+      script.onerror = null;
+      script.remove();
+    };
+    const fail = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+
+    script.async = true;
+    script.src = scriptUrl;
+    script.onload = () => {
+      const modulePromise = globalScope[config.globalName];
+      if (!modulePromise || typeof modulePromise.then !== 'function') {
+        fail(new Error(`${config.scriptName} did not expose ${config.globalName}`));
+        return;
+      }
+      Promise.resolve(modulePromise).then(
+        (module) => {
+          cleanup();
+          resolve(module);
+        },
+        (error: unknown) => {
+          fail(
+            error instanceof Error
+              ? error
+              : new Error(`failed to initialize ${config.scriptName}`)
+          );
+        }
+      );
+    };
+    script.onerror = () => {
+      fail(new Error(`failed to load ${config.scriptName}`));
+    };
+    (document.head ?? document.documentElement).append(script);
+  });
 }
 
 function softwareDecoderScriptUrl(scriptName: string): string {
-  return new URL(`../../ogvjs-1.8.6/${scriptName}`, import.meta.url).toString();
+  const url = new URL(`../../ogvjs-1.8.6/${scriptName}`, import.meta.url);
+  if (typeof location !== 'undefined' && url.origin !== location.origin) {
+    throw new Error(`refusing cross-origin software decoder: ${url.origin}`);
+  }
+  return url.toString();
 }
 
 async function detectCodecSupport(candidates: string[]): Promise<boolean> {

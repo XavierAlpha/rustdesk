@@ -55,6 +55,7 @@ export class WebSocketTransport {
     ) {
       return;
     }
+    this.cipher = undefined;
     const previous = this.socket;
     this.socket = undefined;
     if (previous && previous.readyState < WebSocket.CLOSING) {
@@ -201,6 +202,7 @@ export class WebSocketTransport {
   close(): void {
     const socket = this.socket;
     this.socket = undefined;
+    this.cipher = undefined;
     if (socket && socket.readyState < WebSocket.CLOSING) {
       socket.close();
     }

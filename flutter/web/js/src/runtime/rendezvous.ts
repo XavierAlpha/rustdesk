@@ -106,10 +106,16 @@ export class RendezvousClient {
     }
     this.logger.info(`Requesting relay via ${endpoint}`);
     const transport = new WebSocketTransport('rendezvous');
-    await transport.connect(endpoint);
     const inbox = new MessageInbox(transport);
     try {
-      await this.secureIfNeeded(transport, inbox, options.key ?? '', endpoint);
+      await transport.connect(endpoint);
+      await secureRendezvousTransport(
+        transport,
+        inbox,
+        this.proto,
+        options.key ?? '',
+        this.logger
+      );
 
       const uuid = generateUuid();
       const requestRelay = {
@@ -218,7 +224,13 @@ export class RendezvousClient {
     const inbox = new MessageInbox(transport);
     try {
       await transport.connect(endpoint);
-      await this.secureIfNeeded(transport, inbox, options.key ?? '', endpoint);
+      await secureRendezvousTransport(
+        transport,
+        inbox,
+        this.proto,
+        options.key ?? '',
+        this.logger
+      );
       for (let attempt = 1; attempt <= DIRECT_PROBE_ATTEMPTS; attempt++) {
         const punchHoleRequest = {
           id: options.peerId,
@@ -401,49 +413,44 @@ export class RendezvousClient {
     }
   }
 
-  private async secureIfNeeded(
-    transport: WebSocketTransport,
-    inbox: MessageInbox,
-    key: string,
-    endpoint: string
-  ): Promise<void> {
-    if (endpoint.startsWith('wss://')) {
-      return;
-    }
-    if (!key) {
-      this.logger.warn('No rendezvous public key configured; skipping secure handshake');
-      return;
-    }
-    const rsPk = decodeBase64(key);
-    try {
-      const data = await inbox.next(8000);
-      const msg = decodeProtoObject<Record<string, unknown>>(
-        this.proto.rendezvousType,
-        data,
-        {
-          longs: String,
-          bytes: Uint8Array,
-          defaults: false
-        }
-      );
-      const keyExchange = msg.keyExchange as { keys?: Uint8Array[] } | undefined;
-      if (!keyExchange || !keyExchange.keys || keyExchange.keys.length !== 1) {
-        inbox.pushFront(data);
-        return;
-      }
-      const signedKey = keyExchange.keys[0];
-      const theirPk = signOpen(signedKey, rsPk);
-      const { publicKey, symmetricKey, sealed } = createSymmetricKey(theirPk);
-      const reply = this.proto.rendezvousType.encode({
-        keyExchange: { keys: [publicKey, sealed] }
-      }).finish();
-      transport.send(reply);
-      transport.setCipher(new SecretBoxCipher(symmetricKey));
-      this.logger.info('Rendezvous secure channel established');
-    } catch (err) {
-      this.logger.warn('Secure rendezvous handshake failed', err);
-    }
+}
+
+export async function secureRendezvousTransport(
+  transport: WebSocketTransport,
+  inbox: MessageInbox,
+  proto: ProtoRoots,
+  key: string,
+  logger?: Logger
+): Promise<void> {
+  if (!key) {
+    throw new Error('Missing rendezvous public key');
   }
+  const rsPk = decodeBase64(key);
+  const data = await inbox.next(8000);
+  const msg = decodeProtoObject<Record<string, unknown>>(
+    proto.rendezvousType,
+    data,
+    {
+      longs: String,
+      bytes: Uint8Array,
+      defaults: false
+    }
+  );
+  const keyExchange = msg.keyExchange as { keys?: Uint8Array[] } | undefined;
+  if (!keyExchange?.keys || keyExchange.keys.length !== 1) {
+    throw new Error('Rendezvous server did not provide a valid key exchange');
+  }
+  const signedKey = keyExchange.keys[0];
+  const theirPk = signOpen(signedKey, rsPk);
+  const { publicKey, symmetricKey, sealed } = createSymmetricKey(theirPk);
+  const reply = proto.rendezvousType.encode({
+    keyExchange: { keys: [publicKey, sealed] }
+  }).finish();
+  if (!transport.send(reply)) {
+    throw new Error('Unable to send rendezvous key exchange response');
+  }
+  transport.setCipher(new SecretBoxCipher(symmetricKey));
+  logger?.info('Rendezvous secure channel established');
 }
 
 export function checkWsEndpoint(

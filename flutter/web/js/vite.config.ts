@@ -6,6 +6,7 @@ export default defineConfig({
     target: 'es2019',
     outDir: 'dist',
     emptyOutDir: true,
+    chunkSizeWarningLimit: 550,
     rollupOptions: {
       input: './src/main.ts',
       output: {

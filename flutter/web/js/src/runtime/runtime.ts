@@ -3,14 +3,18 @@ import { EventDispatcher } from '../core/events';
 import { Logger } from '../core/logger';
 import { detectOs, screenInfo } from '../core/platform';
 import { StorageStore } from '../core/storage';
-import { generateUuid } from '../core/uuid';
+import {
+  generateDeviceUuid,
+  generateUuid,
+  isCanonicalDeviceUuid
+} from '../core/uuid';
 import {
   decryptLocalSecret,
   encryptLocalSecret
 } from './crypto';
 import { MessageInbox } from './inbox';
 import { decodeProtoObject, loadProtos, ProtoRoots } from './proto';
-import { checkWsEndpoint } from './rendezvous';
+import { checkWsEndpoint, secureRendezvousTransport } from './rendezvous';
 import { WebSession } from './session';
 import { WebSocketTransport } from './transport';
 import { ConnectRequest, SessionContext, SessionMode } from './types';
@@ -107,7 +111,7 @@ export class WebRuntime {
     this.logger.info('Initializing web runtime');
     this.bindEventSinks();
     this.bindInputSource1Handlers();
-    this.store.ensure('uuid', generateUuid);
+    this.ensureDeviceUuid();
     this.store.ensure('my_name', () => this.config.profile.name);
     this.store.ensure('my_id', () => this.ensureMyId());
     this.store.remove('temporary_password');
@@ -723,7 +727,7 @@ export class WebRuntime {
       case 'my_name':
         return this.store.get('my_name', this.config.profile.name ?? 'Web User');
       case 'uuid':
-        return this.store.ensure('uuid', generateUuid);
+        return this.ensureDeviceUuid();
       case 'envvar':
         if (typeof arg0 === 'string') {
           return this.config.env[arg0] ?? this.store.get(`envvar:${arg0}`, '');
@@ -1020,7 +1024,17 @@ export class WebRuntime {
   }
 
   private getLocalSecretSeed(): string {
-    return this.store.ensure('uuid', generateUuid);
+    return this.ensureDeviceUuid();
+  }
+
+  private ensureDeviceUuid(): string {
+    const existing = this.store.get('uuid');
+    if (isCanonicalDeviceUuid(existing)) {
+      return existing;
+    }
+    const next = generateDeviceUuid();
+    this.store.set('uuid', next);
+    return next;
   }
 
   private encryptLocalPasswordValue(value: string): string {
@@ -2211,7 +2225,11 @@ export class WebRuntime {
     let transport: WebSocketTransport | undefined;
     let inbox: MessageInbox | undefined;
     try {
-      transport = await this.ensureOnlineQueryTransport(endpoint);
+      transport = await this.ensureOnlineQueryTransport(
+        endpoint,
+        proto,
+        context.key
+      );
       inbox = new MessageInbox(transport);
       const request = {
         onlineRequest: {
@@ -2289,7 +2307,9 @@ export class WebRuntime {
   }
 
   private async ensureOnlineQueryTransport(
-    endpoint: string
+    endpoint: string,
+    proto: ProtoRoots,
+    key: string
   ): Promise<WebSocketTransport> {
     this.clearOnlineQueryCloseTimer();
     if (!this.onlineQueryTransport || this.onlineQueryEndpoint !== endpoint) {
@@ -2298,7 +2318,19 @@ export class WebRuntime {
       this.onlineQueryEndpoint = endpoint;
     }
     if (this.onlineQueryTransport.getState() !== 'open') {
-      await this.onlineQueryTransport.connect(endpoint, 5000);
+      const handshakeInbox = new MessageInbox(this.onlineQueryTransport);
+      try {
+        await this.onlineQueryTransport.connect(endpoint, 5000);
+        await secureRendezvousTransport(
+          this.onlineQueryTransport,
+          handshakeInbox,
+          proto,
+          key,
+          this.logger
+        );
+      } finally {
+        handshakeInbox.close();
+      }
     }
     return this.onlineQueryTransport;
   }
@@ -2393,7 +2425,7 @@ export class WebRuntime {
     });
 
     const id = this.store.get('my_id', this.config.profile.id ?? '');
-    const uuid = this.store.ensure('uuid', generateUuid);
+    const uuid = this.ensureDeviceUuid();
     const deviceInfo = this.buildDeviceInfo();
 
     void this.performAccountAuth({

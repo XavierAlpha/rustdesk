@@ -68,7 +68,12 @@ have_web_deps() {
   [[ -f "${WEB_DIR}/libopus.js" ]] &&
   [[ -f "${WEB_DIR}/libopus.wasm" ]] &&
   [[ -f "${WEB_DIR}/yuv-canvas-1.2.6.js" ]] &&
-  [[ -f "${WEB_DIR}/ogvjs-1.8.6/ogv.js" ]]
+  [[ -f "${WEB_DIR}/ogvjs-1.8.6/ogv-decoder-video-vp8-wasm.js" ]] &&
+  [[ -f "${WEB_DIR}/ogvjs-1.8.6/ogv-decoder-video-vp8-wasm.wasm" ]] &&
+  [[ -f "${WEB_DIR}/ogvjs-1.8.6/ogv-decoder-video-vp9-wasm.js" ]] &&
+  [[ -f "${WEB_DIR}/ogvjs-1.8.6/ogv-decoder-video-vp9-wasm.wasm" ]] &&
+  [[ -f "${WEB_DIR}/ogvjs-1.8.6/ogv-decoder-video-av1-wasm.js" ]] &&
+  [[ -f "${WEB_DIR}/ogvjs-1.8.6/ogv-decoder-video-av1-wasm.wasm" ]]
 }
 
 FAVICON_SOURCE="${REPO_ROOT}/res/icon.png"
@@ -126,7 +131,10 @@ if [[ "$RUN" == "true" ]]; then
     FLUTTER_BUILD_ARGS+=("--profile")
   fi
 else
-  FLUTTER_BUILD_ARGS=("build" "web" "--${MODE}")
+  FLUTTER_BUILD_ARGS=("build" "web" "--${MODE}" "--no-wasm-dry-run")
+  if [[ "$MODE" == "release" ]]; then
+    FLUTTER_BUILD_ARGS+=("--csp")
+  fi
 fi
 if [[ -n "${RS_PUB_KEY:-}" ]]; then
   FLUTTER_BUILD_ARGS+=("--dart-define=RS_PUB_KEY=${RS_PUB_KEY}")
@@ -147,3 +155,16 @@ BUILD_DATE_VALUE="$(date '+%Y-%m-%d %H:%M')"
 FLUTTER_BUILD_ARGS+=("--dart-define=BUILD_DATE=${BUILD_DATE_VALUE}")
 
 flutter "${FLUTTER_BUILD_ARGS[@]}"
+
+if [[ "$RUN" == "false" ]]; then
+  FLUTTER_BOOTSTRAP="${FLUTTER_ROOT}/build/web/flutter_bootstrap.js"
+  if [[ ! -f "$FLUTTER_BOOTSTRAP" ]] ||
+    ! grep -q '"compileTarget":"dart2js"' "$FLUTTER_BOOTSTRAP"; then
+    echo "Incomplete Flutter web build configuration." >&2
+    exit 5
+  fi
+  if grep -Eq '"builds":\[[^]]*(\{\},|,\{\})' "$FLUTTER_BOOTSTRAP"; then
+    echo "Flutter web build contains an empty target configuration." >&2
+    exit 6
+  fi
+fi

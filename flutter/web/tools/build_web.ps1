@@ -22,7 +22,12 @@ function Test-WebDepsPresent {
     (Join-Path $WebDir 'libopus.js'),
     (Join-Path $WebDir 'libopus.wasm'),
     (Join-Path $WebDir 'yuv-canvas-1.2.6.js'),
-    (Join-Path $WebDir 'ogvjs-1.8.6\ogv.js')
+    (Join-Path $WebDir 'ogvjs-1.8.6\ogv-decoder-video-vp8-wasm.js'),
+    (Join-Path $WebDir 'ogvjs-1.8.6\ogv-decoder-video-vp8-wasm.wasm'),
+    (Join-Path $WebDir 'ogvjs-1.8.6\ogv-decoder-video-vp9-wasm.js'),
+    (Join-Path $WebDir 'ogvjs-1.8.6\ogv-decoder-video-vp9-wasm.wasm'),
+    (Join-Path $WebDir 'ogvjs-1.8.6\ogv-decoder-video-av1-wasm.js'),
+    (Join-Path $WebDir 'ogvjs-1.8.6\ogv-decoder-video-av1-wasm.wasm')
   )
   return ($markers | ForEach-Object { Test-Path $_ }) -notcontains $false
 }
@@ -121,7 +126,10 @@ if ($Run) {
   }
 }
 else {
-  $flutterArgs = @("build", "web", "--$Mode")
+  $flutterArgs = @("build", "web", "--$Mode", "--no-wasm-dry-run")
+  if ($Mode -eq 'release') {
+    $flutterArgs += '--csp'
+  }
 }
 if (-not [string]::IsNullOrWhiteSpace($env:RS_PUB_KEY)) {
   $flutterArgs += "--dart-define=RS_PUB_KEY=$($env:RS_PUB_KEY)"
@@ -142,3 +150,17 @@ $buildDate = (Get-Date).ToString('yyyy-MM-dd HH:mm')
 $flutterArgs += "--dart-define=BUILD_DATE=$buildDate"
 
 & $flutter @flutterArgs
+
+if (-not $Run) {
+  $flutterBootstrap = Join-Path $flutterRoot 'build\web\flutter_bootstrap.js'
+  if (-not (Test-Path $flutterBootstrap)) {
+    throw 'Incomplete Flutter web build configuration.'
+  }
+  $bootstrapContent = Get-Content -Path $flutterBootstrap -Raw
+  if ($bootstrapContent -notmatch '"compileTarget":"dart2js"') {
+    throw 'Incomplete Flutter web build configuration.'
+  }
+  if ($bootstrapContent -match '"builds":\[[^\]]*(?:\{\},|,\{\})') {
+    throw 'Flutter web build contains an empty target configuration.'
+  }
+}
