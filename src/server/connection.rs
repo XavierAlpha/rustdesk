@@ -1462,7 +1462,10 @@ impl Connection {
 
     #[inline]
     async fn post_audit_async(url: String, v: Value) -> ResultType<String> {
-        crate::post_request(url, v.to_string(), "").await
+        let Some(auth_header) = crate::get_api_auth_header() else {
+            bail!("API account session required for audit upload");
+        };
+        crate::post_request(url, v.to_string(), &auth_header).await
     }
 
     fn set_conn_audit_primary_auth(&mut self, method: ConnAuditPrimaryAuth) {

@@ -103,6 +103,10 @@ async fn start_hbbs_sync_async() {
                 if config::option2bool("stop-service", &Config::get_option("stop-service")) {
                     continue;
                 }
+                let Some(auth_header) = crate::get_api_auth_header() else {
+                    *PRO.lock().unwrap() = false;
+                    continue;
+                };
                 let conns = Connection::alive_conns();
                 if info_uploaded.uploaded && (url != info_uploaded.url || id != info_uploaded.id) {
                     info_uploaded.uploaded = false;
@@ -190,7 +194,7 @@ async fn start_hbbs_sync_async() {
                         let ver = config::Status::get("sysinfo_ver"); // sysinfo_ver is the version of sysinfo on server's side
                         if hash == old_hash {
                             // When the api doesn't exist, Ok("") will be returned in test.
-                            let samever = match crate::post_request(url.replace("heartbeat", "sysinfo_ver"), "".to_owned(), "").await {
+                            let samever = match crate::post_request(url.replace("heartbeat", "sysinfo_ver"), "".to_owned(), &auth_header).await {
                                 Ok(x)  => {
                                     sysinfo_ver = x.clone();
                                     *PRO.lock().unwrap() = true;
@@ -208,7 +212,7 @@ async fn start_hbbs_sync_async() {
                             }
                         }
                     }
-                    match crate::post_request(url.replace("heartbeat", "sysinfo"), v, "").await {
+                    match crate::post_request(url.replace("heartbeat", "sysinfo"), v, &auth_header).await {
                         Ok(x)  => {
                             if x == "SYSINFO_UPDATED" {
                                 info_uploaded = InfoUploaded::uploaded(url.clone(), id.clone(), sys_username);
@@ -242,7 +246,7 @@ async fn start_hbbs_sync_async() {
                 }
                 let modified_at = LocalConfig::get_option("strategy_timestamp").parse::<i64>().unwrap_or(0);
                 v["modified_at"] = json!(modified_at);
-                if let Ok(s) = crate::post_request(url.clone(), v.to_string(), "").await {
+                if let Ok(s) = crate::post_request(url.clone(), v.to_string(), &auth_header).await {
                     if let Ok(mut rsp) = serde_json::from_str::<HashMap::<&str, Value>>(&s) {
                         if rsp.remove("sysinfo").is_some() {
                             info_uploaded.uploaded = false;

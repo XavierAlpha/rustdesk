@@ -891,6 +891,12 @@ class _GeneralState extends State<_General> {
                 'Automatically record incoming sessions',
                 kOptionAllowAutoRecordIncoming,
               ),
+            if (!bind.isOutgoingOnly())
+              _OptionCheckBox(
+                context,
+                'Upload incoming session recordings to server',
+                kOptionUploadRecordingsToServer,
+              ),
             if (!bind.isIncomingOnly())
               _OptionCheckBox(
                 context,

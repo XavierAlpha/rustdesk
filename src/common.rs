@@ -1045,6 +1045,28 @@ pub fn get_audit_server(api: String, custom: String, typ: String) -> String {
     format!("{}/api/audit/{}", url, typ)
 }
 
+/// Authorization header for API requests made by the native service.
+///
+/// Device telemetry, audit events, and recording uploads are privileged data.
+/// Callers must skip the request when there is no account session instead of
+/// falling back to public device identifiers.
+pub fn get_api_access_token() -> Option<String> {
+    let token = LocalConfig::get_option("access_token");
+    if token.is_empty()
+        || !token
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        None
+    } else {
+        Some(token)
+    }
+}
+
+pub fn get_api_auth_header() -> Option<String> {
+    get_api_access_token().map(|token| format!("Authorization: Bearer {token}"))
+}
+
 /// Check if we should use raw TCP proxy for API calls.
 /// Returns true if USE_RAW_TCP_FOR_API builtin option is "Y", WebSocket is off,
 /// and the target URL belongs to the configured non-public API host.

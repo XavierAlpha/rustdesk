@@ -362,6 +362,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Directory", "目录"),
         ("Automatically record incoming sessions", "自动录制传入会话"),
         ("Automatically record outgoing sessions", "自动录制传出会话"),
+        ("Upload incoming session recordings to server", "将传入会话录像上传到服务器"),
         ("Change", "更改"),
         ("Start session recording", "开始录屏"),
         ("Stop session recording", "结束录屏"),

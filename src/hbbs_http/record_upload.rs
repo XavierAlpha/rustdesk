@@ -1,6 +1,10 @@
 use crate::hbbs_http::create_http_client_with_url;
 use bytes::Bytes;
-use hbb_common::{bail, config::Config, log, ResultType};
+use hbb_common::{
+    bail,
+    config::{self, keys, Config},
+    log, ResultType,
+};
 use reqwest::blocking::{Body, Client};
 use scrap::record::RecordState;
 use serde::Serialize;
@@ -15,14 +19,18 @@ use std::{
 const MAX_HEADER_LEN: usize = 1024;
 const SHOULD_SEND_TIME: Duration = Duration::from_secs(1);
 const SHOULD_SEND_SIZE: u64 = 1024 * 1024;
+const MAX_UPLOAD_CHUNK_SIZE: u64 = 4 * 1024 * 1024;
+const UPLOAD_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Whether finished recordings are uploaded to the configured API server.
 ///
-/// The upload endpoint is part of the API server this fork ships, so the
-/// feature is available whenever a session actually records; there is no
-/// separate entitlement to check.
+/// Uploading is an explicit opt-in because recordings contain the full remote
+/// session. A valid account token is also required by the API.
 pub fn is_enable() -> bool {
-    true
+    config::option2bool(
+        keys::OPTION_UPLOAD_RECORDINGS_TO_SERVER,
+        &Config::get_option(keys::OPTION_UPLOAD_RECORDINGS_TO_SERVER),
+    ) && crate::get_api_access_token().is_some()
 }
 
 pub fn run(rx: Receiver<RecordState>) {
@@ -31,6 +39,10 @@ pub fn run(rx: Receiver<RecordState>) {
             Config::get_option("api-server"),
             Config::get_option("custom-rendezvous-server"),
         );
+        if api_server.is_empty() {
+            log::warn!("recording upload is enabled, but the API server is not configured");
+            return;
+        }
         // This URL is used for TLS connectivity testing and fallback detection.
         let login_option_url = format!("{}/api/login-options", &api_server);
         let client = create_http_client_with_url(&login_option_url);
@@ -96,23 +108,33 @@ impl RecordUploader {
         Q: Serialize + ?Sized,
         B: Into<Body>,
     {
-        match self
+        let Some(access_token) = crate::get_api_access_token() else {
+            bail!("API account session required for recording upload");
+        };
+        let response = self
             .client
             .post(format!("{}/api/record", self.api_server))
+            .bearer_auth(access_token)
             .query(query)
             .body(body)
+            .timeout(UPLOAD_TIMEOUT)
             .send()
-        {
-            Ok(resp) => {
-                if let Ok(m) = resp.json::<Map<String, serde_json::Value>>() {
-                    if let Some(e) = m.get("error") {
-                        bail!(e.to_string());
-                    }
-                }
-                Ok(())
-            }
-            Err(e) => bail!(e.to_string()),
+            .map_err(|e| hbb_common::anyhow::anyhow!(e.to_string()))?;
+        let status = response.status();
+        let response_body = response
+            .text()
+            .map_err(|e| hbb_common::anyhow::anyhow!(e.to_string()))?;
+        if !status.is_success() {
+            bail!("recording upload failed with HTTP {}", status.as_u16());
         }
+        if !response_body.is_empty() {
+            if let Ok(m) = serde_json::from_str::<Map<String, serde_json::Value>>(&response_body) {
+                if let Some(e) = m.get("error") {
+                    bail!(e.to_string());
+                }
+            }
+        }
+        Ok(())
     }
 
     fn handle_new_file(&mut self, filepath: String) -> ResultType<()> {
@@ -147,10 +169,15 @@ impl RecordUploader {
                     if !flush && len - self.upload_size < SHOULD_SEND_SIZE {
                         return Ok(());
                     }
-                    let mut buf = Vec::new();
+                    let mut buf = Vec::with_capacity(
+                        (len - self.upload_size).min(MAX_UPLOAD_CHUNK_SIZE) as usize,
+                    );
                     match file.seek(SeekFrom::Start(self.upload_size)) {
-                        Ok(_) => match file.read_to_end(&mut buf) {
+                        Ok(_) => match file.take(MAX_UPLOAD_CHUNK_SIZE).read_to_end(&mut buf) {
                             Ok(length) => {
+                                if length == 0 {
+                                    return Ok(());
+                                }
                                 self.send(
                                     &[
                                         ("type", "part"),
@@ -160,7 +187,7 @@ impl RecordUploader {
                                     ],
                                     buf,
                                 )?;
-                                self.upload_size = len;
+                                self.upload_size += length as u64;
                                 self.last_send = Instant::now();
                                 Ok(())
                             }
@@ -176,7 +203,13 @@ impl RecordUploader {
     }
 
     fn handle_tail(&mut self) -> ResultType<()> {
-        self.handle_frame(true)?;
+        loop {
+            let uploaded_before = self.upload_size;
+            self.handle_frame(true)?;
+            if self.upload_size == uploaded_before {
+                break;
+            }
+        }
         match File::open(&self.filepath) {
             Ok(mut file) => {
                 let mut buf = vec![0u8; MAX_HEADER_LEN];

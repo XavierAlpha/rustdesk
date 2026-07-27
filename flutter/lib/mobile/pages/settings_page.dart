@@ -134,6 +134,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
   var _isUsingPublicServer = false;
   var _allowAskForNoteAtEndOfConnection = false;
   var _preventSleepWhileConnected = true;
+  var _uploadRecordingsToServer = false;
 
   _SettingsState() {
     _enableAbr = option2bool(
@@ -166,6 +167,10 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
     _autoRecordOutgoingSession = option2bool(
       kOptionAllowAutoRecordOutgoing,
       bind.mainGetLocalOption(key: kOptionAllowAutoRecordOutgoing),
+    );
+    _uploadRecordingsToServer = option2bool(
+      kOptionUploadRecordingsToServer,
+      bind.mainGetOptionSync(key: kOptionUploadRecordingsToServer),
     );
     _localIP = bind.mainGetOptionSync(key: 'local-ip-addr');
     _directAccessPort = bind.mainGetOptionSync(key: kOptionDirectAccessPort);
@@ -1072,6 +1077,27 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                           );
                           setState(() {
                             _autoRecordIncomingSession = newValue;
+                          });
+                        },
+                ),
+              if (!outgoingOnly)
+                SettingsTile.switchTile(
+                  title: Text(
+                    translate('Upload incoming session recordings to server'),
+                  ),
+                  initialValue: _uploadRecordingsToServer,
+                  onToggle: isOptionFixed(kOptionUploadRecordingsToServer)
+                      ? null
+                      : (v) async {
+                          await mainSetBoolOption(
+                            kOptionUploadRecordingsToServer,
+                            v,
+                          );
+                          final newValue = await mainGetBoolOption(
+                            kOptionUploadRecordingsToServer,
+                          );
+                          setState(() {
+                            _uploadRecordingsToServer = newValue;
                           });
                         },
                 ),

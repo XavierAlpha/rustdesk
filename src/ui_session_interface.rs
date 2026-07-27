@@ -1946,5 +1946,7 @@ async fn start_one_port_forward<T: InvokeUiSession>(
 #[tokio::main(flavor = "current_thread")]
 async fn send_note(url: String, id: String, sid: u64, note: String) {
     let body = serde_json::json!({ "id": id, "session_id": sid, "note": note });
-    allow_err!(crate::post_request(url, body.to_string(), "").await);
+    if let Some(auth_header) = crate::get_api_auth_header() {
+        allow_err!(crate::post_request(url, body.to_string(), &auth_header).await);
+    }
 }
