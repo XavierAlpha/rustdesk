@@ -21,7 +21,6 @@ def write_metadata(
     manifest: str,
     locked: str,
     flutter: str,
-    rust: str,
 ) -> None:
     (root / "Cargo.toml").write_text(
         f'[package]\nname = "rustdesk"\nversion = "{manifest}"\n',
@@ -39,11 +38,6 @@ def write_metadata(
         f"name: flutter_hbb\nversion: {flutter}\n",
         encoding="utf-8",
     )
-    (root / "src").mkdir()
-    (root / "src" / "version.rs").write_text(
-        f'pub const VERSION: &str = "{rust}";\n',
-        encoding="utf-8",
-    )
 
 
 class ReleaseMetadataTests(unittest.TestCase):
@@ -55,7 +49,6 @@ class ReleaseMetadataTests(unittest.TestCase):
                 manifest="1.2.3",
                 locked="1.2.3",
                 flutter="1.2.3+45",
-                rust="1.2.3",
             )
 
             metadata = METADATA.load_metadata(root)
@@ -67,14 +60,13 @@ class ReleaseMetadataTests(unittest.TestCase):
 
     def test_rejects_mismatched_or_ambiguous_versions(self) -> None:
         cases = (
-            ("1.2.3", "1.2.2", "1.2.3+45", "1.2.3"),
-            ("1.2.3", "1.2.3", "1.2.2+45", "1.2.3"),
-            ("1.2.3", "1.2.3", "1.2.3+0", "1.2.3"),
-            ("1.2.3-rc.1", "1.2.3-rc.1", "1.2.3-rc.1+45", "1.2.3-rc.1"),
-            ("1.2.3", "1.2.3", "1.2.3+45", "1.2.2"),
+            ("1.2.3", "1.2.2", "1.2.3+45"),
+            ("1.2.3", "1.2.3", "1.2.2+45"),
+            ("1.2.3", "1.2.3", "1.2.3+0"),
+            ("1.2.3-rc.1", "1.2.3-rc.1", "1.2.3-rc.1+45"),
         )
-        for manifest, locked, flutter, rust in cases:
-            with self.subTest(manifest=manifest, locked=locked, flutter=flutter, rust=rust):
+        for manifest, locked, flutter in cases:
+            with self.subTest(manifest=manifest, locked=locked, flutter=flutter):
                 with tempfile.TemporaryDirectory() as directory:
                     root = Path(directory)
                     write_metadata(
@@ -82,7 +74,6 @@ class ReleaseMetadataTests(unittest.TestCase):
                         manifest=manifest,
                         locked=locked,
                         flutter=flutter,
-                        rust=rust,
                     )
                     with self.assertRaises(METADATA.MetadataError):
                         METADATA.load_metadata(root)

@@ -24,12 +24,13 @@ The canonical client release metadata is:
 
 - `Cargo.toml` package version;
 - the `rustdesk` package entry in `Cargo.lock`;
-- `src/version.rs` `VERSION`;
 - `flutter/pubspec.yaml` `MAJOR.MINOR.PATCH+BUILD_NUMBER`.
 
-All four values must agree. The build number is explicit and positive; it is
+All three tracked values must agree. The build number is explicit and positive; it is
 not derived from Git commit count. Only stable SemVer is accepted for a
 production release, and the canonical tag is `vMAJOR.MINOR.PATCH`.
+`src/version.rs` is intentionally ignored and generated from these values for
+each build; it is not an additional version source.
 
 Validate metadata locally with:
 

@@ -16,7 +16,6 @@ from pathlib import Path
 SEMVER_PATTERN = r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
 SEMVER_RE = re.compile(rf"^{SEMVER_PATTERN}$")
 PUBSPEC_VERSION_RE = re.compile(rf"^version:[ \t]*({SEMVER_PATTERN})\+([1-9][0-9]*)[ \t]*$", re.MULTILINE)
-RUST_VERSION_RE = re.compile(r'^pub const VERSION: &str = "([^"]+)";$', re.MULTILINE)
 
 
 class MetadataError(ValueError):
@@ -78,18 +77,6 @@ def _pubspec_version(root: Path) -> tuple[str, str]:
     return matches[0].group(1), matches[0].group(5)
 
 
-def _rust_version(root: Path) -> str:
-    path = root / "src" / "version.rs"
-    try:
-        contents = path.read_text(encoding="utf-8")
-    except OSError as error:
-        raise MetadataError(f"cannot read {path}: {error}") from error
-    matches = RUST_VERSION_RE.findall(contents)
-    if len(matches) != 1:
-        raise MetadataError("src/version.rs must define VERSION exactly once")
-    return matches[0]
-
-
 def load_metadata(root: Path) -> ReleaseMetadata:
     root = root.resolve()
     manifest_version = _manifest_version(root)
@@ -99,12 +86,11 @@ def load_metadata(root: Path) -> ReleaseMetadata:
 
     lock_version = _lock_version(root)
     flutter_version, build_number = _pubspec_version(root)
-    rust_version = _rust_version(root)
-    if lock_version != manifest_version or flutter_version != manifest_version or rust_version != manifest_version:
+    if lock_version != manifest_version or flutter_version != manifest_version:
         raise MetadataError(
             "version mismatch: "
             f"Cargo.toml={manifest_version}, Cargo.lock={lock_version}, "
-            f"flutter/pubspec.yaml={flutter_version}, src/version.rs={rust_version}"
+            f"flutter/pubspec.yaml={flutter_version}"
         )
 
     major, minor, patch = match.groups()
