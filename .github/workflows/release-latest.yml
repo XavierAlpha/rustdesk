@@ -820,13 +820,8 @@ jobs:
         shell: bash
         env:
           APP_VERSION: ${{ needs.prepare.outputs.app_version }}
+          SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
         run: |
-          bash .github/scripts/sync-version.sh \
-            "${{ needs.prepare.outputs.version }}" \
-            "${{ needs.prepare.outputs.build_number }}" \
-            "${{ needs.prepare.outputs.source_date_epoch }}"
-          bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
-          (cd flutter/web/js && npm run build)
           chmod +x flutter/web/tools/build_web.sh
           ./flutter/web/tools/build_web.sh --mode release
           mkdir -p artifacts

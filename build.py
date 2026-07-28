@@ -100,7 +100,6 @@ def build_ios(args):
 
 
 def build_web(args):
-    run(["npm", "run", "build"], cwd=FLUTTER_DIR / "web/js")
     build_script = FLUTTER_DIR / "web/tools/build_web.sh"
     run(["bash", str(build_script), "--mode", "release"])
 
@@ -126,9 +125,9 @@ def main():
     parser.add_argument("--build-number", default="0", help="Flutter/Cargo build number.")
     parser.add_argument(
         "--dependency-mode",
-        choices=["latest", "locked"],
-        default="latest",
-        help="latest updates dependency locks in-place; locked uses committed lockfiles.",
+        choices=["locked"],
+        default="locked",
+        help="Use committed dependency lockfiles.",
     )
     parser.add_argument(
         "--skip-bridge",

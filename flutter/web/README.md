@@ -11,11 +11,17 @@ favicon, icons) and the JS bridge toolchain under `web/js`.
 - `web/tools/build_web.sh`: Linux/macOS build helper.
 
 ## What the scripts do
-1. Run `flutter pub get`.
+1. Resolve Flutter packages with `flutter pub get --enforce-lockfile`.
 2. Build the JS bridge in `web/js` unless JS build is skipped.
-3. Generate icons via `flutter_launcher_icons` unless icon generation is skipped.
-4. Bootstrap optional web codec/runtime assets unless deps bootstrap is skipped.
-5. Run `flutter build web` or `flutter run -d chrome`.
+3. Bootstrap the checksum-pinned optional web codec/runtime archive unless deps
+   bootstrap is skipped.
+4. Run `flutter build web` or `flutter run -d chrome`.
+5. Record the exact Git revision and tracked-worktree state in
+   `build/web/.source_revision`.
+
+Web builds never rewrite tracked launcher icons or favicon sources. Refresh
+icons explicitly with `flutter pub run flutter_launcher_icons`, review the
+generated source diff, and commit it separately from runtime build output.
 
 The scripts automatically pass these build-time values as `--dart-define` when
 the environment variables are set:
@@ -25,7 +31,10 @@ the environment variables are set:
 - `APP_NAME`
 - `APP_VERSION`
 
-`BUILD_DATE` is always generated automatically by the script.
+`BUILD_DATE` can be supplied explicitly. Otherwise the scripts convert
+`SOURCE_DATE_EPOCH` to UTC; when neither value is set they use the current Git
+commit timestamp. Rebuilding the same clean revision therefore produces the
+same embedded build date instead of the local wall-clock time.
 
 ## Parameters
 
@@ -35,7 +44,6 @@ the environment variables are set:
 - `-Run`
 - `-SkipJs`
 - `-SkipDeps`
-- `-SkipIcons`
 
 ### Bash
 `build_web.sh` accepts:
@@ -43,7 +51,6 @@ the environment variables are set:
 - `--run`
 - `--skip-js`
 - `--skip-deps`
-- `--skip-icons`
 
 ## Recommended usage
 
@@ -141,13 +148,16 @@ Use the skip flags only when the corresponding step has already been prepared.
 Example:
 
 ```powershell
-.\flutter\web\tools\build_web.ps1 -Mode release -SkipJs -SkipDeps -SkipIcons
+.\flutter\web\tools\build_web.ps1 -Mode release -SkipJs -SkipDeps
 ```
 
 This means:
-- `-SkipJs`: do not run `npm ci` / `npm install` and do not rebuild `web/js/dist/web_bridge.js`
+- `-SkipJs`: do not run `npm ci` or rebuild `web/js/dist/web_bridge.js`
 - `-SkipDeps`: do not download optional codec/runtime assets
-- `-SkipIcons`: do not run `flutter_launcher_icons`
+
+`-SkipJs`/`--skip-js` still requires an existing compiled
+`web/js/dist/web_bridge.js`; dependency fallback from `npm ci` to `npm install`
+is intentionally not supported.
 
 ## Local manual workflow
 
@@ -158,7 +168,7 @@ cd flutter\web\js
 npm ci
 npm run build
 cd ..\..
-flutter pub get
+flutter pub get --enforce-lockfile
 flutter build web --release
 ```
 
@@ -173,6 +183,9 @@ if your deployment depends on them.
 - `APP_NAME`: optional web branding / app name override.
 - `APP_VERSION`: optional version override. If unset, the script reads the
   version from `flutter/pubspec.yaml`.
+- `BUILD_DATE`: explicit single-line build date override.
+- `SOURCE_DATE_EPOCH`: reproducible UTC build timestamp used when `BUILD_DATE`
+  is unset; defaults to the Git commit timestamp.
 - `FLUTTER_BIN`: optional path to the Flutter executable if `flutter` is not in
   `PATH`.
 
@@ -186,7 +199,9 @@ if your deployment depends on them.
 
 ## Optional codec/runtime assets
 
-The bootstrap step may download these ignored assets into `flutter/web`:
+The bootstrap step may download these ignored assets into `flutter/web`. The
+archive URL and SHA-256 are pinned in both build scripts, and its paths and link
+types are validated before extraction:
 - `ogvjs-*`
 - `libopus.js`
 - `libopus.wasm`
@@ -206,7 +221,7 @@ They are still relevant at runtime:
 
 - The scripts can be invoked from the repository root with
   `.\flutter\web\tools\build_web.ps1` or `./flutter/web/tools/build_web.sh`.
-- The PowerShell script uses `npm ci` when `package-lock.json` exists, otherwise
-  it falls back to `npm install`.
+- Both scripts require `package-lock.json` and use `npm ci`; they never mutate
+  dependency locks during a build.
 - The deps bootstrap step is skipped automatically when the expected local files
   are already present.
