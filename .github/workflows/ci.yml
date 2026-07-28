@@ -29,6 +29,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       runtime: ${{ steps.changes.outputs.runtime }}
+      automation: ${{ steps.changes.outputs.automation }}
       dependencies: ${{ steps.changes.outputs.dependencies }}
     steps:
       - name: Checkout
@@ -48,10 +49,12 @@ jobs:
           PUSH_HEAD_SHA: ${{ github.sha }}
         run: |
           runtime=false
+          automation=false
           dependencies=false
 
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             runtime=true
+            automation=true
           else
             if [[ "$EVENT_NAME" == "pull_request" ]]; then
               base="$PR_BASE_SHA"
@@ -68,10 +71,15 @@ jobs:
             git diff --name-only -z "$base" "$head" > "$changed_paths"
             while IFS= read -r -d '' path; do
               case "$path" in
-                README.md|README_*.md|docs/*|LICENSE|LICENSE.*|CONTRIBUTING.md|CODE_OF_CONDUCT.md|.github/ISSUE_TEMPLATE/*)
+                README.md|README_*.md|docs/*|LICENSE|LICENSE.*|CONTRIBUTING.md|CODE_OF_CONDUCT.md|.github/ISSUE_TEMPLATE/*|.github/workflows/*|.github/dependabot.yml|.github/scripts/release_metadata.py|.github/scripts/tests/test_release_metadata.py)
                   ;;
                 *)
                   runtime=true
+                  ;;
+              esac
+              case "$path" in
+                .github/*|build.py|flutter/web/tools/build_web.sh)
+                  automation=true
                   ;;
               esac
               case "$path" in
@@ -84,12 +92,14 @@ jobs:
 
           {
             echo "runtime=$runtime"
+            echo "automation=$automation"
             echo "dependencies=$dependencies"
           } >> "$GITHUB_OUTPUT"
           {
             echo "### Change classification"
             echo
             echo "- Runtime validation: \`$runtime\`"
+            echo "- Automation validation: \`$automation\`"
             echo "- Dependency review: \`$dependencies\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -112,7 +122,7 @@ jobs:
       - name: Test and validate release metadata
         id: release
         run: |
-          python3 -m unittest discover -s .github/scripts/tests -v
+          python3 .github/scripts/tests/test_release_metadata.py
           python3 .github/scripts/release_metadata.py --github-output
 
       - name: Resolve reproducible source timestamp
@@ -136,6 +146,29 @@ jobs:
         with:
           fail-on-severity: moderate
           comment-summary-in-pr: never
+
+  automation:
+    name: Workflow and build automation
+    if: needs.classify.outputs.automation == 'true'
+    needs: classify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Lint workflows and shell scripts
+        run: |
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          shellcheck .github/scripts/*.sh flutter/web/tools/build_web.sh
+
+      - name: Test build automation
+        run: |
+          python3 -m compileall -q .github/scripts libs/portable
+          python3 -m unittest discover -s .github/scripts/tests -v
+          python3 -m unittest discover -s libs/portable/tests -v
 
   generate_bridge:
     name: Generate Flutter Rust bridge
@@ -258,17 +291,6 @@ jobs:
       - name: Prepare locked dependencies
         run: bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
 
-      - name: Workflow and script lint
-        run: |
-          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
-          shellcheck .github/scripts/*.sh flutter/web/tools/build_web.sh
-
-      - name: Python validator tests
-        run: |
-          python3 -m compileall -q .github/scripts libs/portable
-          python3 -m unittest discover -s .github/scripts/tests -v
-          python3 -m unittest discover -s libs/portable/tests -v
-
       - name: Rust format
         run: cargo fmt --all -- --check
 
@@ -311,6 +333,7 @@ jobs:
       - classify
       - metadata
       - dependency_review
+      - automation
       - generate_bridge
       - quality
     runs-on: ubuntu-24.04
@@ -321,10 +344,12 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           RUNTIME_REQUIRED: ${{ needs.classify.outputs.runtime }}
+          AUTOMATION_REQUIRED: ${{ needs.classify.outputs.automation }}
           DEPENDENCIES_CHANGED: ${{ needs.classify.outputs.dependencies }}
           CLASSIFY_RESULT: ${{ needs.classify.result }}
           METADATA_RESULT: ${{ needs.metadata.result }}
           DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency_review.result }}
+          AUTOMATION_RESULT: ${{ needs.automation.result }}
           BRIDGE_RESULT: ${{ needs.generate_bridge.result }}
           QUALITY_RESULT: ${{ needs.quality.result }}
         run: |
@@ -340,6 +365,9 @@ jobs:
 
           require_success "change classification" "$CLASSIFY_RESULT"
           require_success "component version validation" "$METADATA_RESULT"
+          if [[ "$AUTOMATION_REQUIRED" == "true" ]]; then
+            require_success "workflow and build automation" "$AUTOMATION_RESULT"
+          fi
           if [[ "$RUNTIME_REQUIRED" == "true" ]]; then
             require_success "bridge generation" "$BRIDGE_RESULT"
             require_success "Rust, Flutter, and Web quality" "$QUALITY_RESULT"
