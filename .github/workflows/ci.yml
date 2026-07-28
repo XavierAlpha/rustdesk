@@ -83,7 +83,7 @@ jobs:
                   ;;
               esac
               case "$path" in
-                Cargo.toml|Cargo.lock|*/Cargo.toml|flutter/pubspec.yaml|flutter/pubspec.lock|flutter/web/js/package.json|flutter/web/js/package-lock.json|vcpkg.json|vcpkg-configuration.json|.gitmodules|libs/hbb_common|.github/dependabot.yml|.github/workflows/*)
+                Cargo.toml|Cargo.lock|*/Cargo.toml|*/Cargo.lock|flutter/pubspec.yaml|flutter/pubspec.lock|flutter/web/js/package.json|flutter/web/js/package-lock.json|vcpkg.json|vcpkg-configuration.json|.gitmodules|libs/hbb_common|.github/dependabot.yml|.github/workflows/*)
                   dependencies=true
                   ;;
               esac
@@ -187,6 +187,7 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: rustfmt
 
       - name: Install Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
@@ -216,6 +217,9 @@ jobs:
 
       - name: Generate bridge
         run: bash .github/scripts/generate-bridge.sh
+
+      - name: Format generated Rust bridge
+        run: cargo fmt --all
 
       - name: Upload generated bridge
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
