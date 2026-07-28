@@ -80,8 +80,6 @@ WEB_JS_PKG="${WEB_JS_DIR}/package.json"
 WEB_JS_LOCK="${WEB_JS_DIR}/package-lock.json"
 REPO_ROOT="$(cd "${FLUTTER_ROOT}/.." && pwd)"
 PUBSPEC_FILE="${FLUTTER_ROOT}/pubspec.yaml"
-WEB_DEPS_URL="https://github.com/rustdesk/doc.rustdesk.com/releases/download/console/web_deps.tar.gz"
-WEB_DEPS_SHA256="b66011c4fc066b90c46ba0c78884fe5d1a7e5a7fad3dce401300ad893de63818"
 APP_VERSION_VALUE="${APP_VERSION:-}"
 APP_NAME_VALUE="${APP_NAME:-}"
 if [[ -z "$APP_VERSION_VALUE" && -f "$PUBSPEC_FILE" ]]; then
@@ -105,60 +103,8 @@ for required_asset in "${required_web_assets[@]}"; do
   fi
 done
 
-have_web_deps() {
-  [[ -f "${WEB_DIR}/libopus.js" ]] &&
-  [[ -f "${WEB_DIR}/libopus.wasm" ]] &&
-  [[ -f "${WEB_DIR}/yuv-canvas-1.2.6.js" ]] &&
-  [[ -f "${WEB_DIR}/ogvjs-1.8.6/ogv-decoder-video-vp8-wasm.js" ]] &&
-  [[ -f "${WEB_DIR}/ogvjs-1.8.6/ogv-decoder-video-vp8-wasm.wasm" ]] &&
-  [[ -f "${WEB_DIR}/ogvjs-1.8.6/ogv-decoder-video-vp9-wasm.js" ]] &&
-  [[ -f "${WEB_DIR}/ogvjs-1.8.6/ogv-decoder-video-vp9-wasm.wasm" ]] &&
-  [[ -f "${WEB_DIR}/ogvjs-1.8.6/ogv-decoder-video-av1-wasm.js" ]] &&
-  [[ -f "${WEB_DIR}/ogvjs-1.8.6/ogv-decoder-video-av1-wasm.wasm" ]]
-}
-
 if [[ "$SKIP_DEPS" == "false" ]]; then
-  if have_web_deps; then
-    echo "Web deps already present, skipping download."
-  else
-    DEPS_TAR="$(mktemp "${WEB_DIR}/.web-deps.XXXXXX.tar.gz")"
-    trap 'rm -f -- "${DEPS_TAR:-}"' EXIT
-    echo "Downloading web deps: $WEB_DEPS_URL"
-    if command -v wget >/dev/null 2>&1; then
-      wget -O "$DEPS_TAR" "$WEB_DEPS_URL"
-    else
-      curl --fail --location --retry 3 -o "$DEPS_TAR" "$WEB_DEPS_URL"
-    fi
-
-    if command -v sha256sum >/dev/null 2>&1; then
-      actual_sha256="$(sha256sum "$DEPS_TAR" | awk '{print $1}')"
-    elif command -v shasum >/dev/null 2>&1; then
-      actual_sha256="$(shasum -a 256 "$DEPS_TAR" | awk '{print $1}')"
-    else
-      echo "Missing SHA-256 tool (sha256sum or shasum)." >&2
-      exit 4
-    fi
-    if [[ "$actual_sha256" != "$WEB_DEPS_SHA256" ]]; then
-      echo "Web deps checksum mismatch: expected $WEB_DEPS_SHA256, got $actual_sha256" >&2
-      exit 4
-    fi
-
-    if ! tar -tzf "$DEPS_TAR" | awk '
-      /^\// || /(^|\/)\.\.($|\/)/ { bad = 1 }
-      !/^(ogvjs-1\.8\.6\/|libopus\.js$|libopus\.wasm$|yuv-canvas-1\.2\.6\.js$)/ { bad = 1 }
-      END { exit bad }
-    '; then
-      echo "Web deps archive contains an unsafe or unexpected path." >&2
-      exit 4
-    fi
-    if tar -tvzf "$DEPS_TAR" | awk '$1 ~ /^[lh]/ { found = 1 } END { exit !found }'; then
-      echo "Web deps archive must not contain symbolic or hard links." >&2
-      exit 4
-    fi
-    tar -xzf "$DEPS_TAR" -C "$WEB_DIR"
-    rm -f "$DEPS_TAR"
-    trap - EXIT
-  fi
+  bash "${SCRIPT_DIR}/prepare_web_deps.sh"
 fi
 
 "$FLUTTER" pub get --enforce-lockfile
