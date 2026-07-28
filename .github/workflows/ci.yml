@@ -295,6 +295,9 @@ jobs:
       - name: Prepare locked dependencies
         run: bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
 
+      - name: Bootstrap verified Web codec assets
+        run: bash flutter/web/tools/prepare_web_deps.sh
+
       - name: Rust format
         run: cargo fmt --all -- --check
 
