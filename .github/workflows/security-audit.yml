@@ -2,13 +2,6 @@ name: Rust Security Audit
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - master
-    paths:
-      - "Cargo.lock"
-      - "Cargo.toml"
-      - "**/Cargo.toml"
   schedule:
     - cron: "17 2 * * 1"
 
@@ -16,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: rust-security-audit-${{ github.ref }}
+  group: rust-security-audit
   cancel-in-progress: true
 
 jobs:
