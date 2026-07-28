@@ -121,8 +121,12 @@ def main():
         choices=sorted(BUILDERS),
         help="Target platform to build.",
     )
-    parser.add_argument("--version", default=None, help="Version to write before building.")
-    parser.add_argument("--build-number", default="0", help="Flutter/Cargo build number.")
+    parser.add_argument("--version", default=None, help="Stable version to write before building.")
+    parser.add_argument(
+        "--build-number",
+        default=None,
+        help="Positive Flutter build number; required together with --version.",
+    )
     parser.add_argument(
         "--dependency-mode",
         choices=["locked"],
@@ -138,7 +142,9 @@ def main():
 
     ensure_tool("cargo")
     ensure_tool("flutter")
-    if args.version:
+    if (args.version is None) != (args.build_number is None):
+        parser.error("--version and --build-number must be provided together")
+    if args.version is not None:
         sync_version(args.version, args.build_number)
     prepare_dependencies(args.dependency_mode)
     if not args.skip_bridge:

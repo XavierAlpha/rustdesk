@@ -1,14 +1,15 @@
-name: Release Build
+name: Release
 
 on:
   workflow_dispatch:
     inputs:
-      release_tag:
-        description: "Existing semantic-version tag to build, for example v1.4.9"
-        required: true
+      source_ref:
+        description: "Commit or ref reachable from the default branch; blank uses the default branch"
+        required: false
         type: string
-      upload_release:
-        description: "Publish the built packages to the existing release tag"
+        default: ""
+      publish:
+        description: "Publish the version tag and release assets after all builds succeed"
         required: true
         default: false
         type: boolean
@@ -52,36 +53,14 @@ on:
         required: true
         default: true
         type: boolean
-      rs_pub_key:
-        description: "Optional RS_PUB_KEY override. Leave blank to use secrets.RS_PUB_KEY"
-        required: false
-        default: ""
-        type: string
-      rendezvous_servers:
-        description: "Optional RENDEZVOUS_SERVERS override"
-        required: false
-        default: ""
-        type: string
-      api_server:
-        description: "Optional API_SERVER override"
-        required: false
-        default: ""
-        type: string
-  push:
-    tags:
-      - "v*.*.*"
-      - "*.*.*"
-  pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "README.md"
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
-  group: release-${{ github.repository }}-${{ github.event_name == 'pull_request' && github.ref || github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: client-release
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -92,226 +71,172 @@ env:
   NODE_VERSION: "24.18.0"
   ANDROID_NDK_VERSION: "28.2.13676358"
   DEPENDENCY_MODE: locked
-  RS_PUB_KEY: ${{ github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' && inputs.rs_pub_key != '' && inputs.rs_pub_key || secrets.RS_PUB_KEY) || '' }}
-  RENDEZVOUS_SERVERS: ${{ github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' && inputs.rendezvous_servers != '' && inputs.rendezvous_servers || secrets.RENDEZVOUS_SERVERS) || '' }}
-  API_SERVER: ${{ github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' && inputs.api_server != '' && inputs.api_server || secrets.API_SERVER) || '' }}
+  RS_PUB_KEY: ${{ secrets.RS_PUB_KEY }}
+  RENDEZVOUS_SERVERS: ${{ vars.RENDEZVOUS_SERVERS || secrets.RENDEZVOUS_SERVERS }}
+  API_SERVER: ${{ vars.API_SERVER || secrets.API_SERVER }}
 
 jobs:
   prepare:
-    name: Resolve Immutable Source
+    name: Validate release source
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       commit: ${{ steps.meta.outputs.commit }}
+      ci_run_id: ${{ steps.meta.outputs.ci_run_id }}
+      bridge_artifact: ${{ steps.meta.outputs.bridge_artifact }}
+      hbb_common: ${{ steps.meta.outputs.hbb_common }}
       source_date_epoch: ${{ steps.meta.outputs.source_date_epoch }}
-      version: ${{ steps.meta.outputs.version }}
-      app_version: ${{ steps.meta.outputs.app_version }}
-      build_number: ${{ steps.meta.outputs.build_number }}
-      release_tag: ${{ steps.meta.outputs.release_tag }}
+      version: ${{ steps.version.outputs.version }}
+      app_version: ${{ steps.version.outputs.app_version }}
+      build_number: ${{ steps.version.outputs.build_number }}
+      release_tag: ${{ steps.version.outputs.tag }}
     steps:
+      - name: Validate selected release outputs
+        shell: bash
+        env:
+          WINDOWS_X64: ${{ inputs.build_windows_x64 }}
+          WINDOWS_ARM64: ${{ inputs.build_windows_arm64 }}
+          MACOS: ${{ inputs.build_macos_universal }}
+          LINUX_X64: ${{ inputs.build_linux_x64 }}
+          LINUX_ARM64: ${{ inputs.build_linux_arm64 }}
+          ANDROID: ${{ inputs.build_android_arm64 }}
+          IOS: ${{ inputs.build_ios }}
+          WEB: ${{ inputs.build_web }}
+        run: |
+          if [[ "$WINDOWS_X64" != "true" && "$WINDOWS_ARM64" != "true" \
+            && "$MACOS" != "true" && "$LINUX_X64" != "true" \
+            && "$LINUX_ARM64" != "true" && "$ANDROID" != "true" \
+            && "$IOS" != "true" && "$WEB" != "true" ]]; then
+            echo "select at least one release output" >&2
+            exit 1
+          fi
+
       - name: Checkout source metadata
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.source_ref || github.event.repository.default_branch }}
           fetch-depth: 0
+          fetch-tags: true
           persist-credentials: false
-      - name: Resolve source and version
+
+      - name: Test and validate component version
+        id: version
+        run: |
+          python3 -m unittest discover -s .github/scripts/tests -v
+          python3 .github/scripts/release_metadata.py --github-output
+
+      - name: Resolve verified release source
         id: meta
         shell: bash
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH: ${{ inputs.publish }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            commit="$(git rev-parse HEAD)"
-            release_tag=""
-            version="$(
-              python3 - <<'PY'
-          import tomllib
-          with open("Cargo.toml", "rb") as manifest:
-              print(tomllib.load(manifest)["package"]["version"])
-          PY
-            )"
-          else
-            release_tag="$RELEASE_TAG"
-            if [[ ! "$release_tag" =~ ^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$ ]]; then
-              echo "Invalid semantic-version release tag: $release_tag" >&2
-              exit 1
-            fi
-            if ! commit="$(git rev-parse --verify "refs/tags/${release_tag}^{commit}")"; then
-              echo "Release tag does not exist: $release_tag" >&2
-              exit 1
-            fi
-            version="${release_tag#v}"
-            manifest_version="$(
-              git show "$commit:Cargo.toml" |
-                python3 -c 'import sys, tomllib; print(tomllib.load(sys.stdin.buffer)["package"]["version"])'
-            )"
-            lock_version="$(
-              git show "$commit:Cargo.lock" |
-                python3 -c 'import sys, tomllib; data=tomllib.load(sys.stdin.buffer); print(next(package["version"] for package in data["package"] if package["name"] == "rustdesk"))'
-            )"
-            flutter_version="$(
-              git show "$commit:flutter/pubspec.yaml" |
-                sed -nE 's/^version:[[:space:]]*([^+[:space:]]+).*/\1/p'
-            )"
-            if [[ "$manifest_version" != "$version" ||
-                  "$lock_version" != "$version" ||
-                  "$flutter_version" != "$version" ]]; then
-              echo "Tag $release_tag does not match Cargo.toml, Cargo.lock, and Flutter version $version" >&2
-              exit 1
-            fi
+          commit="$(git rev-parse HEAD)"
+          git fetch --no-tags origin "$DEFAULT_BRANCH"
+          if ! git merge-base --is-ancestor "$commit" "origin/$DEFAULT_BRANCH"; then
+            echo "release source $commit is not reachable from $DEFAULT_BRANCH" >&2
+            exit 1
           fi
+
+          if [[ "$PUBLISH" == "true" ]]; then
+            for candidate_tag in "$RELEASE_TAG" "$VERSION"; do
+              if git ls-remote --exit-code --tags origin "refs/tags/$candidate_tag" >/dev/null 2>&1; then
+                echo "release version already has a tag: $candidate_tag" >&2
+                exit 1
+              fi
+            done
+          fi
+
+          runs_json="$(
+            gh api -X GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+              -f head_sha="$commit" \
+              -f event=push \
+              -f status=success \
+              -f per_page=100
+          )"
+          ci_run_id="$(
+            jq -r --arg commit "$commit" \
+              '[.workflow_runs[] | select(.head_sha == $commit and .conclusion == "success")] | sort_by(.run_number) | last | .id // empty' \
+              <<< "$runs_json"
+          )"
+          if [[ -z "$ci_run_id" ]]; then
+            echo "no successful push CI run exists for $commit" >&2
+            exit 1
+          fi
+
+          bridge_artifact="bridge-generated-$commit"
+          artifacts_json="$(
+            gh api -X GET "repos/$GITHUB_REPOSITORY/actions/runs/$ci_run_id/artifacts" \
+              -f per_page=100
+          )"
+          artifact_count="$(
+            jq -r --arg artifact "$bridge_artifact" \
+              '[.artifacts[] | select(.name == $artifact and .expired == false)] | length' \
+              <<< "$artifacts_json"
+          )"
+          if [[ "$artifact_count" != "1" ]]; then
+            echo "CI run $ci_run_id must contain one unexpired $bridge_artifact artifact" >&2
+            exit 1
+          fi
+
           source_date_epoch="$(git show -s --format=%ct "$commit")"
-          build_number="$(git rev-list --count "$commit")"
+          hbb_common="$(git ls-tree "$commit" -- libs/hbb_common | awk '$2 == "commit" { print $3 }')"
+          if [[ ! "$hbb_common" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "release source does not pin one full hbb_common commit" >&2
+            exit 1
+          fi
           {
+            echo "bridge_artifact=$bridge_artifact"
+            echo "ci_run_id=$ci_run_id"
             echo "commit=$commit"
+            echo "hbb_common=$hbb_common"
             echo "source_date_epoch=$source_date_epoch"
-            echo "version=$version"
-            echo "app_version=$version+$build_number"
-            echo "build_number=$build_number"
-            echo "release_tag=$release_tag"
           } >> "$GITHUB_OUTPUT"
+
       - name: Validate release configuration
-        if: github.event_name != 'pull_request'
         run: python3 .github/scripts/validate_build_config.py
 
-  quality:
-    name: Quality Gates
-    needs: [prepare, generate_bridge]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
-    steps:
-      - name: Checkout immutable source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.prepare.outputs.commit }}
-          persist-credentials: false
-          submodules: recursive
-      - name: Download generated bridge
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: bridge-generated
-          path: .
-      - name: Install Linux prerequisites
+      - name: Summarize release candidate
+        env:
+          APP_VERSION: ${{ steps.version.outputs.app_version }}
+          CI_RUN_ID: ${{ steps.meta.outputs.ci_run_id }}
+          RELEASE_COMMIT: ${{ steps.meta.outputs.commit }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          HBB_COMMON_COMMIT: ${{ steps.meta.outputs.hbb_common }}
+          PUBLISH: ${{ inputs.publish }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            clang cmake curl gcc g++ git libasound2-dev libclang-dev libdbus-1-dev libglib2.0-dev \
-            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgtk-3-dev libaom-dev libopus-dev \
-            libpam0g-dev libpulse-dev libva-dev libx11-dev libxi-dev libxtst-dev libxcb-randr0-dev libxcb-shape0-dev \
-            libxcb-xfixes0-dev libxdo-dev libxfixes-dev libvpx-dev libyuv-dev nasm ninja-build pkg-config unzip wget
-      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
-        with:
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
-          components: rustfmt,clippy
-      - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
-        with:
-          channel: ${{ env.FLUTTER_CHANNEL }}
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: flutter/web/js/package-lock.json
-      - name: Sync version
-        run: |
-          bash .github/scripts/sync-version.sh \
-            "${{ needs.prepare.outputs.version }}" \
-            "${{ needs.prepare.outputs.build_number }}" \
-            "${{ needs.prepare.outputs.source_date_epoch }}"
-      - name: Prepare dependencies
-        run: bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
-      - name: Workflow and script lint
-        run: |
-          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
-          shellcheck .github/scripts/*.sh flutter/web/tools/build_web.sh
-      - name: Build configuration validator tests
-        run: |
-          python3 -m compileall -q .github/scripts libs/portable
-          python3 -m unittest discover -s .github/scripts/tests -v
-          python3 -m unittest discover -s libs/portable/tests -v
-      - name: Rust format
-        run: cargo fmt --all -- --check
-      - name: Install pinned Rust dependency auditor
-        run: cargo install cargo-audit --version 0.22.2 --locked --no-default-features
-      - name: Rust dependency audit
-        run: cargo audit
-      - name: Rust clippy
-        run: cargo clippy --locked --workspace --all-targets --features flutter
-      - name: Rust tests
-        run: cargo test --locked --workspace --features flutter
-      - name: Flutter analyze
-        working-directory: flutter
-        run: flutter analyze --no-fatal-infos
-      - name: Flutter tests
-        working-directory: flutter
-        run: flutter test
-      - name: Web bridge lint
-        working-directory: flutter/web/js
-        run: npm run lint
-      - name: Web bridge build
-        working-directory: flutter/web/js
-        run: npm run build
-      - name: Web dependency audit
-        working-directory: flutter/web/js
-        run: npm audit --audit-level=high
+          {
+            echo "### Client release candidate"
+            echo
+            echo "- Version: \`$APP_VERSION\` (\`$RELEASE_TAG\`)"
+            echo "- Commit: \`$RELEASE_COMMIT\`"
+            echo "- hbb_common: \`$HBB_COMMON_COMMIT\`"
+            echo "- Reused CI run: \`$CI_RUN_ID\`"
+            echo "- Publish: \`$PUBLISH\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-  generate_bridge:
-    name: Generate Flutter Rust Bridge
+  approval:
+    name: Approve production release
+    if: inputs.publish
     needs: prepare
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 5
+    environment: release
     steps:
-      - name: Checkout immutable source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.prepare.outputs.commit }}
-          persist-credentials: false
-          submodules: recursive
-      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
-        with:
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
-        with:
-          channel: ${{ env.FLUTTER_CHANNEL }}
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
-      - name: Install Linux prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            clang cmake curl gcc g++ git libasound2-dev libclang-dev libdbus-1-dev libglib2.0-dev \
-            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgtk-3-dev libaom-dev libopus-dev \
-            libpam0g-dev libpulse-dev libva-dev libx11-dev libxi-dev libxtst-dev libxcb-randr0-dev libxcb-shape0-dev \
-            libxcb-xfixes0-dev libxdo-dev libxfixes-dev libvpx-dev libyuv-dev nasm ninja-build pkg-config unzip wget
-      - name: Sync version
-        run: |
-          bash .github/scripts/sync-version.sh \
-            "${{ needs.prepare.outputs.version }}" \
-            "${{ needs.prepare.outputs.build_number }}" \
-            "${{ needs.prepare.outputs.source_date_epoch }}"
-      - name: Prepare dependencies
-        run: bash .github/scripts/prepare-dependencies.sh "${{ env.DEPENDENCY_MODE }}"
-      - name: Generate bridge
-        run: bash .github/scripts/generate-bridge.sh
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: bridge-generated
-          path: |
-            src/bridge_generated*.rs
-            flutter/lib/generated_bridge*.dart
-            flutter/lib/generated_bridge/**
-            flutter/macos/Runner/bridge_generated.h
-            flutter/ios/Runner/bridge_generated.h
-          if-no-files-found: error
-          retention-days: 7
+      - name: Record approval gate
+        run: echo "Production release approved for ${{ needs.prepare.outputs.release_tag }}"
 
   build_windows_x64:
     name: Windows x64
-    needs: [prepare, generate_bridge, quality]
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_windows_x64) }}
+    needs: [prepare, approval]
+    if: >-
+      always() && needs.prepare.result == 'success' &&
+      (needs.approval.result == 'success' || needs.approval.result == 'skipped') &&
+      inputs.build_windows_x64
     runs-on: windows-2022
     timeout-minutes: 90
     steps:
@@ -322,8 +247,10 @@ jobs:
           submodules: recursive
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: bridge-generated
+          name: ${{ needs.prepare.outputs.bridge_artifact }}
           path: .
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.prepare.outputs.ci_run_id }}
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
@@ -383,8 +310,11 @@ jobs:
 
   build_windows_arm64:
     name: Windows arm64
-    needs: [prepare, generate_bridge, quality]
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_windows_arm64) }}
+    needs: [prepare, approval]
+    if: >-
+      always() && needs.prepare.result == 'success' &&
+      (needs.approval.result == 'success' || needs.approval.result == 'skipped') &&
+      inputs.build_windows_arm64
     runs-on: windows-11-arm
     timeout-minutes: 90
     steps:
@@ -395,8 +325,10 @@ jobs:
           submodules: recursive
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: bridge-generated
+          name: ${{ needs.prepare.outputs.bridge_artifact }}
           path: .
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.prepare.outputs.ci_run_id }}
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
@@ -466,8 +398,11 @@ jobs:
 
   build_macos_universal:
     name: macOS universal
-    needs: [prepare, generate_bridge, quality]
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_macos_universal) }}
+    needs: [prepare, approval]
+    if: >-
+      always() && needs.prepare.result == 'success' &&
+      (needs.approval.result == 'success' || needs.approval.result == 'skipped') &&
+      inputs.build_macos_universal
     runs-on: macos-15
     timeout-minutes: 90
     steps:
@@ -478,8 +413,10 @@ jobs:
           submodules: recursive
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: bridge-generated
+          name: ${{ needs.prepare.outputs.bridge_artifact }}
           path: .
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.prepare.outputs.ci_run_id }}
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
@@ -529,8 +466,11 @@ jobs:
 
   build_linux:
     name: Linux ${{ matrix.arch }}
-    needs: [prepare, generate_bridge, quality]
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.build_linux_x64 || inputs.build_linux_arm64)) }}
+    needs: [prepare, approval]
+    if: >-
+      always() && needs.prepare.result == 'success' &&
+      (needs.approval.result == 'success' || needs.approval.result == 'skipped') &&
+      (inputs.build_linux_x64 || inputs.build_linux_arm64)
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -542,14 +482,14 @@ jobs:
             vcpkg_triplet: x64-linux
             deb_arch: amd64
             appimage_arch: x86_64
-            enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_linux_x64) }}
+            enabled: ${{ inputs.build_linux_x64 }}
           - arch: arm64
             runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             vcpkg_triplet: arm64-linux
             deb_arch: arm64
             appimage_arch: aarch64
-            enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_linux_arm64) }}
+            enabled: ${{ inputs.build_linux_arm64 }}
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Skip disabled matrix entry
@@ -564,8 +504,10 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         if: ${{ matrix.enabled }}
         with:
-          name: bridge-generated
+          name: ${{ needs.prepare.outputs.bridge_artifact }}
           path: .
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.prepare.outputs.ci_run_id }}
       - name: Install prerequisites
         if: ${{ matrix.enabled }}
         run: |
@@ -642,8 +584,11 @@ jobs:
 
   build_android_arm64:
     name: Android arm64
-    needs: [prepare, generate_bridge, quality]
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_android_arm64) }}
+    needs: [prepare, approval]
+    if: >-
+      always() && needs.prepare.result == 'success' &&
+      (needs.approval.result == 'success' || needs.approval.result == 'skipped') &&
+      inputs.build_android_arm64
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -665,8 +610,10 @@ jobs:
           submodules: recursive
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: bridge-generated
+          name: ${{ needs.prepare.outputs.bridge_artifact }}
           path: .
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.prepare.outputs.ci_run_id }}
       - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
           distribution: temurin
@@ -738,8 +685,11 @@ jobs:
 
   build_ios:
     name: iOS
-    needs: [prepare, generate_bridge, quality]
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_ios) }}
+    needs: [prepare, approval]
+    if: >-
+      always() && needs.prepare.result == 'success' &&
+      (needs.approval.result == 'success' || needs.approval.result == 'skipped') &&
+      inputs.build_ios
     runs-on: macos-15
     timeout-minutes: 90
     steps:
@@ -750,8 +700,10 @@ jobs:
           submodules: recursive
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: bridge-generated
+          name: ${{ needs.prepare.outputs.bridge_artifact }}
           path: .
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.prepare.outputs.ci_run_id }}
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
@@ -796,8 +748,11 @@ jobs:
 
   build_web:
     name: Web
-    needs: [prepare, quality]
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_web) }}
+    needs: [prepare, approval]
+    if: >-
+      always() && needs.prepare.result == 'success' &&
+      (needs.approval.result == 'success' || needs.approval.result == 'skipped') &&
+      inputs.build_web
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -838,7 +793,7 @@ jobs:
     name: Publish Release Assets
     needs:
       - prepare
-      - quality
+      - approval
       - build_windows_x64
       - build_windows_arm64
       - build_macos_universal
@@ -846,7 +801,16 @@ jobs:
       - build_android_arm64
       - build_ios
       - build_web
-    if: ${{ always() && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.upload_release)) && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    if: >-
+      always() && inputs.publish &&
+      needs.prepare.result == 'success' && needs.approval.result == 'success' &&
+      (!inputs.build_windows_x64 || needs.build_windows_x64.result == 'success') &&
+      (!inputs.build_windows_arm64 || needs.build_windows_arm64.result == 'success') &&
+      (!inputs.build_macos_universal || needs.build_macos_universal.result == 'success') &&
+      (!(inputs.build_linux_x64 || inputs.build_linux_arm64) || needs.build_linux.result == 'success') &&
+      (!inputs.build_android_arm64 || needs.build_android_arm64.result == 'success') &&
+      (!inputs.build_ios || needs.build_ios.result == 'success') &&
+      (!inputs.build_web || needs.build_web.result == 'success')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -860,16 +824,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ needs.prepare.outputs.commit }}
-      - name: Verify release tag is unchanged
-        env:
-          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
-          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
-        run: |
-          current_commit="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
-          if [[ "$current_commit" != "$RELEASE_COMMIT" ]]; then
-            echo "Release tag moved during the workflow" >&2
-            exit 1
-          fi
       - name: Download release artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -879,7 +833,10 @@ jobs:
         env:
           APP_VERSION: ${{ needs.prepare.outputs.app_version }}
           BUILD_NUMBER: ${{ needs.prepare.outputs.build_number }}
+          CI_RUN_ID: ${{ needs.prepare.outputs.ci_run_id }}
+          HBB_COMMON_COMMIT: ${{ needs.prepare.outputs.hbb_common }}
           RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
           SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
         run: |
@@ -910,7 +867,10 @@ jobs:
               "version": os.environ["RELEASE_VERSION"],
               "app_version": os.environ["APP_VERSION"],
               "build_number": int(os.environ["BUILD_NUMBER"]),
+              "tag": os.environ["RELEASE_TAG"],
               "source_commit": os.environ["RELEASE_COMMIT"],
+              "hbb_common_commit": os.environ["HBB_COMMON_COMMIT"],
+              "verified_ci_run_id": int(os.environ["CI_RUN_ID"]),
               "source_date_epoch": int(os.environ["SOURCE_DATE_EPOCH"]),
               "dependency_mode": "locked",
               "rust_toolchain": os.environ["RUST_TOOLCHAIN"],
@@ -944,6 +904,7 @@ jobs:
           draft: false
           fail_on_unmatched_files: true
           generate_release_notes: true
-          prerelease: ${{ contains(needs.prepare.outputs.release_tag, '-') }}
+          prerelease: false
           tag_name: ${{ needs.prepare.outputs.release_tag }}
+          target_commitish: ${{ needs.prepare.outputs.commit }}
           files: release-assets/*

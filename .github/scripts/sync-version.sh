@@ -1,11 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-version="${1:?version is required}"
-build_number="${2:-0}"
+version="${1:?stable MAJOR.MINOR.PATCH version is required}"
+build_number="${2:?positive Flutter build number is required}"
 source_date_epoch="${3:-}"
-cargo_version="${version#v}"
-app_version="${cargo_version}+${build_number}"
+if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+  echo "version must be stable SemVer MAJOR.MINOR.PATCH without a v prefix" >&2
+  exit 2
+fi
+if [[ ! "$build_number" =~ ^[1-9][0-9]*$ ]]; then
+  echo "build number must be a positive decimal integer" >&2
+  exit 2
+fi
+if [[ -n "$source_date_epoch" && ! "$source_date_epoch" =~ ^[0-9]+$ ]]; then
+  echo "source date epoch must be a non-negative decimal integer" >&2
+  exit 2
+fi
+
+cargo_version="$version"
+app_version="${version}+${build_number}"
 if [[ -n "$source_date_epoch" ]]; then
   build_date="$(
     python3 - "$source_date_epoch" <<'PY'
@@ -34,3 +47,5 @@ pub const VERSION: &str = "${cargo_version}";
 #[allow(dead_code)]
 pub const BUILD_DATE: &str = "${build_date}";
 VERSION_RS
+
+python3 .github/scripts/release_metadata.py >/dev/null

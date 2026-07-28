@@ -41,7 +41,9 @@ Camellia welcomes contribution from everyone. See [CONTRIBUTING.md](docs/CONTRIB
 
 ## Dependencies
 
-Desktop versions use Flutter for GUI. Check out our [CI](https://github.com/CamelliaCorp/camellia/blob/master/.github/workflows/release-latest.yml) for building the Flutter version.
+Desktop versions use Flutter for GUI. See the repository's
+[CI workflow](.github/workflows/ci.yml) and [CI/CD release guide](docs/CI-CD.md)
+for validated development and production builds.
 
 ## Raw Steps to build
 
@@ -169,4 +171,3 @@ Please ensure that you run these commands from the root of the Camellia reposito
 ![Connected to a Windows PC](./docs/assets/113112619-f705a480-923b-11eb-911d-97e984ef52b6.png)
 ![File Transfer](./docs/assets/113112857-3fbd5d80-923c-11eb-9836-768325faf906.png)
 ![TCP Tunneling](./docs/assets/135385039-38fdbd72-379a-422d-b97f-33df71fb1cec.png)
-
