@@ -117,32 +117,6 @@ have_web_deps() {
   [[ -f "${WEB_DIR}/ogvjs-1.8.6/ogv-decoder-video-av1-wasm.wasm" ]]
 }
 
-"$FLUTTER" pub get --enforce-lockfile
-
-if [[ "$SKIP_JS" == "false" ]]; then
-  if [[ ! -f "$WEB_JS_PKG" ]]; then
-    echo "Missing '$WEB_JS_PKG'. Add the web JS bridge toolchain, or use --skip-js." >&2
-    exit 3
-  fi
-  if [[ ! -f "$WEB_JS_LOCK" ]]; then
-    echo "Missing '$WEB_JS_LOCK'. Web builds require the committed npm lockfile." >&2
-    exit 3
-  fi
-  if ! command -v npm >/dev/null 2>&1; then
-    echo "Missing 'npm'. Install Node.js (npm) to build web JS dependencies." >&2
-    exit 4
-  fi
-  pushd "$WEB_JS_DIR" >/dev/null
-  npm ci --no-fund --no-audit
-  npm run build
-  popd >/dev/null
-fi
-
-if [[ ! -f "${WEB_JS_DIR}/dist/web_bridge.js" ]]; then
-  echo "Missing compiled JS bridge: ${WEB_JS_DIR}/dist/web_bridge.js" >&2
-  exit 3
-fi
-
 if [[ "$SKIP_DEPS" == "false" ]]; then
   if have_web_deps; then
     echo "Web deps already present, skipping download."
@@ -185,6 +159,32 @@ if [[ "$SKIP_DEPS" == "false" ]]; then
     rm -f "$DEPS_TAR"
     trap - EXIT
   fi
+fi
+
+"$FLUTTER" pub get --enforce-lockfile
+
+if [[ "$SKIP_JS" == "false" ]]; then
+  if [[ ! -f "$WEB_JS_PKG" ]]; then
+    echo "Missing '$WEB_JS_PKG'. Add the web JS bridge toolchain, or use --skip-js." >&2
+    exit 3
+  fi
+  if [[ ! -f "$WEB_JS_LOCK" ]]; then
+    echo "Missing '$WEB_JS_LOCK'. Web builds require the committed npm lockfile." >&2
+    exit 3
+  fi
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "Missing 'npm'. Install Node.js (npm) to build web JS dependencies." >&2
+    exit 4
+  fi
+  pushd "$WEB_JS_DIR" >/dev/null
+  npm ci --no-fund --no-audit
+  npm run build
+  popd >/dev/null
+fi
+
+if [[ ! -f "${WEB_JS_DIR}/dist/web_bridge.js" ]]; then
+  echo "Missing compiled JS bridge: ${WEB_JS_DIR}/dist/web_bridge.js" >&2
+  exit 3
 fi
 
 BUILD_DATE_VALUE="${BUILD_DATE:-}"
