@@ -245,7 +245,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.commit }}
           persist-credentials: false
           submodules: recursive
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ needs.prepare.outputs.bridge_artifact }}
           path: .
@@ -301,7 +301,7 @@ jobs:
           $msi = Get-ChildItem ./Package/bin/*/Release/en-us/Package.msi | Select-Object -First 1
           Copy-Item $msi.FullName ../../artifacts/camellia-${{ needs.prepare.outputs.version }}-windows-x64.msi
           Pop-Location
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: camellia-${{ needs.prepare.outputs.version }}-windows-x64
           path: artifacts/*
@@ -323,7 +323,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.commit }}
           persist-credentials: false
           submodules: recursive
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ needs.prepare.outputs.bridge_artifact }}
           path: .
@@ -389,7 +389,7 @@ jobs:
           $msi = Get-ChildItem ./Package/bin/*/Release/en-us/Package.msi | Select-Object -First 1
           Copy-Item $msi.FullName ../../artifacts/camellia-${{ needs.prepare.outputs.version }}-windows-arm64.msi
           Pop-Location
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: camellia-${{ needs.prepare.outputs.version }}-windows-arm64
           path: artifacts/*
@@ -411,7 +411,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.commit }}
           persist-credentials: false
           submodules: recursive
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ needs.prepare.outputs.bridge_artifact }}
           path: .
@@ -457,7 +457,7 @@ jobs:
           cp -R flutter/build/macos/Build/Products/Release/Camellia.app "$dmg_root/"
           ln -s /Applications "$dmg_root/Applications"
           hdiutil create -volname Camellia -srcfolder "$dmg_root" -ov -format UDZO artifacts/camellia-${{ needs.prepare.outputs.version }}-macos-universal.dmg
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: camellia-${{ needs.prepare.outputs.version }}-macos-universal
           path: artifacts/*
@@ -501,7 +501,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.commit }}
           persist-credentials: false
           submodules: recursive
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         if: ${{ matrix.enabled }}
         with:
           name: ${{ needs.prepare.outputs.bridge_artifact }}
@@ -571,7 +571,7 @@ jobs:
             "${{ matrix.arch }}" \
             "${{ matrix.deb_arch }}" \
             "${{ matrix.appimage_arch }}"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ matrix.enabled }}
         with:
           name: camellia-${{ needs.prepare.outputs.version }}-linux-${{ matrix.arch }}
@@ -608,17 +608,17 @@ jobs:
           ref: ${{ needs.prepare.outputs.commit }}
           persist-credentials: false
           submodules: recursive
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ needs.prepare.outputs.bridge_artifact }}
           path: .
           github-token: ${{ github.token }}
           run-id: ${{ needs.prepare.outputs.ci_run_id }}
-      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: "21"
-      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
@@ -676,7 +676,7 @@ jobs:
           mkdir -p artifacts
           cp flutter/build/app/outputs/flutter-apk/app-release.apk artifacts/camellia-${{ needs.prepare.outputs.version }}-android-arm64.apk
           cp flutter/build/app/outputs/bundle/release/app-release.aab artifacts/camellia-${{ needs.prepare.outputs.version }}-android-arm64.aab
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: camellia-${{ needs.prepare.outputs.version }}-android-arm64
           path: artifacts/*
@@ -698,7 +698,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.commit }}
           persist-credentials: false
           submodules: recursive
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ needs.prepare.outputs.bridge_artifact }}
           path: .
@@ -739,7 +739,7 @@ jobs:
           mkdir -p "$ipa_root/Payload"
           cp -R "$app" "$ipa_root/Payload/"
           (cd "$ipa_root" && zip -qry "$GITHUB_WORKSPACE/artifacts/camellia-${{ needs.prepare.outputs.version }}-ios-unsigned.ipa" Payload)
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: camellia-${{ needs.prepare.outputs.version }}-ios
           path: artifacts/*
@@ -766,7 +766,7 @@ jobs:
           channel: ${{ env.FLUTTER_CHANNEL }}
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -782,7 +782,7 @@ jobs:
           mkdir -p artifacts
           tar -C flutter/build -czf artifacts/camellia-${{ needs.prepare.outputs.version }}-web.tar.gz web
           (cd flutter/build && zip -qry "$GITHUB_WORKSPACE/artifacts/camellia-${{ needs.prepare.outputs.version }}-web.zip" web)
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: camellia-${{ needs.prepare.outputs.version }}-web
           path: artifacts/*
@@ -839,7 +839,7 @@ jobs:
           done
 
       - name: Download release artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: camellia-*
           path: release-inputs
@@ -908,12 +908,12 @@ jobs:
           )
           PY
       - name: Attest release artifacts
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           create-storage-record: false
           subject-path: release-assets/*
       - name: Publish release
-        uses: softprops/action-gh-release@fe965f7af51af5f2602596916f38a38df2e33de0 # v3.0.2
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           draft: false
           fail_on_unmatched_files: true
